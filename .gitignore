@@ -1,0 +1,10 @@
+node_modules/
+.capture-tmp/
+.arena/
+scratch/
+video/
+*.webm
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

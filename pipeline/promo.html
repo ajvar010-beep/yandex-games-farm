@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<!-- pipeline/promo.html — промо-рендерер фабрики (НЕ входит в билд игры).
+     Рисует иконку 512×512 и обложку 800×470 для консоли Яндекс Игр.
+     Оба ассета — стилизованный промо-арт, НЕ скриншоты (5.6).
+     Параметры URL:
+       ?root=<относительный путь к папке игры>  (по умолчанию ../games/hexwave)
+       &variant=N   seed композиции — УНИКАЛЬНЫЙ у каждой игры фабрики (5.1.1.1)
+       &lang=ru|en  язык названия на обложке (иконка — строго без текста, 8.3.1)
+       &what=icon|cover  (информационный; рисуются всегда оба)
+     Палитра и цвета врагов читаются из game/config.js игры, название — из
+     game/i18n.js (тот же словарь, что использует игра, — идентичность имени, 5.1.3).
+     При сбое загрузки конфига рисует из встроенной палитры: съёмка всё равно
+     упадёт на gate (requestfailed/console.error), молчаливого брака нет.
+     Результат: window.__promo = { ready, iconPng, coverPng } — PNG dataURL
+     точных размеров (canvas 512×512 и 800×470). -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>promo</title>
+<style>html,body{margin:0;background:#111}canvas{display:block;margin:8px}</style>
+</head>
+<body>
+<canvas id="icon" width="512" height="512"></canvas>
+<canvas id="cover" width="800" height="470"></canvas>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  try { new URLSearchParams(location.search).forEach(function (v, k) { Q[k] = v; }); } catch (e) {}
+  var root = Q.root || '../games/hexwave';
+  var variant = (parseInt(Q.variant, 10) || 1) >>> 0;
+  var lang = Q.lang === 'en' ? 'en' : 'ru';
+
+  /* Локальный детерминированный RNG (mulberry32) — движок игры сюда не подключается,
+     инструмент автономен; композиция арта зависит только от variant. */
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* Палитра по умолчанию = палитра hexwave; при успешной загрузке game/config.js
+     заменяется на палитру конкретной игры — промо-арт всегда в цветах СВОЕЙ игры. */
+  var FALLBACK = {
+    bg: '#0b0e1a', bg2: '#111631', core: '#7df9ff', defender: '#ffe066',
+    enemy: { drifter: '#ff6b9d', dart: '#ffa94d', tank: '#c77dff', splitter: '#69f0ae', warden: '#ff8787' },
+    text: '#e8f6ff', dim: '#8ea0c9', accent: '#3d7fe0'
+  };
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('load failed: ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function poly(ctx, x, y, r, n, rot) {
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+      var a = rot + (i / n) * Math.PI * 2;
+      var px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawStars(ctx, w, h, rng, n) {
+    for (var i = 0; i < n; i++) {
+      ctx.globalAlpha = 0.25 + rng() * 0.5;
+      ctx.fillStyle = '#cfe8ff';
+      var s = 1 + rng() * 2;
+      ctx.fillRect(rng() * w, rng() * h, s, s);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* Ядро + орбита + страж — общий мотив игры, масштабируется под оба формата. */
+  function drawCoreMotif(ctx, cx, cy, R, pal, rot) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // свечение
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = pal.core;
+    poly(ctx, 0, 0, R * 1.55, 6, rot * 0.2); ctx.fill();
+    // тело ядра
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = pal.bg2;
+    poly(ctx, 0, 0, R, 6, Math.PI / 6); ctx.fill();
+    ctx.lineWidth = Math.max(2, R * 0.07);
+    ctx.strokeStyle = pal.core;
+    poly(ctx, 0, 0, R, 6, Math.PI / 6); ctx.stroke();
+    // сегменты прочности
+    ctx.lineWidth = Math.max(2, R * 0.10);
+    for (var i = 0; i < 3; i++) {
+      var a0 = -Math.PI / 2 + (i / 3) * Math.PI * 2 + 0.06;
+      var a1 = -Math.PI / 2 + ((i + 1) / 3) * Math.PI * 2 - 0.06;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.22, a0, a1);
+      ctx.stroke();
+    }
+    // орбита и страж
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = Math.max(1.5, R * 0.035);
+    ctx.beginPath(); ctx.arc(0, 0, R * 1.85, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    var ga = rot; // позиция стража на орбите — от variant
+    var gx = Math.cos(ga) * R * 1.85, gy = Math.sin(ga) * R * 1.85;
+    ctx.fillStyle = pal.defender;
+    ctx.beginPath(); ctx.arc(gx, gy, R * 0.22, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = pal.defender;
+    ctx.lineWidth = Math.max(2, R * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(gx, gy);
+    ctx.lineTo(gx + Math.cos(ga) * R * 0.45, gy + Math.sin(ga) * R * 0.45);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* Осколки-враги вокруг: типы и цвета — из палитры игры, позиции — от variant. */
+  function drawShards(ctx, w, h, pal, rng, n, avoidX, avoidY, avoidR) {
+    var keys = Object.keys(pal.enemy);
+    for (var i = 0; i < n; i++) {
+      var x = rng() * w, y = rng() * h;
+      var dx = x - avoidX, dy = y - avoidY;
+      if (dx * dx + dy * dy < avoidR * avoidR) { x = (x + w / 2) % w; y = (y + h / 2) % h; }
+      var col = pal.enemy[keys[i % keys.length]];
+      var r = 8 + rng() * (Math.min(w, h) * 0.045);
+      var sides = 3 + (i % 4); // 3..6 углов — визуальное разнообразие типов
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rng() * Math.PI * 2);
+      ctx.globalAlpha = 0.55 + rng() * 0.4;
+      ctx.fillStyle = col;
+      poly(ctx, 0, 0, r, sides, 0); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawIcon(pal, rng) {
+    var c = document.getElementById('icon'), ctx = c.getContext('2d');
+    var grd = ctx.createLinearGradient(0, 0, 0, 512);
+    grd.addColorStop(0, pal.bg2); grd.addColorStop(1, pal.bg);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 512, 512);
+    drawStars(ctx, 512, 512, rng, 40);
+    drawShards(ctx, 512, 512, pal, rng, 9, 256, 256, 190);
+    drawCoreMotif(ctx, 256, 256, 108, pal, rng() * Math.PI * 2);
+    // иконка — БЕЗ текста (8.3.1: никакого обрезанного текста в иконке)
+    return c.toDataURL('image/png');
+  }
+
+  function drawCover(pal, rng, title) {
+    var c = document.getElementById('cover'), ctx = c.getContext('2d');
+    var grd = ctx.createLinearGradient(0, 0, 800, 470);
+    grd.addColorStop(0, pal.bg2); grd.addColorStop(1, pal.bg);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 800, 470);
+    drawStars(ctx, 800, 470, rng, 60);
+    // ядро левее центра, волна осколков справа — читается «защита от волн»
+    drawShards(ctx, 800, 470, pal, rng, 14, 250, 235, 150);
+    drawCoreMotif(ctx, 250, 235, 88, pal, rng() * Math.PI * 2);
+    // название — из словаря САМОЙ игры (5.1.3: идентично игре и материалам)
+    if (title) {
+      var size = 64;
+      ctx.font = '800 ' + size + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+      while (size > 20 && ctx.measureText(title).width > 440) {
+        size -= 2;
+        ctx.font = '800 ' + size + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+      }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = pal.text;
+      ctx.fillText(title, 470, 200);
+      ctx.strokeStyle = pal.accent; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(470, 246); ctx.lineTo(470 + Math.min(400, ctx.measureText(title).width), 246); ctx.stroke();
+    }
+    return c.toDataURL('image/png');
+  }
+
+  function render() {
+    var G = window.GAME || {};
+    var pal = (G.config && G.config.palette) || FALLBACK;
+    var title = null;
+    try {
+      var dict = G.i18n && (G.i18n[lang] || G.i18n.ru || G.i18n.en);
+      title = dict && dict.title ? dict.title : null;
+    } catch (e) {}
+    var rngIcon = mulberry32(variant * 2654435761 >>> 0);
+    var rngCover = mulberry32((variant * 2654435761 ^ 0x9e3779b9) >>> 0);
+    // Хук игры: если game/art.js отдал G.art.promo — игра рисует промо сама,
+    // из тех же процедурных спрайтов (не скриншоты, 5.6), в цветах своей палитры.
+    if (G.art && typeof G.art.promo === 'function') {
+      var ci = document.getElementById('icon'), cc = document.getElementById('cover');
+      G.art.promo(ci.getContext('2d'), 512, 512, 'icon', rngIcon, null);
+      G.art.promo(cc.getContext('2d'), 800, 470, 'cover', rngCover, title);
+      window.__promo = { ready: true,
+        iconPng: ci.toDataURL('image/png'), coverPng: cc.toDataURL('image/png') };
+      return;
+    }
+    window.__promo = {
+      ready: true,
+      iconPng: drawIcon(pal, rngIcon),
+      coverPng: drawCover(pal, rngCover, title)
+    };
+  }
+
+  // config.js обязателен (палитра игры); i18n.js — название на обложке;
+  // art.js — ОПЦИОНАЛЕН (если у игры есть процедурный промо-хук). Сбой загрузки
+  // не вешает страницу: рисуем из FALLBACK, а gate capture.mjs уронит съёмку.
+  loadScript(root + '/game/config.js')
+    .then(function () { return loadScript(root + '/game/i18n.js'); })
+    .then(function () { return loadScript(root + '/game/art.js').catch(function () {}); })
+    .catch(function () {})
+    .then(function () {
+      try { render(); }
+      catch (e) {
+        window.__promo = { ready: true, error: String(e), iconPng: 'data:', coverPng: 'data:' };
+      }
+    });
+})();
+</script>
+</body>
+</html>

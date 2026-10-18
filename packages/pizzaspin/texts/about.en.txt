@@ -1,0 +1,3 @@
+Pizza Spin is a cozy one-button arcade game. A big pizza is baking in the kitchen while toppings rain from above: pepperoni, mushrooms, olives and peppers. Tap the screen to rotate the pizza and catch each falling topping with the golden slice. Catch it — score and combo; miss it — a stain on the crust, and two misses burn the pizza.
+
+From level 3 a rare golden star-topping sometimes falls: it is worth five times the usual score and drops extra crumbs — do not let it slip. In the bakery you can spend crumbs on handy treats: a napkin forgives one miss, a warm oven slows the fall, a golden crumb doubles your score, and a wide slice temporarily doubles the golden zone. Clear all 20 levels, save the pizza by watching a video, and set a record that is kept in the cloud.

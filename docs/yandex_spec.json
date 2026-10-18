@@ -1,0 +1,157 @@
+{
+  "schema": "ai_studio.store_kit.spec.v1",
+  "portal": "yandex",
+  "source_of_truth": "Yandex publishes these sizes in its own requirements list, unlike the portals whose numbers only exist on a console form. The draft form still wins where the two disagree, and this file is corrected in the same commit that finds the disagreement.",
+  "docs": [
+    "https://yandex.com/dev/games/doc/en/concepts/requirements",
+    "https://yandex.com/dev/games/doc/en/concepts/local-launch"
+  ],
+  "confirmed_by_docs": [
+    "icon and cover may not be screenshots from the game (5.6)",
+    "media carries no borders and no rounded corners (8.6)",
+    "media shows no system interface and no Yandex Games interface (8.7)",
+    "gameplay fills at least 70% of screenshots and of video duration (5.1)",
+    "the game name is identical in the game, the draft and the materials, and unique per language (5.2, 5.9)",
+    "repeated characters and duplicated text between fields are not allowed (5.8)",
+    "every archive keeps index.html at its root and ASCII file names (1.23)",
+    "all files together stay under 100 MB uncompressed (1.22)"
+  ],
+  "assets": [
+    {
+      "id": "icon",
+      "file": "icon.png",
+      "width": 512,
+      "height": 512,
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "max_bytes": 1048576,
+      "square": true,
+      "from_screenshot": false,
+      "note": "Square, no rounded corners, no border. Reads at 64 px in the catalogue grid."
+    },
+    {
+      "id": "cover",
+      "file": "cover.png",
+      "width": 800,
+      "height": 470,
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "max_bytes": 2097152,
+      "from_screenshot": false,
+      "note": "Verify the ratio in the draft form before the first upload."
+    },
+    {
+      "id": "screenshot_landscape",
+      "file_glob": "screenshot_landscape_*_*.png",
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "min_count": 3,
+      "max_count": 20,
+      "max_bytes": 5242880,
+      "note": "Real gameplay in the language of the card it sits under. The form: 16:9, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
+      "aspect": "16:9",
+      "min_long_side": 1280,
+      "max_long_side": 2560
+    },
+    {
+      "id": "screenshot_portrait",
+      "file_glob": "screenshot_portrait_*_*.png",
+      "formats": [
+        "png",
+        "jpg"
+      ],
+      "min_count": 0,
+      "max_count": 20,
+      "max_bytes": 5242880,
+      "note": "Only when the draft declares mobile screenshots. The form states the rule: 9:16, long side 1280-2560, JPEG or 24-bit PNG without alpha.",
+      "aspect": "9:16",
+      "min_long_side": 1280,
+      "max_long_side": 2560
+    },
+    {
+      "id": "gameplay_landscape",
+      "kind": "video",
+      "formats": [
+        "mp4"
+      ],
+      "max_bytes": 104857600,
+      "max_seconds": 28,
+      "aspect": "16:9",
+      "note": "Required by the draft form. Real gameplay filmed from the game, no mock overlays.",
+      "file_glob": "gameplay_landscape.*.mp4",
+      "min_count": 1,
+      "max_count": 6
+    },
+    {
+      "id": "gameplay_portrait",
+      "kind": "video",
+      "formats": [
+        "mp4"
+      ],
+      "min_count": 0,
+      "max_bytes": 104857600,
+      "max_seconds": 28,
+      "aspect": "9:16",
+      "note": "Optional in the form, but a mobile-declared game without it shows nothing to phone players.",
+      "file_glob": "gameplay_portrait.*.mp4",
+      "max_count": 6
+    }
+  ],
+  "texts": [
+    {
+      "id": "title",
+      "file": "title.<lang>.txt",
+      "max_chars": 50,
+      "note": "Identical to the name inside the game, and written in the language of the card it sits under: a Latin name on the Russian card is the first thing a reader notices and the rule 5.9 uniqueness check expects the two to differ."
+    },
+    {
+      "id": "seo",
+      "file": "seo.<lang>.txt",
+      "max_chars": 160,
+      "note": "Описание для SEO. A one-sentence summary for search, separate from the store description."
+    },
+    {
+      "id": "about",
+      "file": "about.<lang>.txt",
+      "min_chars": 100,
+      "max_chars": 1000
+    },
+    {
+      "id": "short",
+      "file": "short.<lang>.txt",
+      "max_chars": 70,
+      "note": "Короткое описание. The line under the game's name in a catalogue tile."
+    },
+    {
+      "id": "how_to_play",
+      "file": "how_to_play.<lang>.txt",
+      "min_chars": 40,
+      "max_chars": 1000,
+      "note": "Controls belong here. The form allows 1000, not the 500 this file used to claim."
+    }
+  ],
+  "languages": [
+    "ru",
+    "en"
+  ],
+  "confirmed_by_form": [
+    "the horizontal gameplay video is REQUIRED and carries a red asterisk in the form; the vertical one does not",
+    "at most two categories per draft",
+    "icon 512x512 PNG and cover 800x470 PNG, stated beside their upload fields",
+    "screenshots: 16:9 or 9:16, long side 1280-2560 px, JPEG or 24-bit PNG with no alpha channel",
+    "screenshots are split twice: by platform (Десктопные / Мобильные) and by orientation, and the pair is per language",
+    "every per-language media field carries its own \"use the Russian draft's value\" control, which is what makes an English card show a Russian interface by default",
+    "five text fields per language, not three: name, SEO description, about, short description, how to play",
+    "age ratings offered: 0+, 6+, 12+, 16+, 18+",
+    "supported platforms are Десктоп, Мобильные and ТВ, chosen independently of the screenshot sets",
+    "a live RSYA contract is required to SUBMIT, and the form says so above the submit button; it does not block filling or saving a draft",
+    "the console refuses a set containing identical screenshots and says so in red under the form",
+    "gameplay videos are stored as one entry per orientation carrying one file per language, so a slot that mixes a horizontal file for one language with a vertical one for the other is not a pair the console can show"
+  ]
+}

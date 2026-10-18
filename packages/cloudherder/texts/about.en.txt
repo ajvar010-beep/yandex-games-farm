@@ -1,0 +1,7 @@
+Cloud Herder is a cheerful arcade game about a fluffy little cloud collecting raindrops under a bright sun.
+
+Move your mouse or finger — the cloud obediently follows. Catch the blue raindrops to fill the level quota and stay away from prickly hailstones: two hits and the cloud melts away!
+
+Keep your eyes peeled: sometimes a rainbow drop falls — it is worth triple score and a handful of drops. A no-hit streak raises your multiplier up to ×5. Spend drops in the shop on power-ups: an umbrella absorbs a hailstone, calm slows the fall, a bucket widens your catch zone, and the double rainbow doubles your score.
+
+20 levels with rising speed, a cute hero, gentle music and best scores you will want to beat again.

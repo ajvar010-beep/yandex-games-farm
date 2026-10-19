@@ -1,0 +1,5 @@
+Block Fit is an engaging puzzle in the spirit of Tetris and block puzzles. Drag shapes from the panel onto the 10×10 board. Filled rows and columns clear and earn points. The level goal is to reach the target score.
+
+20 levels with growing difficulty. Winning earns coins that can be spent in the shop on boosters: best place hint, new shapes, undo placement, or a bomb that clears a 3×3 area.
+
+Come back every day — consecutive day streaks earn bonus coins. Compete with yourself: what level can you reach?

@@ -1,0 +1,38 @@
+{
+  "game": "blockfit",
+  "title": "Блок-Фит",
+  "date": "2026-10-19",
+  "verdict": 3.7,
+  "axes": {
+    "mechanic": 4.37,
+    "vibe": 5.65,
+    "monetization": 2.5,
+    "realization": 1.9
+  },
+  "keep": false,
+  "judges": 10,
+  "threshold": 8.0,
+  "critical_flaws": [
+    "КРИТИЧЕСКИЙ БЛОКЕР: handleShopTap/handleOverTap/handleFailTap/handleReviveTap/handlePauseTap определены (scenes.js:851-991), но НИГДЕ не вызываются — update() вызывает driveInput только при mode==='running', а driveInput выходит при mode!=='running' (10/10 судей)",
+    "Следствие: как только игрок открывает лавку/паузу/победу/поражение — игра кирпичится, ни одна кнопка не работает, только F5",
+    "Монетизация мертва на практике: RV-revive недостижим (handleReviveTap не вызывается), лавка не закрывается, interstitial ведёт в тупиковый win-screen",
+    "Эксплойт экономики: undo откатывает score и grid, но НЕ откатывает монеты за очистку линий — спам place+undo = бесконечный фарм",
+    "Прогрессия чисто линейная: +300 очков/уровень, нет новых механик, комбо-множителя, волн"
+  ],
+  "strengths": [
+    "Drag-and-drop в 'running' реализован корректно: pressed→dragging, down→обновление, !down→tryPlace с ghost-превью",
+    "19 фигур (тетромино + пентомино), 20 уровней, цели 500→6200",
+    "4 бустера с РАЗНЫМИ эффектами и проверкой применимости ДО списания",
+    "i18n полный RU/EN-паритет без мёртвых ключей",
+    "Визуал приличный: градиентные блоки, космос-фон, ghost/hint-состояния"
+  ],
+  "lessons_for_next": [
+    "КРИТИЧНО: обработчики оверлеев должны вызываться из update() для ВСЕХ режимов, не только 'running'",
+    "Нужен диспетчер в update: if (P.pressed) { switch(mode) { case 'shop': handleShopTap(); ... } }",
+    "Smoke-тест должен проверять не только 'running', но и все оверлеи (shop, over, fail, revive, pause)",
+    "Undo должен откатывать ВСЕ изменения, включая монеты от линий",
+    "Прогрессия должна менять механику, не только числа"
+  ],
+  "commit": null,
+  "notes": "Тренд партии: watersort 6.48 → matchcandy 7.56 → wordlink 7.09 → mahjongpair 6.72 → merge2048 5.69 → blockfit 3.7. Счёт 0/15. blockfit показал: даже с правильным drag-and-drop в 'running' можно провалиться, если оверлеи мертвы. Главный урок: smoke-тест должен покрывать ВСЕ режимы, не только running."
+}

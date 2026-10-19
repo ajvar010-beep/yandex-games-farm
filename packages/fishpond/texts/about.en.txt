@@ -1,0 +1,3 @@
+Fish Pond is a relaxing arcade where you catch fish and collect bubbles in 60 seconds. Each fish gives points, each bubble gives coins. The more you catch, the higher your score.
+
+A simple and beautiful game for short breaks. Beat your record and enjoy the calm atmosphere of the underwater world.

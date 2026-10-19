@@ -1,0 +1,3 @@
+Aqualine is a cozy logic puzzle about water and color. A row of tubes holds layers of colored liquid: in one move you may pour the top layer into an empty tube or onto a layer of the same color. The goal looks simple and turns out tricky — sort every tube into a single color without tangling yourself up. Each level adds more colors and fewer empty tubes, so you have to plan several moves ahead.
+
+Cleared levels earn you coins to spend in the shop on an undo, an extra tube, a hint or a shuffle. Twenty levels, cozy underwater visuals and cloud saves — start on your phone and continue on your computer.

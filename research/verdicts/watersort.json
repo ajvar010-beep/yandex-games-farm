@@ -1,0 +1,13 @@
+{
+  "game": "watersort",
+  "title": "Аквалайн",
+  "count": 10,
+  "avg": { "mechanic": 7.25, "vibe": 6.5, "monetization": 4.15, "realization": 7.4, "verdict": 6.48 },
+  "keep": false,
+  "fixed_after": "RV-кнопка в лавке, interstitial после победы, детектор тупика + панель, pack+audit OK",
+  "reasons": [
+    "rewarded/interstitial заявлены в i18n, но не вызываются из сцен (только баннер)",
+    "нет детектора тупика (hasMove не вызывается), нет мета-прогресса (звёзды/ежедневки)",
+    "визуал аккуратный, но без характера/маскота; 20 уровней без endgame-петли"
+  ]
+}

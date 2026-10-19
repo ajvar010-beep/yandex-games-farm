@@ -1,0 +1,1 @@
+Sudoku Lite — classic 6×6 sudoku: fill the grid with numbers 1-6 without repeats. 20 levels, boosters, daily streak rewards.

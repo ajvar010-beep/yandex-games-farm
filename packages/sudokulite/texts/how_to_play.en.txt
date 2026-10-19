@@ -1,0 +1,1 @@
+How to play: tap an empty cell, then tap a number on the bottom panel. A number must not repeat in its row, column, or 2×3 block. Fill all cells correctly to win. Stuck? Use boosters in the shop.

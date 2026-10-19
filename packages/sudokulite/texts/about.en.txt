@@ -1,0 +1,5 @@
+Sudoku Lite is a classic sudoku in a compact 6×6 format. Fill the grid with numbers 1 to 6 so that no row, column, or 2×3 block contains a repeated number.
+
+20 levels with growing difficulty: from easy grids with 23 givens to hard ones with 10. Winning earns coins that can be spent in the shop on boosters: number hint, error erase, board check, or cell solve.
+
+Come back every day — consecutive day streaks earn bonus coins. Compete with yourself: what level can you reach?

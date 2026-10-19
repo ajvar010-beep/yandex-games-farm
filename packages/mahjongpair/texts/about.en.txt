@@ -1,0 +1,5 @@
+Mahjong Pair is a calm and thoughtful puzzle in the mahjong solitaire genre. The board is laid out with tiles featuring bamboo, dots, characters, winds and dragons. Find pairs of matching free tiles and remove them from the board. A tile is free if there are no tiles on top and at least one side is clear.
+
+20 levels with growing difficulty: from the simple Turtle to the multi-layered Crown. Each level has its own layout and tile set. If you get stuck, shuffle the remaining tiles or use a hint. Winning earns coins that can be spent in the shop on boosters.
+
+Come back every day — consecutive day streaks earn bonus coins. Compete with yourself: what level can you reach?

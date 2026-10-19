@@ -1,0 +1,13 @@
+{
+  "game": "matchcandy",
+  "title": "Сладкий Рай",
+  "count": 10,
+  "avg": { "mechanic": 7.18, "vibe": 7.1, "monetization": 7.62, "realization": 8.48, "verdict": 7.56 },
+  "keep": false,
+  "fixed_after": "pack --check OK, audit 0 issues, capture+montage 25 файлов медиа; консилиум читал КОД, не строки",
+  "reasons": [
+    "Мёртвые i18n-строки revive_offer/revive_btn/revive_no — RV-возрождение на fail-экране объявлено, но НЕ подключено; упущена монетизация в самом горячем месте (самый частый дефект у 8/10 судей)",
+    "Нет спец-конфет за match4/match5 (striped/wrapped/colorbomb) и L/T-форм — только очковый бонус; глубина ниже жанрового стандарта, цель «набери очки» одинакова все 20 уровней, нет блокеров/jelly",
+    "Мелкие баги: buyRow (clearAndDrop без resolveBoard — каскады от грозди не дают очков), sfx('coin') одинаков для любого каскада, туториал обещает свайп, а реализован только tap-tap"
+  ]
+}

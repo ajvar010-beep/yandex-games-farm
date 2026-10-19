@@ -1,0 +1,3 @@
+Sweet Paradise is a cozy match-3 about a candy shop. Swap neighboring sweets: a row of three pops and makes room, and the candies falling from above can set off a cascade — a chain of matches with a growing multiplier. Each level gives a limited number of moves, and the goal is to hit the score target before they run out.
+
+Wins pay in coins: a bomb clears a single cell, a row burst wipes a whole row, a shuffle rebuilds the board, and a hint shows the best move. Twenty levels, cloud saves and one-hand play — on your phone and your computer.

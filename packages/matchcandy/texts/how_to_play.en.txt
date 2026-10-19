@@ -1,0 +1,1 @@
+Drag between neighboring candies (or tap two in turn) to swap them — a swap only counts if it makes a row of three or more. Watch the move counter: when it runs out, the level ends. Hit the score goal to move on. If you get stuck, visit the shop: a bomb, a row burst, a shuffle and a hint will save the run.

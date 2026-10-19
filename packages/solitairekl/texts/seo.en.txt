@@ -1,0 +1,1 @@
+Klondike Solitaire — classic solitaire: build 4 suits from Ace to King. 10 levels, hints, undo, daily streak rewards.

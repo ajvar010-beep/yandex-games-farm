@@ -1,0 +1,5 @@
+Klondike Solitaire is the classic card solitaire. Arrange cards in 7 columns, reveal hidden cards, and build 4 suits from Ace to King in the foundation.
+
+10 levels with random deals. Winning earns coins that can be spent in the shop on hints or undo.
+
+Come back every day — consecutive day streaks earn bonus coins. Compete with yourself: what level can you reach?

@@ -188,6 +188,7 @@ window.GAME = window.GAME || {};
       this.sel = null;
       this.hint = null;
       this.win = false;
+      this.reviveUsed = false;
       this.pendingCascade = 0; this.cascadeLevel = 0;
       this.layoutCells();
     },
@@ -270,6 +271,36 @@ window.GAME = window.GAME || {};
       this.resolveBoard(game);
       this.saveGame();
     },
+    activateSpecial: function (game, r, c, kind) {
+      var E = window.Engine;
+      var isBomb = kind === -1001;
+      var m = {};
+      if (isBomb) {
+        // бомба: 3×3 вокруг
+        for (var dy = -1; dy <= 1; dy++) {
+          for (var dx = -1; dx <= 1; dx++) {
+            var rr = r + dy, cc = c + dx;
+            if (rr >= 0 && rr < G.config.board.rows && cc >= 0 && cc < G.config.board.cols) {
+              m[rr + ',' + cc] = true;
+            }
+          }
+        }
+      } else {
+        // striped: вся строка
+        for (var cc = 0; cc < G.config.board.cols; cc++) {
+          m[r + ',' + cc] = true;
+        }
+      }
+      this.board[r][c] = -1; // убираем спец-конфету (пусто)
+      var kinds = G.config.kindsCount(this.level);
+      G.match.clearAndDrop(this.board, m, kinds, this.rng);
+      this.score += isBomb ? 100 : 60;
+      E.fx.burst(this.boardX + (c + 0.5) * this.cell, this.boardY + (r + 0.5) * this.cell, isBomb ? '#ff6b81' : '#ffe066', 20, 200, this.rng);
+      E.audio.sfx('wave');
+      this.moves--;
+      this.resolveBoard(game);
+      this.saveGame();
+    },
     resolveBoard: function (game) {
       var C = G.config, M = G.match;
       var kinds = C.kindsCount(this.level);
@@ -288,6 +319,15 @@ window.GAME = window.GAME || {};
           E.fx.burst(x, y, '#ffd43b', 8, 100, new E.Rng(this.seedNum ^ (this.score + i)));
         }
         M.clearAndDrop(this.board, step.cells.reduce(function (o, k) { o[k] = true; return o; }, {}), kinds, this.rng);
+        // спец-конфеты за match4/5 — ПОСЛЕ clearAndDrop, чтобы не быть стёртыми
+        if (cells.length >= 4) {
+          var center = cells[Math.floor(cells.length / 2)].split(',');
+          var cr = +center[0], cc = +center[1];
+          var specialType = cells.length >= 5 ? 'bomb' : 'striped';
+          this.board[cr][cc] = -(1000 + (specialType === 'bomb' ? 1 : 0)); // отрицательный id = спец
+          E.audio.sfx('wave');
+          this.addFloater(this.boardX + (cc + 0.5) * this.cell, this.boardY + (cr + 0.5) * this.cell, specialType === 'bomb' ? '💣' : '⚡', '#ff6b81');
+        }
         E.audio.sfx(cascade > 1 ? 'coin' : 'coin');
         if (cascade > 1) this.addFloater(this.boardX + G.config.board.cols * this.cell / 2, this.boardY + 20, '+' + gained + ' ×' + cascade, '#ffe066');
       }
@@ -423,6 +463,12 @@ window.GAME = window.GAME || {};
           this.resolveBoard(game);
           return;
         }
+        // спец-конфета активируется при тапе
+        var kind = this.board[cell.r][cell.c];
+        if (kind < 0) {
+          this.activateSpecial(game, cell.r, cell.c, kind);
+          return;
+        }
         if (!this.sel) { this.sel = cell; E.audio.sfx('click'); return; }
         if (this.sel.r === cell.r && this.sel.c === cell.c) { this.sel = null; return; }
         if (Math.abs(this.sel.r - cell.r) + Math.abs(this.sel.c - cell.c) === 1) {
@@ -539,6 +585,24 @@ window.GAME = window.GAME || {};
         new E.ui.Button({ x: cx - bw / 2, y: y0 + bh + 12, w: bw, h: bh, fontSize: 19, text: t.t('over_menu'),
           onTap: function () { E.audio.sfx('click'); E.sdk.hideBanner(); game.setScene('menu', {}); } })
       ];
+      // revive на fail: +3 хода за видео
+      if (!isWin && !this.reviveUsed && !this.recordMode && !this.autopilot) {
+        this.overButtons.push(new E.ui.Button({
+          x: cx - bw / 2, y: y0 + 2 * (bh + 12), w: bw, h: bh, fontSize: 16,
+          text: t.t('revive_btn', { n: 3 }),
+          bg: '#7c4dff', border: '#b197fc', fg: '#fff',
+          onTap: function () {
+            E.audio.sfx('click');
+            E.sdk.showRewarded({ onReward: function () {
+              self.moves += 3;
+              self.reviveUsed = true;
+              self.mode = 'running';
+              E.sdk.gameplayStart();
+              E.sdk.hideBanner();
+            } });
+          }
+        }));
+      }
     },
 
     addFloater: function (x, y, text, color) {
@@ -601,7 +665,20 @@ window.GAME = window.GAME || {};
       // сладости
       for (var rr = 0; rr < rows; rr++) for (var cc = 0; cc < cols; cc++) {
         var kind = this.board[rr][cc];
-        if (kind < 0) continue;
+        if (kind < 0) {
+          // спец-конфета
+          var isBomb = kind === -1001;
+          var cx = bx + (cc + 0.5) * cell, cy = by + (rr + 0.5) * cell;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.globalAlpha = 0.9 + 0.1 * Math.sin(game.time * 6);
+          ctx.fillStyle = isBomb ? '#ff6b81' : '#ffe066';
+          ctx.font = '700 ' + Math.round(cell * 0.4) + 'px system-ui';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(isBomb ? '💣' : '⚡', 0, 0);
+          ctx.restore();
+          continue;
+        }
         var kname = G.config.kinds[kind % G.config.kinds.length];
         G.art.drawCandy(ctx, bx + (cc + 0.5) * cell, by + (rr + 0.5) * cell, cell * 0.36, kname, game.time + rr + cc, this.sel && this.sel.r === rr && this.sel.c === cc);
       }

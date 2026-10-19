@@ -105,7 +105,7 @@ window.GAME = window.GAME || {};
     }
     for (var c = 0; c < Cc; c++) {
       var stack = [];
-      for (var r = R - 1; r >= 0; r--) if (b[r][c] >= 0) stack.push(b[r][c]);
+      for (var r = R - 1; r >= 0; r--) if (b[r][c] !== -1) stack.push(b[r][c]); // спец-конфеты тоже падают
       var idx = 0;
       for (var r2 = R - 1; r2 >= 0; r2--) {
         if (idx < stack.length) b[r2][c] = stack[idx++];

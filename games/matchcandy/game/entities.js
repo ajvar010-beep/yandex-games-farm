@@ -138,9 +138,48 @@ window.GAME = window.GAME || {};
     return null;
   }
 
+  /* ---------- самая длинная цепочка в match ---------- */
+  function findLongestChain(b, cells) {
+    var R = C.board.rows, Cc = C.board.cols;
+    var best = null, bestLen = 0;
+    var visited = {};
+    for (var i = 0; i < cells.length; i++) {
+      var parts = cells[i].split(',');
+      var r = +parts[0], c = +parts[1];
+      if (visited[r + ',' + c]) continue;
+      // проверяем горизонталь
+      var hLen = 1;
+      for (var cc = c + 1; cc < Cc; cc++) {
+        if (b[r][cc] === b[r][c] && cells.indexOf(r + ',' + cc) >= 0) hLen++;
+        else break;
+      }
+      for (var cc = c - 1; cc >= 0; cc--) {
+        if (b[r][cc] === b[r][c] && cells.indexOf(r + ',' + cc) >= 0) hLen++;
+        else break;
+      }
+      // проверяем вертикаль
+      var vLen = 1;
+      for (var rr = r + 1; rr < R; rr++) {
+        if (b[rr][c] === b[r][c] && cells.indexOf(rr + ',' + c) >= 0) vLen++;
+        else break;
+      }
+      for (var rr = r - 1; rr >= 0; rr--) {
+        if (b[rr][c] === b[r][c] && cells.indexOf(rr + ',' + c) >= 0) vLen++;
+        else break;
+      }
+      var len = Math.max(hLen, vLen);
+      if (len > bestLen) {
+        bestLen = len;
+        best = { r: r, c: c, len: len };
+      }
+      visited[r + ',' + c] = true;
+    }
+    return best;
+  }
+
   G.match = {
     cloneBoard: cloneBoard, findMatches: findMatches, anyMove: anyMove,
     freshBoard: freshBoard, legalSwap: legalSwap, clearAndDrop: clearAndDrop,
-    resolveStep: resolveStep, hintMove: hintMove
+    resolveStep: resolveStep, hintMove: hintMove, findLongestChain: findLongestChain
   };
 })(window.GAME);

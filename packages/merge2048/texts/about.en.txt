@@ -1,0 +1,5 @@
+Merge 2048 is a classic puzzle where you slide tiles on a 4×4 grid and merge matching ones. Each move adds a new tile. The level goal is to create a tile with the target number: from 128 on the first to 2048 on the last.
+
+20 levels with growing difficulty. Winning earns coins that can be spent in the shop on boosters: best move hint, board shuffle, undo, or a bomb that removes the smallest tile.
+
+Come back every day — consecutive day streaks earn bonus coins. Compete with yourself: what level can you reach?

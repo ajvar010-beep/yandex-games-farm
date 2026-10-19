@@ -1,0 +1,1 @@
+Merge 2048 — classic puzzle: swipe tiles, merge matching ones, reach the level target. 20 levels, boosters, daily streak rewards.

@@ -1,0 +1,1 @@
+How to play: swipe in a direction or use arrow keys/WASD — all tiles slide. Matching tiles merge into one with doubled value. After each move a new tile appears. Create the target tile to win. Stuck? Use boosters in the shop.

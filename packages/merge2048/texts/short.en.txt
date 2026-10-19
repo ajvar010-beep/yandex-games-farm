@@ -1,0 +1,1 @@
+Swipe and merge tiles to 2048

@@ -260,6 +260,8 @@ window.GAME = window.GAME || {};
     trySwap: function (game, r1, c1, r2, c2) {
       var C = G.config, M = G.match;
       var kinds = C.kindsCount(this.level);
+      // блокируем ввод во время анимации
+      if (this.anim) return;
       if (!M.legalSwap(this.board, r1, c1, r2, c2, kinds)) {
         this.sel = null;
         E.audio.sfx('deny');
@@ -340,13 +342,25 @@ window.GAME = window.GAME || {};
         if (dropped && dropped.length > 0) {
           this.dropAnim = { cells: dropped, t: 0, dur: 0.3 };
         }
-        // ставим спец-конфету ПОСЛЕ clearAndDrop
+        // ставим спец-конфету ПОСЛЕ clearAndDrop, корректируя позицию с учётом падения
         if (specialPos) {
-          this.board[specialPos.r][specialPos.c] = -(1000 + (specialPos.type === 'bomb' ? 1 : 0));
+          var adjR = specialPos.r;
+          // если позиция была очищена, ищем ближайшую свободную клетку сверху
+          for (var r = specialPos.r; r >= 0; r--) {
+            if (this.board[r][specialPos.c] !== -1) {
+              adjR = r;
+              break;
+            }
+          }
+          this.board[adjR][specialPos.c] = -(1000 + (specialPos.type === 'bomb' ? 1 : 0));
           E.audio.sfx('wave');
-          this.addFloater(this.boardX + (specialPos.c + 0.5) * this.cell, this.boardY + (specialPos.r + 0.5) * this.cell, specialPos.type === 'bomb' ? '💣' : '⚡', '#ff6b81');
+          this.addFloater(this.boardX + (specialPos.c + 0.5) * this.cell, this.boardY + (adjR + 0.5) * this.cell, specialPos.type === 'bomb' ? '💣' : '⚡', '#ff6b81');
         }
-        E.audio.sfx(cascade > 1 ? 'coin' : 'coin');
+        // звук каскада: разный тон по уровню
+        if (cascade === 1) E.audio.sfx('coin');
+        else if (cascade === 2) E.audio.sfx('wave');
+        else if (cascade === 3) E.audio.sfx('pulse');
+        else E.audio.sfx('explode');
         if (cascade > 1) this.addFloater(this.boardX + G.config.board.cols * this.cell / 2, this.boardY + 20, '+' + gained + ' ×' + cascade, '#ffe066');
       }
       this.pendingCascade = cascade;
@@ -655,6 +669,7 @@ window.GAME = window.GAME || {};
           onTap: function () {
             E.audio.sfx('click');
             E.sdk.showRewarded({ onReward: function () {
+              E.audio.sfx('revive');
               self.moves += 3;
               self.reviveUsed = true;
               self.mode = 'running';

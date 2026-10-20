@@ -1,0 +1,5 @@
+Bubble Pop is a classic bubble shooter arcade. Aim and shoot bubbles at the ceiling, match 3 or more bubbles of the same color to make them pop. Clear the entire ceiling within the given number of shots.
+
+20 levels with growing difficulty: more colors, denser ceiling, faster descent. Winning earns coins that can be spent in the shop on boosters: rainbow (any color), bomb (3×3 explosion), laser (straight line), or extra shots.
+
+Come back every day — consecutive day streaks earn bonus coins. Compete with yourself: what level can you reach?

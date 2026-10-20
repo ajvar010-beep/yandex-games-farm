@@ -86,7 +86,7 @@ func _procedural_level(n: int) -> Dictionary:
 		var nx = pos.x + rng.randf_range(-3.0, 3.0) * dir
 		var nz = pos.z - (3.0 + gap + rng.randf_range(0, 1.5))
 		var ny = pos.y + rng.randf_range(-0.3, 0.8)
-		var m := ["grass","stone","wood","sand"][rng.randi_range(0,3)]
+		var m: String = ["grass","stone","wood","sand"][rng.randi_range(0,3)]
 		var p := {"x":snappedf(nx,0.5),"y":snappedf(ny,0.5),"z":snappedf(nz,0.5),"sx":w,"sy":0.8,"sz":w,"mat":m}
 		# иногда движущаяся
 		if n >= 4 and rng.randf() < 0.18:

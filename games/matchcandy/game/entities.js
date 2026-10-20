@@ -99,6 +99,7 @@ window.GAME = window.GAME || {};
   /* ---------- удалить совпадения и обрушить (гравитация вниз) ---------- */
   function clearAndDrop(b, matched, kinds, rng) {
     var R = C.board.rows, Cc = C.board.cols;
+    var dropped = []; // для анимации падения
     for (var key in matched) {
       var parts = key.split(',');
       b[+parts[0]][+parts[1]] = -1;
@@ -108,10 +109,15 @@ window.GAME = window.GAME || {};
       for (var r = R - 1; r >= 0; r--) if (b[r][c] !== -1) stack.push(b[r][c]); // спец-конфеты тоже падают
       var idx = 0;
       for (var r2 = R - 1; r2 >= 0; r2--) {
-        if (idx < stack.length) b[r2][c] = stack[idx++];
-        else b[r2][c] = Math.floor(rng.float() * kinds) % kinds;
+        if (idx < stack.length) {
+          b[r2][c] = stack[idx++];
+        } else {
+          b[r2][c] = Math.floor(rng.float() * kinds) % kinds;
+          dropped.push({ r: r2, c: c, kind: b[r2][c], fromY: -1 }); // новая конфета сверху
+        }
       }
     }
+    return dropped;
   }
 
   /* ---------- один шаг разрешения: вернуть {cells, count} или null ---------- */

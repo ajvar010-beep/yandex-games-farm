@@ -191,6 +191,7 @@ window.GAME = window.GAME || {};
       this.reviveUsed = false;
       this.pendingCascade = 0; this.cascadeLevel = 0;
       this.anim = null; // { type: 'swap'|'drop', t: 0, dur: 0.2, data: {...} }
+      this.dropAnim = null; // { cells: [{r,c,kind,fromY}], t: 0, dur: 0.3 }
       this.layoutCells();
     },
     layoutCells: function () { /* позиции считаются в layout() */ },
@@ -264,20 +265,20 @@ window.GAME = window.GAME || {};
         E.audio.sfx('deny');
         return;
       }
-      var t = this.board[r1][c1]; this.board[r1][c1] = this.board[r2][c2]; this.board[r2][c2] = t;
+      // сохраняем состояние ДО свапа для анимации
+      var kind1 = this.board[r1][c1], kind2 = this.board[r2][c2];
+      this.anim = {
+        type: 'swap',
+        t: 0, dur: 0.2,
+        from: { r: r1, c: c1, kind: kind1 },
+        to: { r: r2, c: c2, kind: kind2 }
+      };
+      // мутируем доску ПОСЛЕ анимации (через update)
+      this.pendingSwap = { r1: r1, c1: c1, r2: r2, c2: c2 };
       this.moves--;
       this.sel = null;
       this.hint = null;
       E.audio.sfx('click');
-      // анимация свапа
-      this.anim = {
-        type: 'swap',
-        t: 0, dur: 0.15,
-        from: { r: r1, c: c1, kind: this.board[r2][c2] },
-        to: { r: r2, c: c2, kind: this.board[r1][c1] }
-      };
-      this.resolveBoard(game);
-      this.saveGame();
     },
     activateSpecial: function (game, r, c, kind) {
       var E = window.Engine;
@@ -305,7 +306,7 @@ window.GAME = window.GAME || {};
       this.score += isBomb ? 100 : 60;
       E.fx.burst(this.boardX + (c + 0.5) * this.cell, this.boardY + (r + 0.5) * this.cell, isBomb ? '#ff6b81' : '#ffe066', 20, 200, this.rng);
       E.audio.sfx('wave');
-      this.moves--;
+      // активация спец-конфеты БЕСПЛАТНА — не тратим ход
       this.resolveBoard(game);
       this.saveGame();
     },
@@ -326,17 +327,24 @@ window.GAME = window.GAME || {};
           var x = this.boardX + (+pr[1] + 0.5) * this.cell, y = this.boardY + (+pr[0] + 0.5) * this.cell;
           E.fx.burst(x, y, '#ffd43b', 8, 100, new E.Rng(this.seedNum ^ (this.score + i)));
         }
-        M.clearAndDrop(this.board, step.cells.reduce(function (o, k) { o[k] = true; return o; }, {}), kinds, this.rng);
-        // спец-конфеты за match4/5 — ПОСЛЕ clearAndDrop, в центре самой длинной цепочки
+        // спец-конфеты за match4/5 — находим центр ДО clearAndDrop
+        var specialPos = null;
         if (cells.length >= 4) {
           var longest = M.findLongestChain(this.board, cells);
           if (longest) {
-            var cr = longest.r, cc = longest.c;
-            var specialType = cells.length >= 5 ? 'bomb' : 'striped';
-            this.board[cr][cc] = -(1000 + (specialType === 'bomb' ? 1 : 0)); // отрицательный id = спец
-            E.audio.sfx('wave');
-            this.addFloater(this.boardX + (cc + 0.5) * this.cell, this.boardY + (cr + 0.5) * this.cell, specialType === 'bomb' ? '💣' : '⚡', '#ff6b81');
+            specialPos = { r: longest.r, c: longest.c, type: cells.length >= 5 ? 'bomb' : 'striped' };
           }
+        }
+        var dropped = M.clearAndDrop(this.board, step.cells.reduce(function (o, k) { o[k] = true; return o; }, {}), kinds, this.rng);
+        // анимация падения новых конфет
+        if (dropped && dropped.length > 0) {
+          this.dropAnim = { cells: dropped, t: 0, dur: 0.3 };
+        }
+        // ставим спец-конфету ПОСЛЕ clearAndDrop
+        if (specialPos) {
+          this.board[specialPos.r][specialPos.c] = -(1000 + (specialPos.type === 'bomb' ? 1 : 0));
+          E.audio.sfx('wave');
+          this.addFloater(this.boardX + (specialPos.c + 0.5) * this.cell, this.boardY + (specialPos.r + 0.5) * this.cell, specialPos.type === 'bomb' ? '💣' : '⚡', '#ff6b81');
         }
         E.audio.sfx(cascade > 1 ? 'coin' : 'coin');
         if (cascade > 1) this.addFloater(this.boardX + G.config.board.cols * this.cell / 2, this.boardY + 20, '+' + gained + ' ×' + cascade, '#ffe066');
@@ -440,7 +448,23 @@ window.GAME = window.GAME || {};
     update: function (game, dt) {
       if (this.anim) {
         this.anim.t += dt;
-        if (this.anim.t >= this.anim.dur) this.anim = null;
+        if (this.anim.t >= this.anim.dur) {
+          // анимация завершена — применяем свап
+          if (this.anim.type === 'swap' && this.pendingSwap) {
+            var p = this.pendingSwap;
+            var t = this.board[p.r1][p.c1];
+            this.board[p.r1][p.c1] = this.board[p.r2][p.c2];
+            this.board[p.r2][p.c2] = t;
+            this.pendingSwap = null;
+            this.resolveBoard(game);
+            this.saveGame();
+          }
+          this.anim = null;
+        }
+      }
+      if (this.dropAnim) {
+        this.dropAnim.t += dt;
+        if (this.dropAnim.t >= this.dropAnim.dur) this.dropAnim = null;
       }
       if (this.mode === 'running') this.updateRunning(game, dt);
       if (this.hint) { this.hintT -= dt; if (this.hintT <= 0) this.hint = null; }
@@ -462,20 +486,26 @@ window.GAME = window.GAME || {};
     },
     driveInput: function (game) {
       var P = E.input.pointer;
-      // свайп: drag от одной клетки к соседней
-      if (P.down && P.moved && this.sel) {
-        var dx = P.x - P.downX, dy = P.y - P.downY;
-        var threshold = this.cell * 0.5;
-        if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
-          var dir;
-          if (Math.abs(dx) > Math.abs(dy)) dir = dx > 0 ? 'right' : 'left';
-          else dir = dy > 0 ? 'down' : 'up';
-          var r2 = this.sel.r + (dir === 'down' ? 1 : dir === 'up' ? -1 : 0);
-          var c2 = this.sel.c + (dir === 'right' ? 1 : dir === 'left' ? -1 : 0);
-          if (r2 >= 0 && r2 < G.config.board.rows && c2 >= 0 && c2 < G.config.board.cols) {
-            this.trySwap(game, this.sel.r, this.sel.c, r2, c2);
-            this.sel = null;
-            return;
+      // свайп: drag от одной клетки к соседней — БЕЗ предварительного тапа
+      if (P.down && P.moved) {
+        var startCell = this.cellAt(P.downX, P.downY);
+        if (startCell && !this.sel) {
+          this.sel = startCell;
+        }
+        if (this.sel) {
+          var dx = P.x - P.downX, dy = P.y - P.downY;
+          var threshold = this.cell * 0.5;
+          if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+            var dir;
+            if (Math.abs(dx) > Math.abs(dy)) dir = dx > 0 ? 'right' : 'left';
+            else dir = dy > 0 ? 'down' : 'up';
+            var r2 = this.sel.r + (dir === 'down' ? 1 : dir === 'up' ? -1 : 0);
+            var c2 = this.sel.c + (dir === 'right' ? 1 : dir === 'left' ? -1 : 0);
+            if (r2 >= 0 && r2 < G.config.board.rows && c2 >= 0 && c2 < G.config.board.cols) {
+              this.trySwap(game, this.sel.r, this.sel.c, r2, c2);
+              this.sel = null;
+              return;
+            }
           }
         }
       }
@@ -724,6 +754,19 @@ window.GAME = window.GAME || {};
           continue;
         }
         var kname = G.config.kinds[kind % G.config.kinds.length];
+        // анимация падения новых конфет
+        if (this.dropAnim) {
+          var drop = this.dropAnim;
+          var prog = Math.min(1, drop.t / drop.dur);
+          var ease = 1 - Math.pow(1 - prog, 3); // easeOut
+          for (var di = 0; di < drop.cells.length; di++) {
+            var dc = drop.cells[di];
+            if (dc.r === rr && dc.c === cc) {
+              cy = by + (dc.fromY + (rr - dc.fromY) * ease + 0.5) * cell;
+              break;
+            }
+          }
+        }
         G.art.drawCandy(ctx, cx, cy, cell * 0.36, kname, game.time + rr + cc, this.sel && this.sel.r === rr && this.sel.c === cc);
       }
     },

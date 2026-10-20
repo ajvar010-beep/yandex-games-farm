@@ -1,0 +1,183 @@
+class_name ParkourPlayer
+extends CharacterBody3D
+## Игрок-паркурщик: бег, прыжок, двойной прыжок, койот-тайм.
+
+signal died
+signal landed
+
+@export var speed := 7.0
+@export var sprint_mult := 1.4
+@export var jump_force := 9.5
+@export var gravity_mult := 1.8
+
+var _coyote := 0.0
+var _jump_buffer := 0.0
+var _jumps := 0
+var _max_jumps := 2
+var _dead := false
+var _spawn := Vector3.ZERO
+
+var _cam: Node3D
+var _mesh: Node3D
+var _body_mat: StandardMaterial3D
+var _head_mat: StandardMaterial3D
+
+func _ready() -> void:
+	_spawn = global_position
+	_build_visual()
+	_cam = get_parent().get_node_or_null("CameraRig")
+
+func _build_visual() -> void:
+	_mesh = Node3D.new()
+	add_child(_mesh)
+	var col := GameState.SKINS.get(GameState.current_skin, GameState.SKINS["nub"])["color"]
+	_body_mat = StandardMaterial3D.new()
+	_body_mat.albedo_color = col
+	_body_mat.roughness = 0.7
+	_head_mat = StandardMaterial3D.new()
+	_head_mat.albedo_color = col.lightened(0.35)
+	# тело
+	var body := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.6, 0.7, 0.35)
+	body.mesh = bm
+	body.position.y = 0.85
+	body.material_override = _body_mat
+	_mesh.add_child(body)
+	# голова
+	var head := MeshInstance3D.new()
+	var hm := BoxMesh.new()
+	hm.size = Vector3(0.55, 0.5, 0.55)
+	head.mesh = hm
+	head.position.y = 1.45
+	head.material_override = _head_mat
+	_mesh.add_child(head)
+	# глаза
+	for sx in [-1.0, 1.0]:
+		var eye := MeshInstance3D.new()
+		var em := BoxMesh.new()
+		em.size = Vector3(0.08, 0.08, 0.02)
+		eye.mesh = em
+		eye.position = Vector3(sx * 0.13, 1.47, 0.29)
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.1, 0.1, 0.15)
+		eye.material_override = m
+		_mesh.add_child(eye)
+	# ноги
+	for sx in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var lm := BoxMesh.new()
+		lm.size = Vector3(0.22, 0.5, 0.3)
+		leg.mesh = lm
+		leg.position = Vector3(sx * 0.16, 0.25, 0.0)
+		leg.material_override = _body_mat
+		_mesh.add_child(leg)
+	# коллизия
+	var shape := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.32
+	cap.height = 1.4
+	shape.shape = cap
+	shape.position.y = 0.75
+	add_child(shape)
+
+func set_spawn(p: Vector3) -> void:
+	_spawn = p
+
+func respawn() -> void:
+	global_position = _spawn
+	velocity = Vector3.ZERO
+	_dead = false
+	_jumps = 0
+
+func kill() -> void:
+	if _dead: return
+	_dead = true
+	AudioBus.die()
+	died.emit()
+
+func revive() -> void:
+	_dead = false
+	# чуть выше, чтобы не провалиться
+	global_position = _spawn + Vector3.UP * 0.5
+	velocity = Vector3.ZERO
+	_jumps = 0
+
+func _input(event: InputEvent) -> void:
+	if _dead: return
+	if event.is_action_pressed("jump"):
+		_jump_buffer = 0.15
+	# мобильный тап = прыжок (обработаем в Game через тап по экрану)
+
+func _physics_process(delta: float) -> void:
+	if _dead:
+		return
+	# таймеры
+	if _coyote > 0: _coyote -= delta
+	if _jump_buffer > 0: _jump_buffer -= delta
+
+	# направление ввода
+	var input_dir := _get_input_dir()
+	var cam_basis := Basis.IDENTITY
+	if _cam:
+		cam_basis = _cam.global_transform.basis
+	var dir := (cam_basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	dir.y = 0
+	dir = dir.normalized()
+
+	# скорость
+	var spd := speed
+	var target := dir * spd
+	velocity.x = move_toward(velocity.x, target.x, 40 * delta)
+	velocity.z = move_toward(velocity.z, target.z, 40 * delta)
+
+	# гравитация
+	if not is_on_floor():
+		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_mult * delta
+	else:
+		_jumps = 0
+		_coyote = 0.12
+		if _jump_buffer > 0:
+			_do_jump()
+			_jump_buffer = 0
+
+	# прыжок из буфера/в воздухе (двойной)
+	if _jump_buffer > 0 and not is_on_floor() and _jumps < _max_jumps and _jumps > 0:
+		_do_jump()
+		_jump_buffer = 0
+	elif _jump_buffer > 0 and is_on_floor():
+		_do_jump()
+		_jump_buffer = 0
+
+	move_and_slide()
+
+	# поворот модели по направлению движения
+	if dir.length() > 0.1 and _mesh:
+		var target_yaw := atan2(-dir.x, -dir.z)
+		_mesh.rotation.y = lerp_angle(_mesh.rotation.y, target_yaw, 12 * delta)
+
+	# подпрыгивание при беге
+	if _mesh:
+		var run := clampf(Vector2(velocity.x, velocity.z).length() / speed, 0.0, 1.0)
+		_mesh.position.y = abs(sin(Time.get_ticks_msec() * 0.012)) * 0.12 * run
+
+func _get_input_dir() -> Vector2:
+	# виртуальный джойстик (моб) имеет приоритет
+	var game := get_parent()
+	if game and game.get("_vmove") != null:
+		var vm: Vector2 = game.get("_vmove")
+		if vm.length() > 0.08:
+			return vm
+	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+
+func _do_jump() -> void:
+	_jumps += 1
+	velocity.y = jump_force
+	if _jumps > 1:
+		AudioBus.double_jump()
+	else:
+		AudioBus.jump()
+
+# мобильный тап (из Game)
+func tap_jump() -> void:
+	_jump_buffer = 0.15

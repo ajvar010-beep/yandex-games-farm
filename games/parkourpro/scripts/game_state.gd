@@ -10,6 +10,7 @@ var best_times: Dictionary = {}  # level -> ms
 var last_daily: String = ""      # YYYY-MM-DD
 var daily_streak: int = 0
 var no_ads: bool = false         # IAP: отключить interstitial
+var stars: Dictionary = {}       # level -> 1..3 (рейтинг скорости)
 
 const SKINS := {
 	"nub":  {"name": "Нуб",   "color": Color(0.35, 0.75, 0.35), "cost": 0,    "rv": false},
@@ -60,6 +61,7 @@ func save_data() -> void:
 		"last_daily": last_daily,
 		"daily_streak": daily_streak,
 		"no_ads": no_ads,
+		"stars": stars,
 	}
 	if Yandex.is_ready():
 		Yandex.save(data)
@@ -88,6 +90,19 @@ func _apply(d: Dictionary) -> void:
 	last_daily = str(d.get("last_daily", ""))
 	daily_streak = int(d.get("daily_streak", 0))
 	no_ads = bool(d.get("no_ads", false))
+	stars = Dictionary(d.get("stars", {}))
+
+func add_stars(level: int, n: int) -> void:
+	var key := str(level)
+	if not stars.has(key) or n > stars[key]:
+		stars[key] = n
+		save_data()
+
+func total_stars() -> int:
+	var s := 0
+	for k in stars:
+		s += int(stars[k])
+	return s
 
 # Ежедневная награда (retention)
 func can_claim_daily() -> bool:

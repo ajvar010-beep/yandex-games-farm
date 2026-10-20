@@ -167,6 +167,10 @@ func _physics_process(delta: float) -> void:
 	if dir.length() > 0.1 and _mesh:
 		var target_yaw := atan2(-dir.x, -dir.z)
 		_mesh.rotation.y = lerp_angle(_mesh.rotation.y, target_yaw, 12 * delta)
+		# тутор: первое движение
+		var game := get_parent()
+		if game and game.has_method("_advance_tutorial"):
+			game._advance_tutorial()
 
 	# подпрыгивание при беге
 	if _mesh:
@@ -185,6 +189,10 @@ func _get_input_dir() -> Vector2:
 func _do_jump() -> void:
 	_jumps += 1
 	velocity.y = jump_force
+	# тутор: первый прыжок
+	var game := get_parent()
+	if game and game.has_method("_advance_tutorial"):
+		game._advance_tutorial()
 	# squash&stretch: при прыжке вытягиваемся
 	if _mesh:
 		_mesh.scale = Vector3(0.85, 1.15, 0.85)

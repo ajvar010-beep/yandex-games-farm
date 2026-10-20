@@ -67,7 +67,7 @@ func load_level(n: int) -> void:
 	_update_coins()
 	# тутор-подсказка на 1 уровне
 	if n == 1:
-		_show_tutorial_hint()
+		_show_tutorial_step(0)
 
 func _procedural_level(n: int) -> Dictionary:
 	# авто-генерация, если нет файла уровня
@@ -106,6 +106,9 @@ var _ls := 0
 func _process(_delta: float) -> void:
 	if _running:
 		_time_ms = Time.get_ticks_msec() - _ls
+		var t := hud.get_node_or_null("Timer")
+		if t:
+			t.text = "%.1f" % (_time_ms / 1000.0)
 	# падение за край
 	if player.global_position.y < -5.0 and _running:
 		_on_player_died()
@@ -178,6 +181,17 @@ func _build_hud() -> void:
 	coins.add_theme_constant_override("shadow_offset_x", 2)
 	coins.add_theme_constant_override("shadow_offset_y", 2)
 	top.add_child(coins)
+
+	# таймер (спидран)
+	var timer := Label.new()
+	timer.name = "Timer"
+	timer.text = "0.0"
+	timer.add_theme_font_size_override("font_size", 26)
+	timer.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+	timer.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
+	timer.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	timer.offset_top = 10
+	hud.add_child(timer)
 
 	# кнопка паузы
 	var pause := Button.new()
@@ -287,25 +301,43 @@ func _on_menu() -> void:
 	AudioBus.click()
 	get_parent().back_to_menu()
 
-func _show_tutorial_hint() -> void:
-	var hint := Label.new()
-	hint.text = "WASD/свайп — бег • Space/тап — прыжок (двойной!) • Дойди до кольца ⭕"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	hint.offset_y = -120
-	hint.add_theme_font_size_override("font_size", 22)
-	hint.add_theme_color_override("font_color", Color.WHITE)
-	hint.add_theme_color_override("font_shadow_color", Color(0,0,0,0.8))
-	hud.add_child(hint)
-	var tw := create_tween()
-	tw.tween_interval(6.0)
-	tw.tween_property(hint, "modulate:a", 0.0, 1.0)
-	tw.tween_callback(hint.queue_free)
+var _tutorial_step := 0
+var _tutorial_label: Label
+
+func _show_tutorial_step(step: int) -> void:
+	_tutorial_step = step
+	if _tutorial_label:
+		_tutorial_label.queue_free()
+		_tutorial_label = null
+	if step > 2:
+		return
+	_tutorial_label = Label.new()
+	var texts := [
+		"Беги вперёд: WASD или свайп влевой части экрана",
+		"Прыгай: Space или тап правой части",
+		"Двойной прыжок в воздухе! Дойди до кольца ⭕"
+	]
+	_tutorial_label.text = texts[step]
+	_tutorial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tutorial_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_tutorial_label.offset_y = -120
+	_tutorial_label.add_theme_font_size_override("font_size", 24)
+	_tutorial_label.add_theme_color_override("font_color", Color(1, 1, 0.4))
+	_tutorial_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.8))
+	hud.add_child(_tutorial_label)
+
+func _advance_tutorial() -> void:
+	if level_num == 1 and _tutorial_step < 2:
+		_show_tutorial_step(_tutorial_step + 1)
 
 func _show_win() -> void:
 	var t := "%.1f" % (_time_ms / 1000.0)
-	# RV на удвоение награды — главный денежный триггер
-	_show_panel("Финиш!", "Время: %s сек  •  ◈ %d" % [t, coins_collected], "◈×2 (видео)", _on_double_coins, "Дальше ▶", _on_next)
+	# звёзды за скорость: <15с=3, <25с=2, иначе 1
+	var sec := _time_ms / 1000.0
+	var stars := 3 if sec < 15.0 else (2 if sec < 25.0 else 1)
+	var star_str := "★★★" if stars == 3 else ("★★☆" if stars == 2 else "★☆☆")
+	GameState.add_stars(level_num, stars)
+	_show_panel("Финиш! %s" % star_str, "Время: %s сек  •  ◈ %d" % [t, coins_collected], "◈×2 (видео)", _on_double_coins, "Дальше ▶", _on_next)
 
 func _on_double_coins() -> void:
 	AudioBus.click()

@@ -36,6 +36,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not target:
 		return
+	_process_auto(delta)
 	var tp := target.global_position
 	var want := tp + Vector3(sin(_yaw) * distance * cos(_pitch), height + sin(_pitch) * distance * 0.4, cos(_yaw) * distance * cos(_pitch))
 	global_position = global_position.lerp(want, smooth * delta)
@@ -45,6 +46,21 @@ func _process(delta: float) -> void:
 func rotate_cam(dx: float, dy: float) -> void:
 	_yaw -= dx * 0.004
 	_pitch = clampf(_pitch - dy * 0.003, -0.35, 0.5)
+
+# авто-камера: плавно доворачивает за игроком (чтобы на мобиле не надо было крутить)
+var _auto_follow := true
+
+func _process_auto(delta: float) -> void:
+	if not _auto_follow or not target:
+		return
+	# целевой yaw = направление движения игрока (если бежит)
+	var v := Vector2.ZERO
+	if target is ParkourPlayer:
+		var vel: Vector3 = target.velocity
+		v = Vector2(vel.x, vel.z)
+	if v.length() > 1.0:
+		var want_yaw := atan2(-v.x, -v.y)
+		_yaw = lerp_angle(_yaw, want_yaw, 2.5 * delta)
 
 var _clouds: Array[MeshInstance3D] = []
 

@@ -131,7 +131,7 @@ func _build() -> void:
 		b.pressed.connect(func(): _on_skin(sid))
 		_skin_grid.add_child(b)
 
-	# низ: звук
+	# низ: звук + ежедневка
 	var foot := HBoxContainer.new()
 	vb.add_child(foot)
 	var snd := Button.new()
@@ -142,7 +142,29 @@ func _build() -> void:
 		refresh())
 	foot.add_child(snd)
 
+	var fsp := Control.new()
+	fsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	foot.add_child(fsp)
+
+	var daily := Button.new()
+	if GameState.can_claim_daily():
+		daily.text = "🎁 Награда дня!"
+		daily.modulate = Color(1, 0.9, 0.3)
+	else:
+		daily.text = "🎁 завтра (×%d)" % GameState.daily_streak
+		daily.modulate = Color(0.7, 0.7, 0.75)
+	daily.add_theme_font_size_override("font_size", 20)
+	daily.pressed.connect(_on_daily)
+	foot.add_child(daily)
+
 	_update_coins()
+
+func _on_daily() -> void:
+	if GameState.can_claim_daily():
+		var got := GameState.claim_daily()
+		AudioBus.buy()
+		_coins_label.text = "◈ %d (+%d)" % [GameState.coins, got]
+		refresh()
 
 func _update_coins() -> void:
 	_coins_label.text = "◈ %d" % GameState.coins

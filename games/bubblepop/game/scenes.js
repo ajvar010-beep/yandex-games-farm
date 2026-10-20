@@ -277,6 +277,13 @@ window.GAME = window.GAME || {};
         if (this.flying) {
           this.updateFlying(dt);
         }
+        // потолок опускается
+        var dropSpeed = G.config.game.dropSpeedBase + (this.level - 1) * G.config.game.dropSpeedPerLevel;
+        this.ceilingY += dropSpeed * dt;
+        // проверка поражения: потолок достиг панели
+        if (this.ceilingY > this.panelY - 50) {
+          this.failLevel();
+        }
         // туториал
         if (this.tutorialStep < 3) {
           this.tutorialTimer += dt;
@@ -325,6 +332,8 @@ window.GAME = window.GAME || {};
       var dy = this.aim.y - this.panelY;
       var dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 20) return; // слишком короткий drag
+      // блокируем стрельбу вниз
+      if (dy > 0) return;
 
       var speed = G.config.physics.ballSpeed;
       var vx = dx / dist * speed;
@@ -407,6 +416,27 @@ window.GAME = window.GAME || {};
         x: bestX, y: bestY
       };
 
+      // спец-шарик активируется при посадке
+      if (f.special) {
+        var affected = G.entities.applySpecial(this.grid, bestX, bestY, f.special);
+        if (affected.length > 0) {
+          G.entities.explode(this.grid, affected);
+          var score = affected.length * 15;
+          this.score += score;
+          this.coins += Math.floor(score / 20);
+          E.audio.sfx('explode');
+          E.fx.flash(G.config.palette.good, 0.3);
+          E.fx.burst(x, y, G.config.palette.good, 20, 200, this.rng);
+          this.addFloater(x, y, '+' + score, G.config.palette.good);
+          if (G.entities.isClear(this.grid)) {
+            this.completeLevel();
+            return;
+          }
+        }
+        this.nextShot();
+        return;
+      }
+
       // проверка взрыва
       var matches = G.entities.findMatches(this.grid, bestX, bestY);
       if (matches.length >= 3) {
@@ -415,6 +445,20 @@ window.GAME = window.GAME || {};
         this.score += score;
         this.coins += Math.floor(score / 20);
         G.entities.explode(this.grid, matches);
+        // каскадный отвал: оторванные от потолка кластеры падают
+        var orphans = G.entities.dropOrphans(this.grid);
+        if (orphans.length > 0) {
+          var orphanScore = orphans.length * 5;
+          this.score += orphanScore;
+          this.coins += Math.floor(orphanScore / 20);
+          E.audio.sfx('wave');
+          for (var i = 0; i < orphans.length; i++) {
+            var o = orphans[i];
+            var pos = G.entities.gridToScreen(o.x, o.y, this.cellSize, this.boardX, this.boardY);
+            E.fx.burst(pos.x, pos.y, G.config.palette.accent, 5, 80, this.rng);
+          }
+          this.addFloater(x, y, '+' + orphanScore + ' падение', G.config.palette.accent);
+        }
         E.audio.sfx('explode');
         E.fx.flash(G.config.palette.good, 0.3);
         E.fx.burst(x, y, G.config.palette.good, 15, 150, this.rng);
@@ -579,8 +623,12 @@ window.GAME = window.GAME || {};
       // панель внизу
       this.drawPanel(ctx);
 
-      // маскот
-      G.art.drawMascot(ctx, w * 0.1, h * 0.8, Math.min(40, w * 0.08), this.t, this.combo > 0 ? 'happy' : 'idle');
+      // маскот — реагирует на события
+      var mood = 'idle';
+      if (this.mode === 'over') mood = 'happy';
+      else if (this.mode === 'fail') mood = 'sad';
+      else if (this.combo > 0) mood = 'happy';
+      G.art.drawMascot(ctx, w * 0.1, h * 0.8, Math.min(40, w * 0.08), this.t, mood);
 
       // флоатеры
       this.drawFloaters(ctx);

@@ -75,7 +75,8 @@ window.GAME = window.GAME || {};
   ART.drawBubble = function (ctx, x, y, size, colorId, state, t) {
     var P = pal();
     var colors = [P.bubble1, P.bubble2, P.bubble3, P.bubble4, P.bubble5, P.bubble6];
-    var color = colors[(colorId - 1) % colors.length];
+    // colorId 0 = rainbow — серебристый
+    var color = colorId === 0 ? '#e0e0e0' : colors[(colorId - 1) % colors.length];
 
     ctx.save();
     ctx.translate(x, y);

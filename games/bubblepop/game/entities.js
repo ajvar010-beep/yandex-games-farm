@@ -99,7 +99,9 @@ window.GAME = window.GAME || {};
       var key = cur.x + ',' + cur.y;
       if (visited[key]) continue;
       visited[key] = true;
-      if (!grid[cur.y] || !grid[cur.y][cur.x] || grid[cur.y][cur.x].color !== color) continue;
+      if (!grid[cur.y] || !grid[cur.y][cur.x]) continue;
+      // rainbow совпадает с любым цветом
+      if (color !== 0 && grid[cur.y][cur.x].color !== color && grid[cur.y][cur.x].color !== 0) continue;
       match.push(cur);
 
       // соседи в шестиугольной сетке
@@ -129,6 +131,53 @@ window.GAME = window.GAME || {};
     for (var i = 0; i < matches.length; i++) {
       grid[matches[i].y][matches[i].x] = null;
     }
+  };
+
+  /* ---------- Каскадный отвал: оторванные от потолка кластеры падают ---------- */
+  ENT.dropOrphans = function (grid) {
+    var connected = {};
+    var queue = [];
+    // начинаем с верхней строки (потолок)
+    for (var x = 0; x < COLS; x++) {
+      if (grid[0][x]) {
+        queue.push({ x: x, y: 0 });
+        connected[x + ',' + 0] = true;
+      }
+    }
+    while (queue.length > 0) {
+      var cur = queue.pop();
+      // соседи в шестиугольной сетке
+      var neighbors = [
+        { x: cur.x - 1, y: cur.y }, { x: cur.x + 1, y: cur.y },
+        { x: cur.x, y: cur.y - 1 }, { x: cur.x, y: cur.y + 1 }
+      ];
+      if (cur.y % 2 === 0) {
+        neighbors.push({ x: cur.x - 1, y: cur.y - 1 });
+        neighbors.push({ x: cur.x - 1, y: cur.y + 1 });
+      } else {
+        neighbors.push({ x: cur.x + 1, y: cur.y - 1 });
+        neighbors.push({ x: cur.x + 1, y: cur.y + 1 });
+      }
+      for (var i = 0; i < neighbors.length; i++) {
+        var n = neighbors[i];
+        var key = n.x + ',' + n.y;
+        if (n.x >= 0 && n.x < COLS && n.y >= 0 && n.y < ROWS && grid[n.y][n.x] && !connected[key]) {
+          connected[key] = true;
+          queue.push(n);
+        }
+      }
+    }
+    // отключаем неподключённые
+    var dropped = [];
+    for (var y = 0; y < ROWS; y++) {
+      for (var x = 0; x < COLS; x++) {
+        if (grid[y][x] && !connected[x + ',' + y]) {
+          dropped.push({ x: x, y: y, cell: grid[y][x] });
+          grid[y][x] = null;
+        }
+      }
+    }
+    return dropped;
   };
 
   /* ---------- Проверка победы ---------- */

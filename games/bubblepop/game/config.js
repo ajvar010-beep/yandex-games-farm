@@ -14,6 +14,8 @@ window.GAME = window.GAME || {};
       board: '#0d2a3a',
       ceiling: '#1a3a4a',
       grid: '#2a4a5a',
+      cell: '#1c2330',
+      cellHot: '#2a3444',
       text: '#f0f4f8',
       dim: '#8899aa',
       accent: '#4ecdc4',

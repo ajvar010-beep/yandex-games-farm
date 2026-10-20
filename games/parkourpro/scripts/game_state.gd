@@ -9,6 +9,7 @@ var sound_on: bool = true
 var best_times: Dictionary = {}  # level -> ms
 var last_daily: String = ""      # YYYY-MM-DD
 var daily_streak: int = 0
+var no_ads: bool = false         # IAP: отключить interstitial
 
 const SKINS := {
 	"nub":  {"name": "Нуб",   "color": Color(0.35, 0.75, 0.35), "cost": 0,    "rv": false},
@@ -58,6 +59,7 @@ func save_data() -> void:
 		"best": best_times,
 		"last_daily": last_daily,
 		"daily_streak": daily_streak,
+		"no_ads": no_ads,
 	}
 	if Yandex.is_ready():
 		Yandex.save(data)
@@ -85,6 +87,7 @@ func _apply(d: Dictionary) -> void:
 	best_times = Dictionary(d.get("best", {}))
 	last_daily = str(d.get("last_daily", ""))
 	daily_streak = int(d.get("daily_streak", 0))
+	no_ads = bool(d.get("no_ads", false))
 
 # Ежедневная награда (retention)
 func can_claim_daily() -> bool:

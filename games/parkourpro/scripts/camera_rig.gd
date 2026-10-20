@@ -30,6 +30,8 @@ func _ready() -> void:
 	e.ambient_light_energy = 0.9
 	env.environment = e
 	get_parent().call_deferred("add_child", env)
+	# облака (процедурные, плавают)
+	_spawn_clouds()
 
 func _process(delta: float) -> void:
 	if not target:
@@ -43,3 +45,30 @@ func _process(delta: float) -> void:
 func rotate_cam(dx: float, dy: float) -> void:
 	_yaw -= dx * 0.004
 	_pitch = clampf(_pitch - dy * 0.003, -0.35, 0.5)
+
+var _clouds: Array[MeshInstance3D] = []
+
+func _spawn_clouds() -> void:
+	var root := get_parent()
+	if not root: return
+	for i in 7:
+		var c := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		var s := randf_range(2.5, 5.0)
+		bm.size = Vector3(s, s * 0.45, s * 0.7)
+		c.mesh = bm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1, 1, 1, 0.75)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		c.material_override = m
+		c.position = Vector3(randf_range(-30, 30), randf_range(8, 18), randf_range(-40, 10))
+		root.call_deferred("add_child", c)
+		_clouds.append(c)
+
+func _physics_process(delta: float) -> void:
+	# облака медленно плывут
+	for c in _clouds:
+		if is_instance_valid(c):
+			c.position.x += delta * 0.5
+			if c.position.x > 40:
+				c.position.x = -40

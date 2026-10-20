@@ -131,6 +131,20 @@ func _build() -> void:
 		b.pressed.connect(func(): _on_skin(sid))
 		_skin_grid.add_child(b)
 
+	# Магазин монет (IAP)
+	var shop_title := Label.new()
+	shop_title.text = "— МАГАЗИН —"
+	shop_title.add_theme_font_size_override("font_size", 22)
+	shop_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	vb.add_child(shop_title)
+
+	var shop := HBoxContainer.new()
+	shop.add_theme_constant_override("separation", 10)
+	vb.add_child(shop)
+	_add_iap_btn(shop, "💰 500 ◈\n49 ₽", "coins_500", 500)
+	_add_iap_btn(shop, "💰 1500 ◈\n129 ₽", "coins_1500", 1500)
+	_add_iap_btn(shop, "🚫 Без рекламы\n199 ₽", "no_ads", 0)
+
 	# низ: звук + ежедневка
 	var foot := HBoxContainer.new()
 	vb.add_child(foot)
@@ -165,6 +179,23 @@ func _on_daily() -> void:
 		AudioBus.buy()
 		_coins_label.text = "◈ %d (+%d)" % [GameState.coins, got]
 		refresh()
+
+func _add_iap_btn(parent: Control, label: String, product_id: String, coins: int) -> void:
+	var b := Button.new()
+	b.text = label
+	b.custom_minimum_size = Vector2(200, 110)
+	b.add_theme_font_size_override("font_size", 20)
+	b.pressed.connect(func():
+		AudioBus.click()
+		Yandex.purchase(product_id, func():
+			if coins > 0:
+				GameState.add_coins(coins)
+			else:
+				GameState.no_ads = true
+			GameState.save_data()
+			AudioBus.buy()
+			refresh()))
+	parent.add_child(b)
 
 func _update_coins() -> void:
 	_coins_label.text = "◈ %d" % GameState.coins

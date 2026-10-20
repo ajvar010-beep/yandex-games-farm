@@ -21,6 +21,7 @@ var _cam: Node3D
 var _mesh: Node3D
 var _body_mat: StandardMaterial3D
 var _head_mat: StandardMaterial3D
+var _was_air := false
 
 func _ready() -> void:
 	_spawn = global_position
@@ -151,6 +152,17 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 
+	# squash при приземлении
+	if is_on_floor() and _was_air:
+		_was_air = false
+		if _mesh:
+			_mesh.scale = Vector3(1.2, 0.8, 1.2)
+			var tw := create_tween()
+			tw.tween_property(_mesh, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		landed.emit()
+	elif not is_on_floor():
+		_was_air = true
+
 	# поворот модели по направлению движения
 	if dir.length() > 0.1 and _mesh:
 		var target_yaw := atan2(-dir.x, -dir.z)
@@ -173,6 +185,11 @@ func _get_input_dir() -> Vector2:
 func _do_jump() -> void:
 	_jumps += 1
 	velocity.y = jump_force
+	# squash&stretch: при прыжке вытягиваемся
+	if _mesh:
+		_mesh.scale = Vector3(0.85, 1.15, 0.85)
+		var tw := create_tween()
+		tw.tween_property(_mesh, "scale", Vector3.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if _jumps > 1:
 		AudioBus.double_jump()
 	else:

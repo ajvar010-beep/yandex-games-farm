@@ -104,3 +104,51 @@ func load_from_cloud() -> void:
 
 func get_save_data() -> Dictionary:
 	return _save_data
+
+# ---------- IAP (Yandex Payments) ----------
+
+func purchase(product_id: String, on_ok: Callable, on_fail: Callable = Callable()) -> void:
+	if not _sdk_ready:
+		# вне браузера — фейк-успех для теста
+		on_ok.call()
+		return
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk == null or js.ysdk.payments == null:
+		if on_fail.is_valid(): on_fail.call()
+		return
+	js.ysdk.payments.purchase({"id": product_id}).then(
+		JavaScriptBridge.create_callback(func(r): on_ok.call())
+	).catch(
+		JavaScriptBridge.create_callback(func(e):
+			if on_fail.is_valid(): on_fail.call())
+	)
+
+func get_purchases(on_list: Callable) -> void:
+	if not _sdk_ready:
+		on_list.call([])
+		return
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk == null or js.ysdk.payments == null:
+		on_list.call([])
+		return
+	js.ysdk.payments.getPurchases().then(
+		JavaScriptBridge.create_callback(func(r): on_list.call(r))
+	).catch(JavaScriptBridge.create_callback(func(e): on_list.call([])))
+
+# ---------- Лидерборды ----------
+
+func submit_score(name: String, score: int) -> void:
+	if not _sdk_ready: return
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk != null and js.ysdk.leaderboards != null:
+		js.ysdk.leaderboards.setScore(name, score)
+
+func get_leaderboard(name: String, on_data: Callable) -> void:
+	if not _sdk_ready:
+		on_data.call(null)
+		return
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk != null and js.ysdk.leaderboards != null:
+		js.ysdk.leaderboards.getEntries(name, {"quantityTop": 10, "includeUser": true}).then(
+			JavaScriptBridge.create_callback(func(r): on_data.call(r))
+		).catch(JavaScriptBridge.create_callback(func(e): on_data.call(null)))

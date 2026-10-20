@@ -18,6 +18,25 @@ const snap = (v) => Math.round(v * 2) / 2;
 
 function genLevel(n) {
   const r = rng(1000 + n * 77);
+  // Уровень 1 = тутор: прямая дорожка, большие платформы, монеты в ряд
+  if (n === 1) {
+    return {
+      name: 'Обучение',
+      start: [0, 2, 0],
+      platforms: [
+        { x: 0, y: 0, z: 0, sx: 8, sy: 1, sz: 8, mat: 'grass' },
+        { x: 0, y: 0, z: -6, sx: 5, sy: 1, sz: 5, mat: 'grass' },
+        { x: 0, y: 0.2, z: -12, sx: 4.5, sy: 1, sz: 4.5, mat: 'stone' },
+        { x: 0, y: 0.4, z: -18, sx: 4, sy: 1, sz: 4, mat: 'stone' },
+        { x: 0, y: 0.6, z: -24, sx: 4, sy: 1, sz: 4, mat: 'wood' },
+        { x: 0, y: 0.8, z: -30, sx: 5, sy: 1, sz: 5, mat: 'gold' },
+      ],
+      coins: [[0, 1, -6], [0, 1.2, -12], [0, 1.4, -18], [0, 1.6, -24]],
+      checkpoints: [[0, 0.5, -15]],
+      finish: [0, 1.8, -30],
+      lava_y: -6.0, lava_size: 260.0
+    };
+  }
   const platforms = [{ x: 0, y: 0, z: 0, sx: 7, sy: 1, sz: 7, mat: 'grass' }];
   const coins = [];
   const checkpoints = [];

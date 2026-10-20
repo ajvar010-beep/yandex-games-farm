@@ -59,6 +59,7 @@ func load_level(def: Dictionary) -> void:
 		c.queue_free()
 	_coins.clear()
 	_traps.clear()
+	_spawn_ambient_particles()
 
 	var plats: Array = def.get("platforms", [])
 	for p in plats:
@@ -222,3 +223,18 @@ func _physics_process(delta: float) -> void:
 	for c in _coins:
 		if c.visible:
 			c.rotate_y(2.2 * delta)
+
+func _spawn_ambient_particles() -> void:
+	# пыль/пузыри в воздухе (живость)
+	for i in 12:
+		var p := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.06
+		sm.height = 0.12
+		p.mesh = sm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1, 1, 1, 0.4)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		p.material_override = m
+		p.position = Vector3(randf_range(-15, 15), randf_range(1, 8), randf_range(-30, 5))
+		add_child(p)

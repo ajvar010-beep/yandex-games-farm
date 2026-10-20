@@ -13,9 +13,10 @@ var _time_ms := 0
 var _running := false
 var _last_interstitial := 0
 var _death_pos := Vector3.ZERO
-var _can_revive := true
 var _deaths := 0
+var _revives_used := 0  # цепочка revive (0..max)
 
+const MAX_REVIVES := 5
 const INTERSTITIAL_COOLDOWN_MS := 95_000  # не чаще ~95с
 
 func _ready() -> void:
@@ -60,9 +61,13 @@ func load_level(n: int) -> void:
 	_time_ms = 0
 	_ls = Time.get_ticks_msec()
 	_running = true
-	_can_revive = true
+	_deaths = 0
+	_revives_used = 0
 	hud.get_node("LevelLabel").text = "Уровень %d" % n
 	_update_coins()
+	# тутор-подсказка на 1 уровне
+	if n == 1:
+		_show_tutorial_hint()
 
 func _procedural_level(n: int) -> Dictionary:
 	# авто-генерация, если нет файла уровня
@@ -122,6 +127,9 @@ func _on_checkpoint(pos: Vector3) -> void:
 func _on_finish() -> void:
 	_running = false
 	GameState.complete_level(level_num, _time_ms)
+	# сабмит в лидерборд (чем меньше время, тем лучше → инвертируем в очки)
+	var score := max(1, 1_000_000 - _time_ms)
+	Yandex.submit_score("parkour_time", score)
 	_show_win()
 
 func _on_player_died() -> void:
@@ -253,15 +261,16 @@ func _hide_panel() -> void:
 
 func _show_death() -> void:
 	AudioBus.die()
-	var can_rv := _can_revive
+	var can_rv := _revives_used < MAX_REVIVES
 	if can_rv:
-		_show_panel("Провал!", "Упал в лаву...", "▶ Ожить (видео)", _on_revive, "Заново", _on_restart)
+		var n := _revives_used + 1
+		_show_panel("Провал!", "Упал в лаву... (%d/%d)" % [n, MAX_REVIVES], "▶ Ожить (видео)", _on_revive, "Заново", _on_restart)
 	else:
 		_show_panel("Провал!", "Упал в лаву...", "Заново", _on_restart, "В меню", _on_menu)
 
 func _on_revive() -> void:
 	AudioBus.click()
-	_can_revive = false
+	_revives_used += 1
 	_hide_panel()
 	Yandex.show_rewarded(func():
 		player.revive()
@@ -277,6 +286,21 @@ func _on_restart() -> void:
 func _on_menu() -> void:
 	AudioBus.click()
 	get_parent().back_to_menu()
+
+func _show_tutorial_hint() -> void:
+	var hint := Label.new()
+	hint.text = "WASD/свайп — бег • Space/тап — прыжок (двойной!) • Дойди до кольца ⭕"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	hint.offset_y = -120
+	hint.add_theme_font_size_override("font_size", 22)
+	hint.add_theme_color_override("font_color", Color.WHITE)
+	hint.add_theme_color_override("font_shadow_color", Color(0,0,0,0.8))
+	hud.add_child(hint)
+	var tw := create_tween()
+	tw.tween_interval(6.0)
+	tw.tween_property(hint, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(hint.queue_free)
 
 func _show_win() -> void:
 	var t := "%.1f" % (_time_ms / 1000.0)
@@ -299,6 +323,7 @@ func _on_next() -> void:
 	load_level(level_num + 1)
 
 func _maybe_interstitial() -> void:
+	if GameState.no_ads: return
 	var now := Time.get_ticks_msec()
 	if now - _last_interstitial > INTERSTITIAL_COOLDOWN_MS:
 		_last_interstitial = now

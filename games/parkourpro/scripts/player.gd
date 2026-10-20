@@ -31,7 +31,7 @@ func _ready() -> void:
 func _build_visual() -> void:
 	_mesh = Node3D.new()
 	add_child(_mesh)
-	var col := GameState.SKINS.get(GameState.current_skin, GameState.SKINS["nub"])["color"]
+	var col: Color = GameState.SKINS.get(GameState.current_skin, GameState.SKINS["nub"])["color"]
 	_body_mat = StandardMaterial3D.new()
 	_body_mat.albedo_color = col
 	_body_mat.roughness = 0.7

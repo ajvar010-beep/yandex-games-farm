@@ -1,0 +1,9 @@
+{
+  "id": "nubikparkour",
+  "engine": "godot-4.7.2-web",
+  "version": "1.0.0",
+  "orientation": "landscape",
+  "touch": true,
+  "monetization": ["rewarded_video", "interstitial"],
+  "levels": 20
+}

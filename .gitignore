@@ -1,18 +1,3 @@
-node_modules/
-.capture-tmp/
-.arena/
-scratch/
-video/
-*.webm
-__pycache__/
-*.pyc
-.DS_Store
-Thumbs.db
-# engines (heavy binaries)
-engines/godot/*.exe
-engines/godot/*.tpz
-engines/godot/tpl/
-# godot editor cache
-games/*/.godot/
-# scratch (research, foreign code)
-scratch/
+publish/
+scratch_council.txt
+**/.godot/

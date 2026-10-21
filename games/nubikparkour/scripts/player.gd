@@ -6,9 +6,10 @@ signal died
 signal landed
 
 @export var speed := 7.0
-@export var sprint_mult := 1.4
 @export var jump_force := 9.5
 @export var gravity_mult := 1.8
+
+const COYOTE_TIME := 0.12
 
 var _coyote := 0.0
 var _jump_buffer := 0.0
@@ -16,6 +17,7 @@ var _jumps := 0
 var _max_jumps := 2
 var _dead := false
 var _spawn := Vector3.ZERO
+var _last_safe := Vector3.ZERO   # последняя точка на полу — для честного revive
 
 var _cam: Node3D
 var _mesh: Node3D
@@ -98,6 +100,7 @@ func set_spawn(p: Vector3) -> void:
 
 func respawn() -> void:
 	global_position = _spawn
+	_last_safe = _spawn
 	velocity = Vector3.ZERO
 	_dead = false
 	_jumps = 0
@@ -127,10 +130,11 @@ func _explode() -> void:
 
 func revive() -> void:
 	_dead = false
-	# чуть выше, чтобы не провалиться
-	global_position = _spawn + Vector3.UP * 0.5
+	# честный revive: последняя безопасная точка на полу, а не чекпоинт
+	global_position = _last_safe + Vector3.UP * 0.5
 	velocity = Vector3.ZERO
 	_jumps = 0
+	_coyote = COYOTE_TIME
 	if _mesh: _mesh.visible = true
 
 func _input(event: InputEvent) -> void:
@@ -161,23 +165,28 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, target.x, 40 * delta)
 	velocity.z = move_toward(velocity.z, target.z, 40 * delta)
 
-	# гравитация
-	if not is_on_floor():
-		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_mult * delta
-	else:
+	# гравитация + койот-тайм
+	if is_on_floor():
 		_jumps = 0
-		_coyote = 0.12
-		if _jump_buffer > 0:
+		_coyote = COYOTE_TIME
+		_last_safe = global_position  # честный revive: помним точку на полу
+	else:
+		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_mult * delta
+
+	# прыжок: пол / койот / двойной в воздухе
+	var on_floor_or_coyote := is_on_floor() or _coyote > 0.0
+	if _jump_buffer > 0:
+		if on_floor_or_coyote:
+			if not is_on_floor(): _coyote = 0.0  # потратили койот
+			_do_jump()
+			_jump_buffer = 0
+		elif _jumps > 0 and _jumps < _max_jumps:
 			_do_jump()
 			_jump_buffer = 0
 
-	# прыжок из буфера/в воздухе (двойной)
-	if _jump_buffer > 0 and not is_on_floor() and _jumps < _max_jumps and _jumps > 0:
-		_do_jump()
-		_jump_buffer = 0
-	elif _jump_buffer > 0 and is_on_floor():
-		_do_jump()
-		_jump_buffer = 0
+	# переменная высота прыжка: отпустил кнопку — гасим подъём
+	if Input.is_action_just_released("jump") and velocity.y > 0:
+		velocity.y *= 0.45
 
 	move_and_slide()
 
@@ -215,6 +224,10 @@ func _get_input_dir() -> Vector2:
 		if vm.length() > 0.08:
 			return vm
 	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+
+# для авто-камеры: пока есть активный ввод — не доворачивать yaw (анти-цикл)
+func is_input_active() -> bool:
+	return _get_input_dir().length() > 0.08
 
 func _do_jump() -> void:
 	_jumps += 1

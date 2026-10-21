@@ -1,0 +1,1 @@
+Run forward with WASD or swipe on the left half of the screen. Jump with Space or tap the right half. The mid-air double jump saves long leaps. The first level teaches you step by step. Collect emeralds and reach the finish portal. Fall into lava and you return to a checkpoint.

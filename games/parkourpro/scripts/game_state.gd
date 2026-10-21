@@ -34,6 +34,7 @@ const TR := {
 	"restart": {"ru": "Заново", "en": "Restart"},
 	"menu": {"ru": "В меню", "en": "Menu"},
 	"finish": {"ru": "Финиш! %s", "en": "Finish! %s"},
+	"new_record": {"ru": "🏆 Новый рекорд!", "en": "🏆 New record!"},
 	"time_coins": {"ru": "Время: %s сек  •  ◈ %d", "en": "Time: %s s  •  ◈ %d"},
 	"double": {"ru": "◈×2 (видео)", "en": "◈×2 (video)"},
 	"next": {"ru": "Дальше ▶", "en": "Next ▶"},
@@ -46,8 +47,8 @@ const TR := {
 	"shop_hdr": {"ru": "— МАГАЗИН —", "en": "— SHOP —"},
 	"sound_on": {"ru": "Звук: ВКЛ", "en": "Sound: ON"},
 	"sound_off": {"ru": "Звук: ВЫКЛ", "en": "Sound: OFF"},
-	"daily": {"ru": "🎁 Награда дня!", "en": "🎁 Daily reward!"},
-	"daily_next": {"ru": "🎁 завтра (×%d)", "en": "🎁 tomorrow (×%d)"},
+	"daily": {"ru": "🎖 Награда дня!", "en": "🎖 Daily reward!"},
+	"daily_next": {"ru": "🎖 завтра (×%d)", "en": "🎖 tomorrow (×%d)"},
 	"hacker": {"ru": "ХАКЕР", "en": "HACKER"},
 	"skin_nub": {"ru": "Нуб", "en": "Noob"},
 	"skin_pro": {"ru": "Про", "en": "Pro"},
@@ -57,7 +58,22 @@ const TR := {
 	"skin_hacker": {"ru": "Хакер", "en": "Hacker"},
 	"shop_coins1": {"ru": "💰 500 ◈\n49 ₽", "en": "💰 500 ◈\n49 RUB"},
 	"shop_coins2": {"ru": "💰 1500 ◈\n129 ₽", "en": "💰 1500 ◈\n129 RUB"},
-	"shop_noads": {"ru": "🚫 Без рекламы\n199 ₽", "en": "🚫 No ads\n199 RUB"},
+	"shop_noads": {"ru": "⛔ Без рекламы\n199 ₽", "en": "⛔ No ads\n199 RUB"},
+	"noads_owned": {"ru": "⛔ Реклама отключена ✓", "en": "⛔ Ads removed ✓"},
+	"stars_total": {"ru": "★ %d/%d", "en": "★ %d/%d"},
+	"rv_coins": {"ru": "📺 +%d ◈", "en": "📺 +%d ◈"},
+	"skin_progress": {"ru": "◈ %d / %d до скина «%s»", "en": "◈ %d / %d to unlock \"%s\""},
+	"lb_hdr": {"ru": "— ЛИДЕРЫ (время) —", "en": "— LEADERS (time) —"},
+	"lb_loading": {"ru": "загрузка...", "en": "loading..."},
+	"lb_unavailable": {"ru": "лидерборд недоступен", "en": "leaderboard unavailable"},
+	"lb_you": {"ru": "... #%d ты (%s): %s", "en": "... #%d you (%s): %s"},
+	"sec": {"ru": " с", "en": " s"},
+	"series_hdr": {"ru": "— СЕРИЯ —", "en": "— SERIES —"},
+	"series_nub": {"ru": "Сложно? Начни с «Нубик Паркур» — там легче. А мастера ждут в «Бог Паркур»!", "en": "Too hard? Start with Nubik Parkour — it's easier. Masters await in God of Parkour!"},
+	"series_pro": {"ru": "Новичкам — «Нубик Паркур» (легче). Хардкорщикам — «Бог Паркур» (уже/быстрее)!", "en": "Beginners: Nubik Parkour (easier). Hardcore: God of Parkour (narrower/faster)!"},
+	"series_god": {"ru": "Это вершина серии. Младшие братья: «Нубик Паркур» и «Про Паркур».", "en": "This is the peak of the series. Its brothers: Nubik Parkour and Pro Parkour."},
+	"daily_double_q": {"ru": "🎖 +%d ◈ получено!\nУдвоить награду за видео?", "en": "🎖 +%d ◈ claimed!\nDouble the reward for a video?"},
+	"no_thanks": {"ru": "Нет, спасибо", "en": "No, thanks"},
 }
 
 func L(key: String) -> String:
@@ -72,15 +88,65 @@ func set_lang(l: String) -> void:
 
 const SKINS := {
 	"nub":  {"name": "Нуб",   "color": Color(0.35, 0.75, 0.35), "cost": 0,    "rv": false},
-	"pro":  {"name": "Про",   "color": Color(0.25, 0.45, 0.95), "cost": 120,  "rv": false},
-	"samurai": {"name": "Самурай", "color": Color(0.95, 0.35, 0.25), "cost": 250, "rv": false},
+	"pro":  {"name": "Про",   "color": Color(0.25, 0.45, 0.95), "cost": 80,   "rv": false},
+	"samurai": {"name": "Самурай", "color": Color(0.95, 0.35, 0.25), "cost": 150, "rv": false},
 	"god":  {"name": "Бог",   "color": Color(1.0, 0.85, 0.20), "cost": 0,    "rv": true},
-	"neon": {"name": "Неон",  "color": Color(0.9, 0.2, 0.9),   "cost": 400,  "rv": false},
+	"neon": {"name": "Неон",  "color": Color(0.9, 0.2, 0.9),   "cost": 250,  "rv": false},
 	"hacker": {"name": "Хакер", "color": Color(0.05, 0.18, 0.08), "cost": 666, "rv": false},
 }
 
 func _ready() -> void:
+	_setup_fonts()
 	load_data()
+	# GameState — первый autoload, Yandex ещё не в дереве; коннектим отложенно
+	_connect_yandex.call_deferred()
+
+func _connect_yandex() -> void:
+	if Yandex.is_ready():
+		_on_sdk_ready()  # сигнал уже прошёл до коннекта
+		return
+	if not Yandex.sdk_ready.is_connected(_on_sdk_ready):
+		Yandex.sdk_ready.connect(_on_sdk_ready)
+
+func _on_sdk_ready() -> void:
+	# restore покупок (no_ads) + облачный сейв
+	Yandex.get_purchases(_restore_purchases)
+	Yandex.load_from_cloud(_merge_cloud)
+
+# глобальный шрифт: Noto Sans (кириллица) + Noto Sans Symbols 2 (★◈▶🔒 и пр.)
+# без этого дефолтный шрифт Godot рисует тофу вместо глифов
+func _setup_fonts() -> void:
+	var main: Font = load("res://assets/fonts/NotoSans-Regular.ttf")
+	var symbols: Font = load("res://assets/fonts/NotoSansSymbols2-Regular.ttf")
+	if main and symbols:
+		if main is FontFile:
+			(main as FontFile).fallbacks = [symbols]
+		ThemeDB.set_fallback_font(main)
+
+func _restore_purchases(list) -> void:
+	if list == null: return
+	for p in list:
+		var pid: String = str(p.productID)
+		if pid == "no_ads":
+			no_ads = true
+	save_data()
+
+func _merge_cloud(d: Dictionary) -> void:
+	if d.is_empty(): return
+	# мердж по принципу «больше/новее» — облако не должно откатывать локальный прогресс
+	coins = maxi(coins, int(d.get("coins", 0)))
+	max_level = maxi(max_level, int(d.get("max_level", 1)))
+	for s in d.get("unlocked", []):
+		if s not in unlocked_skins:
+			unlocked_skins.append(s)
+	no_ads = no_ads or bool(d.get("no_ads", false))
+	for k in d.get("best", {}):
+		if not best_times.has(k) or int(d["best"][k]) < int(best_times[k]):
+			best_times[k] = d["best"][k]
+	for k in d.get("stars", {}):
+		if not stars.has(k) or int(d["stars"][k]) > int(stars[k]):
+			stars[k] = d["stars"][k]
+	save_data()
 
 func add_coins(n: int) -> void:
 	coins += n
@@ -107,6 +173,17 @@ func complete_level(level: int, time_ms: int) -> void:
 		best_times[key] = time_ms
 	save_data()
 
+func is_new_record(level: int, time_ms: int) -> bool:
+	var key := str(level)
+	if not best_times.has(key): return true
+	return time_ms < int(best_times[key])
+
+func best_time(level: int) -> int:
+	return int(best_times.get(str(level), 0))
+
+func stars_of(level: int) -> int:
+	return int(stars.get(str(level), 0))
+
 # ---------- persistence (Yandex cloud или localStorage fallback) ----------
 
 func save_data() -> void:
@@ -122,13 +199,13 @@ func save_data() -> void:
 		"no_ads": no_ads,
 		"stars": stars,
 	}
+	# ОБА хранилища: локал работает всегда, облако — когда SDK готов
+	var f := FileAccess.open("user://save.json", FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(data))
+		f.close()
 	if Yandex.is_ready():
 		Yandex.save(data)
-	else:
-		var f := FileAccess.open("user://save.json", FileAccess.WRITE)
-		if f:
-			f.store_string(JSON.stringify(data))
-			f.close()
 
 func load_data() -> void:
 	# облако грузит Yandex позже; тут локальный fallback

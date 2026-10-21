@@ -17,7 +17,7 @@ var _deaths := 0
 var _revives_used := 0  # цепочка revive (0..max)
 
 const MAX_REVIVES := 5
-const INTERSTITIAL_COOLDOWN_MS := 95_000  # не чаще ~95с
+const INTERSTITIAL_COOLDOWN_MS := 130_000  # не чаще ~130с (детская аудитория)
 
 func _ready() -> void:
 	level = ParkourLevel.new()
@@ -59,15 +59,33 @@ func load_level(n: int) -> void:
 	player.set_spawn(Vector3(start[0], start[1], start[2]))
 	player.respawn()
 	_time_ms = 0
-	_ls = Time.get_ticks_msec()
+	_par_sec = _calc_par(def)
 	_running = true
 	_deaths = 0
 	_revives_used = 0
-	hud.get_node("LevelLabel").text = GameState.L("level") % n
+	_new_record = false
+	_lvl_label.text = GameState.L("level") % n
 	_update_coins()
+	_timer_label.text = "0.0"
 	# тутор-подсказка на 1 уровне
 	if n == 1:
 		_show_tutorial_step(0)
+
+# par-время уровня: суммарный путь по платформам / средняя скорость игрока
+func _calc_par(def: Dictionary) -> float:
+	var plats: Array = def.get("platforms", [])
+	if plats.size() < 2:
+		return 20.0
+	var dist := 0.0
+	var prev := Vector3.ZERO
+	for i in plats.size():
+		var p: Dictionary = plats[i]
+		var cur := Vector3(float(p.get("x", 0)), float(p.get("y", 0)), float(p.get("z", 0)))
+		if i > 0:
+			dist += prev.distance_to(cur)
+		prev = cur
+	# средняя эффективная скорость с прыжками ~4.5 м/с
+	return maxf(8.0, dist / 4.5)
 
 func _procedural_level(n: int) -> Dictionary:
 	# авто-генерация, если нет файла уровня
@@ -101,20 +119,14 @@ func _procedural_level(n: int) -> Dictionary:
 	plats.append({"x":pos.x,"y":pos.y+0.5,"z":pos.z-3,"sx":5,"sy":1,"sz":5,"mat":"gold"})
 	return {"start":[0,2,0],"platforms":plats,"coins":coins,"checkpoints":cps,"finish":[pos.x,pos.y+1.5,pos.z-3],"lava_y":-6.0,"lava_size":240.0}
 
-var _ls := 0
-
-func _process(_delta: float) -> void:
-	if _running:
-		_time_ms = Time.get_ticks_msec() - _ls
-		var t := hud.get_node_or_null("Timer")
-		if t:
-			t.text = "%.1f" % (_time_ms / 1000.0)
+func _process(delta: float) -> void:
+	if _running and not get_tree().paused:
+		# честный спидран-таймер: копим только активное время (без панелей/видео)
+		_time_ms += int(delta * 1000.0)
+		_timer_label.text = "%.1f" % (_time_ms / 1000.0)
 	# падение за край
 	if player.global_position.y < -5.0 and _running:
 		_on_player_died()
-
-func _level_start() -> void:
-	_ls = Time.get_ticks_msec()
 
 func _on_coin() -> void:
 	coins_collected += 1
@@ -122,16 +134,17 @@ func _on_coin() -> void:
 	_update_coins()
 
 func _update_coins() -> void:
-	hud.get_node("Coins").text = "◈ %d" % coins_collected
+	_coins_label.text = "◈ %d" % coins_collected
 
 func _on_checkpoint(pos: Vector3) -> void:
 	player.set_spawn(pos)
 
 func _on_finish() -> void:
 	_running = false
+	_new_record = GameState.is_new_record(level_num, _time_ms)
 	GameState.complete_level(level_num, _time_ms)
 	# сабмит в лидерборд (чем меньше время, тем лучше → инвертируем в очки)
-	var score := max(1, 1_000_000 - _time_ms)
+	var score: int = maxi(1, 1_000_000 - _time_ms)
 	Yandex.submit_score("parkour_time", score)
 	_show_win()
 
@@ -143,12 +156,17 @@ func _on_player_died() -> void:
 	_show_death()
 
 # ---------- HUD ----------
+var _lvl_label: Label
+var _coins_label: Label
+var _timer_label: Label
+
 func _build_hud() -> void:
 	hud = Control.new()
 	hud.name = "HUD"
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var layer := CanvasLayer.new()
 	layer.layer = 10
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
 	layer.add_child(hud)
 
@@ -156,49 +174,50 @@ func _build_hud() -> void:
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top.offset_top = 8
 	top.offset_left = 12
-	top.offset_right = -12
+	top.offset_right = -96  # справа — кнопка паузы
 	hud.add_child(top)
 
-	var lvl := Label.new()
-	lvl.name = "LevelLabel"
-	lvl.add_theme_font_size_override("font_size", 34)
-	lvl.add_theme_color_override("font_color", Color.WHITE)
-	lvl.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
-	lvl.add_theme_constant_override("shadow_offset_x", 2)
-	lvl.add_theme_constant_override("shadow_offset_y", 2)
-	top.add_child(lvl)
+	_lvl_label = Label.new()
+	_lvl_label.add_theme_font_size_override("font_size", 34)
+	_lvl_label.add_theme_color_override("font_color", Color.WHITE)
+	_lvl_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
+	_lvl_label.add_theme_constant_override("shadow_offset_x", 2)
+	_lvl_label.add_theme_constant_override("shadow_offset_y", 2)
+	top.add_child(_lvl_label)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(spacer)
 
-	var coins := Label.new()
-	coins.name = "Coins"
-	coins.text = "◈ 0"
-	coins.add_theme_font_size_override("font_size", 34)
-	coins.add_theme_color_override("font_color", Color(0.4, 1.0, 0.7))
-	coins.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
-	coins.add_theme_constant_override("shadow_offset_x", 2)
-	coins.add_theme_constant_override("shadow_offset_y", 2)
-	top.add_child(coins)
+	_coins_label = Label.new()
+	_coins_label.text = "◈ 0"
+	_coins_label.add_theme_font_size_override("font_size", 34)
+	_coins_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.7))
+	_coins_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
+	_coins_label.add_theme_constant_override("shadow_offset_x", 2)
+	_coins_label.add_theme_constant_override("shadow_offset_y", 2)
+	top.add_child(_coins_label)
 
 	# таймер (спидран)
-	var timer := Label.new()
-	timer.name = "Timer"
-	timer.text = "0.0"
-	timer.add_theme_font_size_override("font_size", 26)
-	timer.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
-	timer.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
-	timer.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	timer.offset_top = 10
-	hud.add_child(timer)
+	_timer_label = Label.new()
+	_timer_label.text = "0.0"
+	_timer_label.add_theme_font_size_override("font_size", 26)
+	_timer_label.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+	_timer_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
+	_timer_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_timer_label.offset_top = 10
+	hud.add_child(_timer_label)
 
-	# кнопка паузы
+	# кнопка паузы — справа вверху (не перекрывает LevelLabel)
 	var pause := Button.new()
 	pause.name = "PauseBtn"
-	pause.text = "❚❚"
+	pause.text = "II"
 	pause.custom_minimum_size = Vector2(72, 72)
-	pause.position = Vector2(12, 8)
+	pause.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	pause.offset_left = -84
+	pause.offset_right = -12
+	pause.offset_top = 8
+	pause.offset_bottom = 80
 	pause.add_theme_font_size_override("font_size", 28)
 	pause.pressed.connect(_toggle_pause)
 	hud.add_child(pause)
@@ -216,6 +235,8 @@ func _build_ui() -> void:
 	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var layer := CanvasLayer.new()
 	layer.layer = 20
+	# КРИТИЧНО: панель паузы/смерти/победы должна принимать ввод при paused-дереве
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
 	layer.add_child(ui)
 	ui.visible = false
@@ -284,16 +305,23 @@ func _show_death() -> void:
 
 func _on_revive() -> void:
 	AudioBus.click()
-	_revives_used += 1
 	_hide_panel()
 	Yandex.show_rewarded(func():
+		# награда получена — только теперь тратим попытку revive
+		_revives_used += 1
 		player.revive()
-		_running = true)
+		_running = true,
+		func():
+			# ошибка рекламы — без софтока: панель снова показана
+			AudioBus.mute(false)
+			_show_death())
 
 func _on_restart() -> void:
 	AudioBus.click()
 	_hide_panel()
-	_maybe_interstitial()
+	# смерть + мгновенная реклама = двойной удар по новичку (тренд: рейтинг важнее дохода)
+	if _deaths >= 2:
+		_maybe_interstitial()
 	player.respawn()
 	_running = true
 
@@ -330,14 +358,27 @@ func _advance_tutorial() -> void:
 	if level_num == 1 and _tutorial_step < 2:
 		_show_tutorial_step(_tutorial_step + 1)
 
+var _par_sec := 20.0  # par-время уровня: путь / средняя скорость
+var _new_record := false
+
+func _stars_earned() -> int:
+	# звёзды от par-времени (а не абсолютного): par×1.0 = 3★, ×1.35 = 2★, иначе 1★
+	var sec := _time_ms / 1000.0
+	if sec <= _par_sec: return 3
+	if sec <= _par_sec * 1.35: return 2
+	return 1
+
+func _star_str(n: int) -> String:
+	return "★★★" if n == 3 else ("★★☆" if n == 2 else "★☆☆")
+
 func _show_win() -> void:
 	var t := "%.1f" % (_time_ms / 1000.0)
-	# звёзды за скорость: <15с=3, <25с=2, иначе 1
-	var sec := _time_ms / 1000.0
-	var stars := 3 if sec < 15.0 else (2 if sec < 25.0 else 1)
-	var star_str := "★★★" if stars == 3 else ("★★☆" if stars == 2 else "★☆☆")
+	var stars := _stars_earned()
 	GameState.add_stars(level_num, stars)
-	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
+	var body := GameState.L("time_coins") % [t, coins_collected]
+	if _new_record:
+		body += "\n" + GameState.L("new_record")
+	_show_panel(GameState.L("finish") % _star_str(stars), body, GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
 
 func _on_double_coins() -> void:
 	AudioBus.click()
@@ -346,7 +387,15 @@ func _on_double_coins() -> void:
 		GameState.add_coins(coins_collected)  # удваиваем
 		coins_collected *= 2
 		AudioBus.buy()
-		_show_panel(GameState.L("doubled"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu))
+		_show_panel(GameState.L("doubled"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu),
+		func():
+			# ошибка рекламы — возвращаем панель победы без удвоения
+			_show_win_panel())
+
+func _show_win_panel() -> void:
+	var t := "%.1f" % (_time_ms / 1000.0)
+	var star_str := _star_str(_stars_earned())
+	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
 
 func _on_next() -> void:
 	AudioBus.click()

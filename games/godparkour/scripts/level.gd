@@ -29,6 +29,8 @@ func _make_materials() -> void:
 	for k in COLORS:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = COLORS[k]
+		m.albedo_texture = _block_texture(COLORS[k], k.hash())
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		m.roughness = 0.85
 		_mats[k] = m
 	# лава
@@ -69,8 +71,19 @@ func load_level(def: Dictionary) -> void:
 	_spawn_ambient_particles()
 
 	var plats: Array = def.get("platforms", [])
+	# серия Нубик/Про/Бог: difficulty сужает боковую ширину sx и ускоряет mover'ы.
+	# Глубину sz и позиции НЕ трогаем — иначе разрывы вырастут и god-уровни станут
+	# непроходимыми (smoke-тест валидирует только базовый JSON). Проходимость сохраняется.
+	var diff: float = Variant.difficulty
 	for p in plats:
-		_spawn_platform(p)
+		var q: Dictionary = p.duplicate()
+		if diff != 1.0:
+			q["sx"] = maxf(1.2, float(q.get("sx", 2)) / diff)
+			if q.has("move"):
+				var mv: Dictionary = (q["move"] as Dictionary).duplicate()
+				mv["speed"] = float(mv.get("speed", 2.0)) * diff
+				q["move"] = mv
+		_spawn_platform(q)
 	var coins: Array = def.get("coins", [])
 	for c in coins:
 		_spawn_coin(Vector3(c[0], c[1], c[2]))
@@ -88,6 +101,22 @@ func load_level(def: Dictionary) -> void:
 	# лава-плоскость на y=0
 	_spawn_lava(def.get("lava_y", -6.0), def.get("lava_size", 220.0))
 
+# процедурная пиксельная текстура блока 16×16 (жанровая конвенция майнкрафта).
+# Детерминированный шум по базовому цвету + «шапка» сверху для grass-подобных.
+func _block_texture(base: Color, seed: int) -> ImageTexture:
+	var img := Image.create_empty(16, 16, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	for y in 16:
+		for x in 16:
+			var n := rng.randf_range(-0.10, 0.10)
+			var c := base * (1.0 + n)
+			# пиксельная сетка-рамка чуть темнее — блоки читаются отдельными кубами
+			if x == 0 or y == 0:
+				c = c.darkened(0.22)
+			img.set_pixel(x, y, Color(c.r, c.g, c.b, 1.0))
+	return ImageTexture.create_from_image(img)
+
 func _apply_hacker_theme() -> void:
 	# тёмное небо
 	var env := get_viewport().world_3d.environment
@@ -95,6 +124,9 @@ func _apply_hacker_theme() -> void:
 		env.background_color = Color(0.01, 0.04, 0.02)
 		env.ambient_light_color = Color(0.1, 0.45, 0.15)
 		env.ambient_light_energy = 0.55
+		env.fog_enabled = true
+		env.fog_light_color = Color(0.02, 0.12, 0.04)
+		env.fog_density = 0.018
 	# лава-данные (зелёная)
 	var data := StandardMaterial3D.new()
 	data.albedo_color = Color(0.02, 0.6, 0.1)
@@ -103,7 +135,7 @@ func _apply_hacker_theme() -> void:
 	data.emission_energy_multiplier = 2.2
 	_mats["lava"] = data
 	# монеты — кибер-голубые
-	var coin := _mats["coin"]
+	var coin: StandardMaterial3D = _mats["coin"]
 	coin.albedo_color = Color(0.2, 0.8, 1.0)
 	coin.emission = Color(0.2, 0.8, 1.0)
 
@@ -113,18 +145,24 @@ func _apply_default_theme() -> void:
 		env.background_color = Color(0.53, 0.75, 0.92)
 		env.ambient_light_color = Color(0.7, 0.78, 0.9)
 		env.ambient_light_energy = 0.9
-	var lava := _mats["lava"]
+		env.fog_enabled = true
+		env.fog_light_color = Color(0.6, 0.78, 0.94)
+		env.fog_density = 0.012
+	var lava: StandardMaterial3D = _mats["lava"]
 	lava.albedo_color = Color(1.0, 0.35, 0.05)
 	lava.emission = Color(1.0, 0.4, 0.1)
 	lava.emission_energy_multiplier = 2.0
-	var coin := _mats["coin"]
+	var coin: StandardMaterial3D = _mats["coin"]
 	coin.albedo_color = Color(0.2, 0.95, 0.6)
 	coin.emission = Color(0.2, 0.95, 0.6)
 
 func _spawn_platform(p: Dictionary) -> void:
 	var pos := Vector3(p.get("x", 0), p.get("y", 0), p.get("z", 0))
 	var size := Vector3(p.get("sx", 2), p.get("sy", 1), p.get("sz", 2))
-	var body := StaticBody3D.new()
+	var moving: bool = p.has("move")
+	# AnimatableBody3D переносит CharacterBody3D на себе (в отличие от StaticBody3D,
+	# где платформа просто уезжает из-под ног)
+	var body: PhysicsBody3D = AnimatableBody3D.new() if moving else StaticBody3D.new()
 	body.position = pos
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -139,7 +177,7 @@ func _spawn_platform(p: Dictionary) -> void:
 	body.add_child(cs)
 	add_child(body)
 	# движущаяся ловушка
-	if p.has("move"):
+	if moving:
 		_traps.append({"node": body, "base": pos, "move": p["move"]})
 
 func _spawn_coin(pos: Vector3) -> void:

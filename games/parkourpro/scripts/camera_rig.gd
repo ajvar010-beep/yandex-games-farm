@@ -53,7 +53,11 @@ var _auto_follow := true
 func _process_auto(delta: float) -> void:
 	if not _auto_follow or not target:
 		return
-	# целевой yaw = направление движения игрока (если бежит)
+	# анти-замкнутый цикл: пока игрок активно рулит — камеру НЕ доворачиваем,
+	# иначе camera-relative ввод «съезжает» вместе с yaw (камера догоняет скорость,
+	# которая сама зависит от базиса камеры)
+	if target is ParkourPlayer and target.has_method("is_input_active") and target.is_input_active():
+		return
 	var v := Vector2.ZERO
 	if target is ParkourPlayer:
 		var vel: Vector3 = target.velocity

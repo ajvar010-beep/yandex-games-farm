@@ -46,22 +46,25 @@ var _pending := 0
 func _fetch_sdk_objects() -> void:
 	var js = JavaScriptBridge.get_interface("window")
 	_pending = 3
+	# ВАЖНО: .catch() обязателен на КАЖДОМ геттере — иначе при реджекте
+	# (getPayments для анонимов, getLeaderboards без настроенных ЛБ) _settle не
+	# вызывается, _pending не доходит до 0 и sdk_ready не эмитится (restore/облако мертвы).
 	if js.ysdk.getPlayer != null:
 		js.ysdk.getPlayer().then(JavaScriptBridge.create_callback(func(args):
 			if args.size() > 0: _player = args[0]
-			_settle()))
+			_settle())).catch(JavaScriptBridge.create_callback(func(_e): _settle()))
 	else:
 		_settle()
 	if js.ysdk.getPayments != null:
 		js.ysdk.getPayments().then(JavaScriptBridge.create_callback(func(args):
 			if args.size() > 0: _payments = args[0]
-			_settle()))
+			_settle())).catch(JavaScriptBridge.create_callback(func(_e): _settle()))
 	else:
 		_settle()
 	if js.ysdk.getLeaderboards != null:
 		js.ysdk.getLeaderboards().then(JavaScriptBridge.create_callback(func(args):
 			if args.size() > 0: _lb = args[0]
-			_settle()))
+			_settle())).catch(JavaScriptBridge.create_callback(func(_e): _settle()))
 	else:
 		_settle()
 
@@ -100,13 +103,17 @@ func show_fullscreen(on_closed: Callable = Callable()) -> void:
 	AudioBus.mute(true)
 	gameplay_stop()
 	var js = JavaScriptBridge.get_interface("window")
-	var opts = js.Object.create()
-	opts.callbacks = js.Object.create()
+	# ВАЖНО: Object.create() без аргумента бросает TypeError в JS-движке;
+	# JavaScriptBridge.create_object("Object") = new Object() = {} (документированный API)
+	var opts = JavaScriptBridge.create_object("Object")
+	opts.callbacks = JavaScriptBridge.create_object("Object")
 	opts.callbacks.onClose = JavaScriptBridge.create_callback(func(wasShown):
 		AudioBus.mute(false)
+		gameplay_start()
 		if _adv_cb_off.is_valid(): _adv_cb_off.call())
 	opts.callbacks.onError = JavaScriptBridge.create_callback(func(e):
 		AudioBus.mute(false)
+		gameplay_start()
 		if _adv_cb_off.is_valid(): _adv_cb_off.call())
 	js.ysdk.adv.showFullscreenAdv(opts)
 
@@ -124,8 +131,8 @@ func show_rewarded(on_reward: Callable, on_fail: Callable = Callable()) -> void:
 	AudioBus.mute(true)
 	gameplay_stop()
 	var js = JavaScriptBridge.get_interface("window")
-	var opts = js.Object.create()
-	opts.callbacks = js.Object.create()
+	var opts = JavaScriptBridge.create_object("Object")
+	opts.callbacks = JavaScriptBridge.create_object("Object")
 	opts.callbacks.onRewarded = _js_cb_reward
 	opts.callbacks.onClose = _js_cb_close
 	opts.callbacks.onError = JavaScriptBridge.create_callback(func(e):

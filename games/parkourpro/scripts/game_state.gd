@@ -255,7 +255,7 @@ func claim_daily() -> int:
 	else:
 		daily_streak = 1
 	last_daily = today
-	var reward := 50 + (daily_streak - 1) * 25  # 50, 75, 100, ...
+	var reward := mini(200, 50 + (daily_streak - 1) * 25)  # 50..200, кап против инфляции
 	add_coins(reward)
 	save_data()
 	return reward

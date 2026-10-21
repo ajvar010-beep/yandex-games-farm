@@ -290,23 +290,30 @@ func _build_leaderboard(parent: Control) -> void:
 
 	Yandex.get_leaderboard("parkour_time", func(res):
 		if not is_instance_valid(lb_label): return
-		if res == null:
+		# null-safe: у свежего ЛБ entries может отсутствовать; quantity нет в API
+		if res == null or res.entries == null:
+			lb_label.text = GameState.L("lb_unavailable")
+			return
+		var entries = res.entries
+		var n: int = mini(int(entries.size()), 8)
+		if n == 0:
 			lb_label.text = GameState.L("lb_unavailable")
 			return
 		var lines: PackedStringArray = []
-		var entries = res.entries
-		var n: int = min(int(res.quantity), 8)
 		for i in range(n):
 			var e = entries[i]
 			var pname := "?"
 			if e.player != null:
 				pname = str(e.player.publicName)
 			lines.append("%d. %s — %s" % [i + 1, pname, _fmt_score(int(e.score))])
-		if int(res.userRank) > 0:
+		if res.userRank != null and int(res.userRank) > 0:
 			var uname := "?"
-			if res.userEntry != null and res.userEntry.player != null:
-				uname = str(res.userEntry.player.publicName)
-			lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(int(res.userEntry.score))])
+			var uscore := 0
+			if res.userEntry != null:
+				if res.userEntry.player != null:
+					uname = str(res.userEntry.player.publicName)
+				uscore = int(res.userEntry.score)
+			lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(uscore)])
 		lb_label.text = "\n".join(lines))
 
 func _fmt_score(v: int) -> String:
@@ -353,7 +360,9 @@ func _on_daily() -> void:
 
 func _offer_daily_double(got: int) -> void:
 	var box := PanelContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
 	box.custom_minimum_size = Vector2(420, 200)
 	add_child(box)
 	var vb := VBoxContainer.new()

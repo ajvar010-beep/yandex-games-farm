@@ -37,6 +37,8 @@ func _ready() -> void:
 	cam_rig.name = "CameraRig"
 	add_child(cam_rig)
 	cam_rig.target = player
+	# игрок создан РАНЬШЕ камеры — его _cam остался null, чиним wiring
+	player._cam = cam_rig
 
 	_build_hud()
 	_build_ui()
@@ -64,6 +66,7 @@ func load_level(n: int) -> void:
 	_deaths = 0
 	_revives_used = 0
 	_new_record = false
+	_won = false
 	_lvl_label.text = GameState.L("level") % n
 	_update_coins()
 	_timer_label.text = "0.0"
@@ -71,21 +74,27 @@ func load_level(n: int) -> void:
 	if n == 1:
 		_show_tutorial_step(0)
 
-# par-время уровня: суммарный путь по платформам / средняя скорость игрока
+# par-время уровня: путь / средняя скорость + ожидание движущихся платформ
 func _calc_par(def: Dictionary) -> float:
 	var plats: Array = def.get("platforms", [])
 	if plats.size() < 2:
 		return 20.0
 	var dist := 0.0
 	var prev := Vector3.ZERO
+	var mover_wait := 0.0
 	for i in plats.size():
 		var p: Dictionary = plats[i]
 		var cur := Vector3(float(p.get("x", 0)), float(p.get("y", 0)), float(p.get("z", 0)))
 		if i > 0:
 			dist += prev.distance_to(cur)
 		prev = cur
+		# на mover в среднем ждём ~0.75 полупериода (фаза случайна)
+		if p.has("move"):
+			var mv: Dictionary = p["move"]
+			var spd := maxf(0.5, float(mv.get("speed", 2.0)))
+			mover_wait += 0.75 * (PI / spd)
 	# средняя эффективная скорость с прыжками ~4.5 м/с
-	return maxf(8.0, dist / 4.5)
+	return maxf(8.0, dist / 4.5 + mover_wait * 0.5)
 
 func _procedural_level(n: int) -> Dictionary:
 	# авто-генерация, если нет файла уровня
@@ -129,6 +138,7 @@ func _process(delta: float) -> void:
 		_on_player_died()
 
 func _on_coin() -> void:
+	if not _running: return  # труп не фармит монеты
 	coins_collected += 1
 	GameState.add_coins(1)
 	_update_coins()
@@ -140,6 +150,9 @@ func _on_checkpoint(pos: Vector3) -> void:
 	player.set_spawn(pos)
 
 func _on_finish() -> void:
+	if _won: return  # защита от повторного триггера
+	if player.get("_dead"): return  # мёртвый не побеждает
+	_won = true
 	_running = false
 	_new_record = GameState.is_new_record(level_num, _time_ms)
 	GameState.complete_level(level_num, _time_ms)
@@ -153,6 +166,9 @@ func _on_player_died() -> void:
 	_running = false
 	_death_pos = player.global_position
 	_deaths += 1
+	# kill() замораживает физику (_dead=true) — иначе тело долетает до лавы,
+	# приземляется на неё (is_on_floor) и портило _last_safe; заодно анимация распада
+	player.kill()
 	_show_death()
 
 # ---------- HUD ----------
@@ -247,8 +263,11 @@ func _build_ui() -> void:
 	ui.add_child(dim)
 
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# anchors AND offsets по центру (set_anchors_preset оставляет offsets нулевыми — панель уезжала)
+	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_panel.custom_minimum_size = Vector2(460, 300)
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	ui.add_child(_panel)
 
 	var vb := VBoxContainer.new()
@@ -327,7 +346,13 @@ func _on_restart() -> void:
 
 func _on_menu() -> void:
 	AudioBus.click()
-	get_parent().back_to_menu()
+	# родитель — GameHolder (без скрипта): Main ищем от корня, иначе софтлок «В меню»
+	get_tree().paused = false
+	var main := get_tree().root.get_node_or_null("Main")
+	if main:
+		main.back_to_menu()
+	else:
+		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
 var _tutorial_step := 0
 var _tutorial_label: Label
@@ -347,25 +372,42 @@ func _show_tutorial_step(step: int) -> void:
 	]
 	_tutorial_label.text = texts[step]
 	_tutorial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# preset + offset_top/bottom (offset_y после preset сбрасывался в 0 — тутор был невидим)
 	_tutorial_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_tutorial_label.offset_y = -120
+	_tutorial_label.offset_top = -150
+	_tutorial_label.offset_bottom = -110
+	_tutorial_label.offset_left = -400
+	_tutorial_label.offset_right = 400
+	_tutorial_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tutorial_label.add_theme_font_size_override("font_size", 24)
 	_tutorial_label.add_theme_color_override("font_color", Color(1, 1, 0.4))
 	_tutorial_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.8))
 	hud.add_child(_tutorial_label)
 
-func _advance_tutorial() -> void:
-	if level_num == 1 and _tutorial_step < 2:
-		_show_tutorial_step(_tutorial_step + 1)
+# шаги тутора по типу действия (а не каждый кадр): move→jump→double
+func _advance_tutorial(trigger: String = "") -> void:
+	if level_num != 1: return
+	match trigger:
+		"move":
+			if _tutorial_step == 0:
+				_show_tutorial_step(1)
+		"jump":
+			if _tutorial_step == 1:
+				_show_tutorial_step(2)
+		"double":
+			if _tutorial_step == 2:
+				_show_tutorial_step(99)  # скрыть
 
 var _par_sec := 20.0  # par-время уровня: путь / средняя скорость
 var _new_record := false
+var _won := false
 
 func _stars_earned() -> int:
-	# звёзды от par-времени (а не абсолютного): par×1.0 = 3★, ×1.35 = 2★, иначе 1★
+	# звёзды от par-времени: par×1.2 = 3★, par×1.8 = 2★, иначе 1★
+	# (детская аудитория: 3★ достижима хорошей игрой, не идеальной)
 	var sec := _time_ms / 1000.0
-	if sec <= _par_sec: return 3
-	if sec <= _par_sec * 1.35: return 2
+	if sec <= _par_sec * 1.2: return 3
+	if sec <= _par_sec * 1.8: return 2
 	return 1
 
 func _star_str(n: int) -> String:
@@ -384,8 +426,10 @@ func _on_double_coins() -> void:
 	AudioBus.click()
 	_hide_panel()
 	Yandex.show_rewarded(func():
-		GameState.add_coins(coins_collected)  # удваиваем
-		coins_collected *= 2
+		# удваиваем + фикс-бонус 20: смотреть видео выгодно даже на бедных уровнях
+		var bonus := coins_collected + 20
+		GameState.add_coins(bonus)
+		coins_collected += bonus
 		AudioBus.buy()
 		_show_panel(GameState.L("doubled"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu),
 		func():

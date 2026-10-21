@@ -169,7 +169,10 @@ func _physics_process(delta: float) -> void:
 	if is_on_floor():
 		_jumps = 0
 		_coyote = COYOTE_TIME
-		_last_safe = global_position  # честный revive: помним точку на полу
+		# честный revive: помним точку только на НАСТОЯЩЕМ полу, не на лаве
+		# (лава — StaticBody3D с коллизией, is_on_floor на ней true, но revive туда = смерть)
+		if _floor_is_safe():
+			_last_safe = global_position
 	else:
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_mult * delta
 
@@ -205,10 +208,10 @@ func _physics_process(delta: float) -> void:
 	if dir.length() > 0.1 and _mesh:
 		var target_yaw := atan2(-dir.x, -dir.z)
 		_mesh.rotation.y = lerp_angle(_mesh.rotation.y, target_yaw, 12 * delta)
-		# тутор: первое движение
+		# тутор: первое движение (шаг 0→1)
 		var game := get_parent()
 		if game and game.has_method("_advance_tutorial"):
-			game._advance_tutorial()
+			game._advance_tutorial("move")
 
 	# подпрыгивание при беге + размахивание руками/ногами
 	if _mesh:
@@ -229,13 +232,29 @@ func _get_input_dir() -> Vector2:
 func is_input_active() -> bool:
 	return _get_input_dir().length() > 0.08
 
+# пол под игроком безопасен для revive-точки? (не лава, не ниже порога)
+func _floor_is_safe() -> bool:
+	if global_position.y < -3.0:
+		return false  # страховка: слишком низко = над лавой
+	# проверяем все slide-коллизии кадра на группу «lava»
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col == null: continue
+		var collider = col.get_collider()
+		if collider is Node and collider.is_in_group("lava"):
+			return false
+	return true
+
 func _do_jump() -> void:
 	_jumps += 1
 	velocity.y = jump_force
-	# тутор: первый прыжок
+	# тутор: первый прыжок (1→2), двойной (2→скрыть)
 	var game := get_parent()
 	if game and game.has_method("_advance_tutorial"):
-		game._advance_tutorial()
+		if _jumps > 1:
+			game._advance_tutorial("double")
+		else:
+			game._advance_tutorial("jump")
 	# squash&stretch: при прыжке вытягиваемся
 	if _mesh:
 		_mesh.scale = Vector3(0.85, 1.15, 0.85)

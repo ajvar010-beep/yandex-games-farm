@@ -20,6 +20,9 @@ func _check_ready() -> void:
 	var js = JavaScriptBridge.get_interface("window")
 	if js and js.ysdk != null:
 		_sdk_ready = true
+		# автоопределение языка (п. 2.14) — эмитит lang_changed, меню перестроится
+		if js.ysdk.environment != null:
+			GameState.set_lang(str(js.ysdk.environment.i18n.lang))
 	else:
 		await get_tree().create_timer(0.5).timeout
 		_check_ready()

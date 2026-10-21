@@ -14,6 +14,11 @@ func _ready() -> void:
 	_main = get_tree().root.get_node_or_null("Main")
 	if _main == null:
 		_main = get_parent().get_parent().get_parent()  # fallback
+	if not GameState.lang_changed.is_connected(_on_lang_changed):
+		GameState.lang_changed.connect(_on_lang_changed)
+	_build()
+
+func _on_lang_changed() -> void:
 	_build()
 
 func refresh() -> void:
@@ -64,7 +69,7 @@ func _build() -> void:
 
 	# скролл с уровнями
 	var lv_title := Label.new()
-	lv_title.text = "— УРОВНИ —"
+	lv_title.text = GameState.L("levels_hdr")
 	lv_title.add_theme_font_size_override("font_size", 22)
 	lv_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
 	vb.add_child(lv_title)
@@ -85,7 +90,7 @@ func _build() -> void:
 		var unlocked := i <= GameState.max_level
 		if i == 21:
 			# ХАКЕР — неоновая кнопка
-			b.text = "ХАКЕР" if unlocked else "🔒"
+			b.text = GameState.L("hacker") if unlocked else "🔒"
 			b.modulate = Color(0.1, 1.0, 0.3) if unlocked else Color(0.45, 0.45, 0.5)
 			b.add_theme_font_size_override("font_size", 26)
 		else:
@@ -106,7 +111,7 @@ func _build() -> void:
 
 	# магазин скинов
 	var sh_title := Label.new()
-	sh_title.text = "— СКИНЫ —"
+	sh_title.text = GameState.L("skins_hdr")
 	sh_title.add_theme_font_size_override("font_size", 22)
 	sh_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
 	vb.add_child(sh_title)
@@ -122,7 +127,7 @@ func _build() -> void:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(150, 130)
 		var unlocked := GameState.is_unlocked(id)
-		var txt: String = s["name"]
+		var txt: String = GameState.L("skin_" + id)
 		if not unlocked:
 			if s.get("rv", false):
 				txt += "\n📺"
@@ -139,7 +144,7 @@ func _build() -> void:
 
 	# Магазин монет (IAP)
 	var shop_title := Label.new()
-	shop_title.text = "— МАГАЗИН —"
+	shop_title.text = GameState.L("shop_hdr")
 	shop_title.add_theme_font_size_override("font_size", 22)
 	shop_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
 	vb.add_child(shop_title)
@@ -147,15 +152,15 @@ func _build() -> void:
 	var shop := HBoxContainer.new()
 	shop.add_theme_constant_override("separation", 10)
 	vb.add_child(shop)
-	_add_iap_btn(shop, "💰 500 ◈\n49 ₽", "coins_500", 500)
-	_add_iap_btn(shop, "💰 1500 ◈\n129 ₽", "coins_1500", 1500)
-	_add_iap_btn(shop, "🚫 Без рекламы\n199 ₽", "no_ads", 0)
+	_add_iap_btn(shop, GameState.L("shop_coins1"), "coins_500", 500)
+	_add_iap_btn(shop, GameState.L("shop_coins2"), "coins_1500", 1500)
+	_add_iap_btn(shop, GameState.L("shop_noads"), "no_ads", 0)
 
 	# низ: звук + ежедневка
 	var foot := HBoxContainer.new()
 	vb.add_child(foot)
 	var snd := Button.new()
-	snd.text = "Звук: ВКЛ" if GameState.sound_on else "Звук: ВЫКЛ"
+	snd.text = GameState.L("sound_on") if GameState.sound_on else GameState.L("sound_off")
 	snd.pressed.connect(func():
 		GameState.sound_on = not GameState.sound_on
 		GameState.save_data()
@@ -168,10 +173,10 @@ func _build() -> void:
 
 	var daily := Button.new()
 	if GameState.can_claim_daily():
-		daily.text = "🎁 Награда дня!"
+		daily.text = GameState.L("daily")
 		daily.modulate = Color(1, 0.9, 0.3)
 	else:
-		daily.text = "🎁 завтра (×%d)" % GameState.daily_streak
+		daily.text = GameState.L("daily_next") % GameState.daily_streak
 		daily.modulate = Color(0.7, 0.7, 0.75)
 	daily.add_theme_font_size_override("font_size", 20)
 	daily.pressed.connect(_on_daily)

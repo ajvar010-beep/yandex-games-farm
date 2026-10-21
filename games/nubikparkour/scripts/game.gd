@@ -63,7 +63,7 @@ func load_level(n: int) -> void:
 	_running = true
 	_deaths = 0
 	_revives_used = 0
-	hud.get_node("LevelLabel").text = "Уровень %d" % n
+	hud.get_node("LevelLabel").text = GameState.L("level") % n
 	_update_coins()
 	# тутор-подсказка на 1 уровне
 	if n == 1:
@@ -278,9 +278,9 @@ func _show_death() -> void:
 	var can_rv := _revives_used < MAX_REVIVES
 	if can_rv:
 		var n := _revives_used + 1
-		_show_panel("Провал!", "Упал в лаву... (%d/%d)" % [n, MAX_REVIVES], "▶ Ожить (видео)", _on_revive, "Заново", _on_restart)
+		_show_panel(GameState.L("fail"), GameState.L("lava_n") % [n, MAX_REVIVES], GameState.L("revive"), _on_revive, GameState.L("restart"), _on_restart)
 	else:
-		_show_panel("Провал!", "Упал в лаву...", "Заново", _on_restart, "В меню", _on_menu)
+		_show_panel(GameState.L("fail"), GameState.L("lava"), GameState.L("restart"), _on_restart, GameState.L("menu"), _on_menu)
 
 func _on_revive() -> void:
 	AudioBus.click()
@@ -313,9 +313,9 @@ func _show_tutorial_step(step: int) -> void:
 		return
 	_tutorial_label = Label.new()
 	var texts := [
-		"Беги вперёд: WASD или свайп влевой части экрана",
-		"Прыгай: Space или тап правой части",
-		"Двойной прыжок в воздухе! Дойди до кольца ⭕"
+		GameState.L("tut0"),
+		GameState.L("tut1"),
+		GameState.L("tut2")
 	]
 	_tutorial_label.text = texts[step]
 	_tutorial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -337,7 +337,7 @@ func _show_win() -> void:
 	var stars := 3 if sec < 15.0 else (2 if sec < 25.0 else 1)
 	var star_str := "★★★" if stars == 3 else ("★★☆" if stars == 2 else "★☆☆")
 	GameState.add_stars(level_num, stars)
-	_show_panel("Финиш! %s" % star_str, "Время: %s сек  •  ◈ %d" % [t, coins_collected], "◈×2 (видео)", _on_double_coins, "Дальше ▶", _on_next)
+	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
 
 func _on_double_coins() -> void:
 	AudioBus.click()
@@ -346,7 +346,7 @@ func _on_double_coins() -> void:
 		GameState.add_coins(coins_collected)  # удваиваем
 		coins_collected *= 2
 		AudioBus.buy()
-		_show_panel("◈ Удвоено!", "Монет: %d" % coins_collected, "Дальше ▶", _on_next, "В меню", _on_menu))
+		_show_panel(GameState.L("doubled"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu))
 
 func _on_next() -> void:
 	AudioBus.click()
@@ -366,7 +366,7 @@ func _toggle_pause() -> void:
 	get_tree().paused = not get_tree().paused
 	if get_tree().paused:
 		Yandex.gameplay_stop()
-		_show_panel("Пауза", "", "Продолжить", _on_resume, "В меню", _on_menu)
+		_show_panel(GameState.L("pause"), "", GameState.L("continue"), _on_resume, GameState.L("menu"), _on_menu)
 	else:
 		_hide_panel()
 		Yandex.gameplay_start()

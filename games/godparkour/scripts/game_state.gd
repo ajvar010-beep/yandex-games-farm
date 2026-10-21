@@ -11,6 +11,64 @@ var last_daily: String = ""      # YYYY-MM-DD
 var daily_streak: int = 0
 var no_ads: bool = false         # IAP: отключить interstitial
 var stars: Dictionary = {}       # level -> 1..3 (рейтинг скорости)
+var lang := "ru"                 # ru | en (авто по SDK)
+
+signal lang_changed              # SDK определил язык — меню/HUD перестраиваются
+
+# ---------- i18n ----------
+const TR := {
+	"title_nub": {"ru": "НУБИК ПАРКУР", "en": "NOOBIK PARKOUR"},
+	"title_pro": {"ru": "ПРО ПАРКУР", "en": "PRO PARKOUR"},
+	"title_god": {"ru": "БОГ ПАРКУРА", "en": "PARKOUR GOD"},
+	"sub_nub": {"ru": "Учись прыгать! Лёгкие уровни для новичков.", "en": "Learn to jump! Easy levels for beginners."},
+	"sub_pro": {"ru": "Прыгай по блокам. Не упади в лаву. Дойди до финиша.", "en": "Jump across blocks. Don't fall in lava. Reach the finish."},
+	"sub_god": {"ru": "Только для избранных. Узкие платформы, злые ловушки.", "en": "Only for the chosen. Narrow platforms, evil traps."},
+	"level": {"ru": "Уровень %d", "en": "Level %d"},
+	"tut0": {"ru": "Беги вперёд: WASD или свайп в левой части экрана", "en": "Run forward: WASD or swipe on the left half"},
+	"tut1": {"ru": "Прыгай: Space или тап правой части", "en": "Jump: Space or tap on the right half"},
+	"tut2": {"ru": "Двойной прыжок в воздухе! Дойди до кольца ⭕", "en": "Double jump in mid-air! Reach the ring ⭕"},
+	"fail": {"ru": "Провал!", "en": "Failed!"},
+	"lava": {"ru": "Упал в лаву...", "en": "Fell into lava..."},
+	"lava_n": {"ru": "Упал в лаву... (%d/%d)", "en": "Fell into lava... (%d/%d)"},
+	"revive": {"ru": "▶ Ожить (видео)", "en": "▶ Revive (video)"},
+	"restart": {"ru": "Заново", "en": "Restart"},
+	"menu": {"ru": "В меню", "en": "Menu"},
+	"finish": {"ru": "Финиш! %s", "en": "Finish! %s"},
+	"time_coins": {"ru": "Время: %s сек  •  ◈ %d", "en": "Time: %s s  •  ◈ %d"},
+	"double": {"ru": "◈×2 (видео)", "en": "◈×2 (video)"},
+	"next": {"ru": "Дальше ▶", "en": "Next ▶"},
+	"doubled": {"ru": "◈ Удвоено!", "en": "◈ Doubled!"},
+	"coins_n": {"ru": "Монет: %d", "en": "Coins: %d"},
+	"pause": {"ru": "Пауза", "en": "Paused"},
+	"continue": {"ru": "Продолжить", "en": "Continue"},
+	"levels_hdr": {"ru": "— УРОВНИ —", "en": "— LEVELS —"},
+	"skins_hdr": {"ru": "— СКИНЫ —", "en": "— SKINS —"},
+	"shop_hdr": {"ru": "— МАГАЗИН —", "en": "— SHOP —"},
+	"sound_on": {"ru": "Звук: ВКЛ", "en": "Sound: ON"},
+	"sound_off": {"ru": "Звук: ВЫКЛ", "en": "Sound: OFF"},
+	"daily": {"ru": "🎁 Награда дня!", "en": "🎁 Daily reward!"},
+	"daily_next": {"ru": "🎁 завтра (×%d)", "en": "🎁 tomorrow (×%d)"},
+	"hacker": {"ru": "ХАКЕР", "en": "HACKER"},
+	"skin_nub": {"ru": "Нуб", "en": "Noob"},
+	"skin_pro": {"ru": "Про", "en": "Pro"},
+	"skin_samurai": {"ru": "Самурай", "en": "Samurai"},
+	"skin_god": {"ru": "Бог", "en": "God"},
+	"skin_neon": {"ru": "Неон", "en": "Neon"},
+	"skin_hacker": {"ru": "Хакер", "en": "Hacker"},
+	"shop_coins1": {"ru": "💰 500 ◈\n49 ₽", "en": "💰 500 ◈\n49 RUB"},
+	"shop_coins2": {"ru": "💰 1500 ◈\n129 ₽", "en": "💰 1500 ◈\n129 RUB"},
+	"shop_noads": {"ru": "🚫 Без рекламы\n199 ₽", "en": "🚫 No ads\n199 RUB"},
+}
+
+func L(key: String) -> String:
+	var d: Dictionary = TR.get(key, {})
+	return d.get(lang, key)
+
+func set_lang(l: String) -> void:
+	var nl := "en" if l.begins_with("en") else "ru"
+	if nl != lang:
+		lang = nl
+		lang_changed.emit()
 
 const SKINS := {
 	"nub":  {"name": "Нуб",   "color": Color(0.35, 0.75, 0.35), "cost": 0,    "rv": false},

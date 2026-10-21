@@ -8,7 +8,7 @@ var _coins_label: Label
 var _skin_grid: GridContainer
 var _title: Label
 
-const LEVELS_TOTAL := 20
+const LEVELS_TOTAL := 21
 
 func _ready() -> void:
 	_main = get_tree().root.get_node_or_null("Main")
@@ -83,14 +83,20 @@ func _build() -> void:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(180, 110)
 		var unlocked := i <= GameState.max_level
-		b.text = "%d" % i
-		b.add_theme_font_size_override("font_size", 40)
-		if unlocked:
-			b.modulate = Color(0.5, 0.95, 0.6)
+		if i == 21:
+			# ХАКЕР — неоновая кнопка
+			b.text = "ХАКЕР" if unlocked else "🔒"
+			b.modulate = Color(0.1, 1.0, 0.3) if unlocked else Color(0.45, 0.45, 0.5)
+			b.add_theme_font_size_override("font_size", 26)
 		else:
-			b.modulate = Color(0.45, 0.45, 0.5)
-			b.text = "🔒"
-			b.add_theme_font_size_override("font_size", 34)
+			b.text = "%d" % i
+			b.add_theme_font_size_override("font_size", 40)
+			if unlocked:
+				b.modulate = Color(0.5, 0.95, 0.6)
+			else:
+				b.modulate = Color(0.45, 0.45, 0.5)
+				b.text = "🔒"
+				b.add_theme_font_size_override("font_size", 34)
 		b.disabled = not unlocked
 		var lv := i
 		b.pressed.connect(func():

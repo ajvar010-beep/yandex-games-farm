@@ -18,6 +18,7 @@ const SKINS := {
 	"samurai": {"name": "Самурай", "color": Color(0.95, 0.35, 0.25), "cost": 250, "rv": false},
 	"god":  {"name": "Бог",   "color": Color(1.0, 0.85, 0.20), "cost": 0,    "rv": true},
 	"neon": {"name": "Неон",  "color": Color(0.9, 0.2, 0.9),   "cost": 400,  "rv": false},
+	"hacker": {"name": "Хакер", "color": Color(0.05, 0.18, 0.08), "cost": 666, "rv": false},
 }
 
 func _ready() -> void:

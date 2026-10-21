@@ -84,4 +84,46 @@ for (let n = 1; n <= 20; n++) {
   const file = path.join(OUT, String(n).padStart(2, '0') + '.json');
   fs.writeFileSync(file, JSON.stringify(def, null, 0));
 }
-console.log('Generated 20 levels into', OUT);
+
+// Уровень 21 — «ХАКЕР»: тёмная неоновая тема, матричные платформы
+(function genHackerLevel() {
+  const r = rng(777);
+  const platforms = [{ x: 0, y: 0, z: 0, sx: 7, sy: 1, sz: 7, mat: 'neon' }];
+  const coins = [];
+  const checkpoints = [];
+  let pos = { x: 0, y: 0, z: 0 };
+  let dir = 1;
+  const steps = 22;
+  const gap = 1.6;
+  const mats = ['neon', 'dark', 'stone'];
+  for (let i = 1; i <= steps; i++) {
+    const nx = pos.x + (r() * 2.2 - 1.1) * dir;
+    const nz = pos.z - (2.2 + gap + r() * 0.5);
+    const ny = pos.y + (r() * 1.0 - 0.3);
+    const w = 2.2 + r() * 0.8;
+    const p = {
+      x: snap(nx), y: snap(ny), z: snap(nz),
+      sx: snap(w), sy: 0.6, sz: snap(w),
+      mat: mats[i % 3]
+    };
+    if (i % 4 === 0) p.move = { axis: r() < 0.5 ? 'x' : 'y', range: 1.8, speed: 1.4 + r() * 1.4 };
+    platforms.push(p);
+    pos = { x: p.x, y: p.y, z: p.z };
+    if (i % 2 === 0) coins.push([snap(pos.x), snap(pos.y + 1.0), snap(pos.z)]);
+    if (i === 11) checkpoints.push([snap(pos.x), snap(pos.y + 0.6), snap(pos.z)]);
+    dir = -dir;
+  }
+  platforms.push({ x: snap(pos.x), y: snap(pos.y + 0.5), z: snap(pos.z - 3.2), sx: 5, sy: 1, sz: 5, mat: 'gold' });
+  const def = {
+    name: 'ХАКЕР',
+    theme: 'hacker',
+    start: [0, 2, 0],
+    platforms, coins, checkpoints,
+    finish: [snap(pos.x), snap(pos.y + 1.6), snap(pos.z - 3.2)],
+    lava_y: -6.0, lava_size: 300.0
+  };
+  fs.writeFileSync(path.join(OUT, '21.json'), JSON.stringify(def, null, 0));
+  console.log('Hacker level (21) generated');
+})();
+
+console.log('Generated 21 levels into', OUT);

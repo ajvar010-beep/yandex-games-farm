@@ -38,6 +38,13 @@ func _make_materials() -> void:
 	lava.emission = Color(1.0, 0.4, 0.1)
 	lava.emission_energy_multiplier = 2.0
 	_mats["lava"] = lava
+	# неон (хакер-тема)
+	var neon := StandardMaterial3D.new()
+	neon.albedo_color = Color(0.02, 0.15, 0.05)
+	neon.emission_enabled = true
+	neon.emission = Color(0.0, 1.0, 0.25)
+	neon.emission_energy_multiplier = 1.3
+	_mats["neon"] = neon
 	# монета
 	var coin := StandardMaterial3D.new()
 	coin.albedo_color = Color(0.2, 0.95, 0.6)
@@ -73,8 +80,46 @@ func load_level(def: Dictionary) -> void:
 	var finish: Array = def.get("finish", [])
 	if finish.size() == 3:
 		_spawn_finish(Vector3(finish[0], finish[1], finish[2]))
+	# тема: хакер (неон) или обычная (восстановление дефолта важно — env общий)
+	if str(def.get("theme", "")) == "hacker":
+		_apply_hacker_theme()
+	else:
+		_apply_default_theme()
 	# лава-плоскость на y=0
 	_spawn_lava(def.get("lava_y", -6.0), def.get("lava_size", 220.0))
+
+func _apply_hacker_theme() -> void:
+	# тёмное небо
+	var env := get_viewport().world_3d.environment
+	if env:
+		env.background_color = Color(0.01, 0.04, 0.02)
+		env.ambient_light_color = Color(0.1, 0.45, 0.15)
+		env.ambient_light_energy = 0.55
+	# лава-данные (зелёная)
+	var data := StandardMaterial3D.new()
+	data.albedo_color = Color(0.02, 0.6, 0.1)
+	data.emission_enabled = true
+	data.emission = Color(0.0, 1.0, 0.2)
+	data.emission_energy_multiplier = 2.2
+	_mats["lava"] = data
+	# монеты — кибер-голубые
+	var coin := _mats["coin"]
+	coin.albedo_color = Color(0.2, 0.8, 1.0)
+	coin.emission = Color(0.2, 0.8, 1.0)
+
+func _apply_default_theme() -> void:
+	var env := get_viewport().world_3d.environment
+	if env:
+		env.background_color = Color(0.53, 0.75, 0.92)
+		env.ambient_light_color = Color(0.7, 0.78, 0.9)
+		env.ambient_light_energy = 0.9
+	var lava := _mats["lava"]
+	lava.albedo_color = Color(1.0, 0.35, 0.05)
+	lava.emission = Color(1.0, 0.4, 0.1)
+	lava.emission_energy_multiplier = 2.0
+	var coin := _mats["coin"]
+	coin.albedo_color = Color(0.2, 0.95, 0.6)
+	coin.emission = Color(0.2, 0.95, 0.6)
 
 func _spawn_platform(p: Dictionary) -> void:
 	var pos := Vector3(p.get("x", 0), p.get("y", 0), p.get("z", 0))

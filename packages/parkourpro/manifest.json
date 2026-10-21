@@ -4,6 +4,10 @@
   "version": "1.0.0",
   "orientation": "landscape",
   "touch": true,
-  "monetization": ["rewarded_video", "interstitial"],
-  "levels": 20
+  "monetization": [
+    "rewarded_video",
+    "interstitial",
+    "iap"
+  ],
+  "levels": 21
 }

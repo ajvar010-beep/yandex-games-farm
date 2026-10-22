@@ -306,8 +306,10 @@ func _show_panel(title: String, sub: String, primary_text: String, primary_cb: C
 		_btn_primary.pressed.disconnect(c.callable)
 	for c in _btn_secondary.pressed.get_connections():
 		_btn_secondary.pressed.disconnect(c.callable)
-	_btn_primary.pressed.connect(primary_cb)
-	_btn_secondary.pressed.connect(secondary_cb)
+	if primary_cb.is_valid():
+		_btn_primary.pressed.connect(primary_cb)
+	if secondary_cb.is_valid():
+		_btn_secondary.pressed.connect(secondary_cb)
 	AudioBus.click()
 
 func _hide_panel() -> void:

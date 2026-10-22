@@ -7,6 +7,7 @@
  *
  * Ожидает структуру:
  *   games/<name>/...            — билд игры (index.html в корне)
+ *   games/<name>/export/web/    — ИЛИ Web-билд Godot (index.html + index.pck/wasm), берётся автоматически
  *   packages/<name>/media/      — icon.png, cover.png, shot_ru_*.png, shot_en_*.png, gameplay_*.mp4
  *   packages/<name>/texts/      — title.ru.txt, seo.ru.txt, short.ru.txt, about.ru.txt, how_to_play.ru.txt (+ .en.)
  *   packages/<name>/CHECKLIST.md — генерируется автоматически
@@ -144,20 +145,25 @@ function checkMedia() {
 }
 
 // ---------- 3. валидация билда + zip (§4) ----------
+// Godot-проекты (parkour-серия): билд лежит в <gameDir>/export/web/, а не в корне.
+// buildDir определяет, что идёт в zip и откуда читать index.html.
+const buildDir = existsSync(join(gameDir, 'index.html')) ? gameDir
+  : existsSync(join(gameDir, 'export', 'web', 'index.html')) ? join(gameDir, 'export', 'web')
+  : gameDir;
 function walk(dir, base = dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(d =>
     d.isDirectory() ? walk(join(dir, d.name), base) : [relative(base, join(dir, d.name))]);
 }
 function checkBuild() {
-  if (!existsSync(join(gameDir, 'index.html'))) { e('билд: нет index.html в корне ' + gameDir); return null; }
-  const files = walk(gameDir);
+  if (!existsSync(join(buildDir, 'index.html'))) { e('билд: нет index.html ни в корне ' + gameDir + ', ни в export/web/'); return null; }
+  const files = walk(buildDir);
   let total = 0;
   for (const rel of files) {
     if (/[^\x20-\x7e]/.test(rel) || /\s/.test(rel)) e(`билд: не-ASCII/пробел в имени: ${rel} (1.22)`);
-    total += statSync(join(gameDir, rel)).size;
+    total += statSync(join(buildDir, rel)).size;
   }
   if (total > 100 * 1024 * 1024) e(`билд: ${Math.round(total / 1048576)} МБ > 100 МБ (1.21)`);
-  const html = readFileSync(join(gameDir, 'index.html'), 'utf8');
+  const html = readFileSync(join(buildDir, 'index.html'), 'utf8');
   if (!/\/sdk\.js|sdk\.js/.test(html)) w('билд: index.html не ссылается на sdk.js — проверить подключение SDK (1.1)');
   return files;
 }
@@ -180,7 +186,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zf:
             zf.write(p, os.path.relpath(p, src).replace(os.sep, '/'))
 print('zipped')
 `;
-  const r = spawnSync('python', ['-c', py, gameDir, zipPath], { encoding: 'utf8' });
+  const r = spawnSync('python', ['-c', py, buildDir, zipPath], { encoding: 'utf8' });
   if (r.status !== 0 || !existsSync(zipPath)) { e('zip: python-zip failed: ' + (r.stderr || r.stdout)); return null; }
   // проверка: index.html в КОРНЕ архива, пути только с forward slash
   const verify = spawnSync('python', ['-c',

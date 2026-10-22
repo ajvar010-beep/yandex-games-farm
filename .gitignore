@@ -1,3 +1,12 @@
 publish/
 scratch_council.txt
 **/.godot/
+# локальный инструментарий и рабочий мусор (не для репо)
+engines/
+node_modules/
+scratch/
+.arena/
+video/
+council_*.txt
+# промежуточные записи Godot Movie Maker (десятки МБ, пересоздаются одной командой)
+games/*/export/*.avi

@@ -9,6 +9,7 @@ signal finish_reached
 var _mats: Dictionary = {}
 var _coins: Array[Node3D] = []
 var _traps: Array[Dictionary] = []
+var _crumbles: Array[Dictionary] = []
 
 const COLORS := {
 	"grass": Color(0.35, 0.72, 0.35),
@@ -47,6 +48,13 @@ func _make_materials() -> void:
 	neon.emission = Color(0.0, 1.0, 0.25)
 	neon.emission_energy_multiplier = 1.3
 	_mats["neon"] = neon
+	# крошащаяся платформа: рыжевато-коричневая с тёплым свечением — честно читается как «хрупкая»
+	var crmb := StandardMaterial3D.new()
+	crmb.albedo_color = Color(0.68, 0.38, 0.22)
+	crmb.emission_enabled = true
+	crmb.emission = Color(0.5, 0.22, 0.06)
+	crmb.emission_energy_multiplier = 0.4
+	_mats["crumble"] = crmb
 	# монета
 	var coin := StandardMaterial3D.new()
 	coin.albedo_color = Color(0.2, 0.95, 0.6)
@@ -68,6 +76,7 @@ func load_level(def: Dictionary) -> void:
 		c.queue_free()
 	_coins.clear()
 	_traps.clear()
+	_crumbles.clear()
 	_spawn_ambient_particles()
 
 	var plats: Array = def.get("platforms", [])
@@ -87,6 +96,12 @@ func load_level(def: Dictionary) -> void:
 	var coins: Array = def.get("coins", [])
 	for c in coins:
 		_spawn_coin(Vector3(c[0], c[1], c[2]))
+	# опасные блоки (отдельный массив — не путать с проходимостью platforms)
+	var hazards: Array = def.get("hazards", [])
+	for h in hazards:
+		var hd: Dictionary = h
+		_spawn_hazard(Vector3(float(hd.get("x", 0)), float(hd.get("y", 0)), float(hd.get("z", 0))),
+			Vector3(float(hd.get("sx", 1)), float(hd.get("sy", 1.5)), float(hd.get("sz", 1))))
 	var cps: Array = def.get("checkpoints", [])
 	for c in cps:
 		_spawn_checkpoint(Vector3(c[0], c[1], c[2]))
@@ -164,11 +179,29 @@ func _spawn_platform(p: Dictionary) -> void:
 	# где платформа просто уезжает из-под ног)
 	var body: PhysicsBody3D = AnimatableBody3D.new() if moving else StaticBody3D.new()
 	body.position = pos
+	var mat: String = p.get("mat", "grass")
+	# физика материалов: лёд скользит, песок тормозит (жанровое ожидание).
+	# player._floor_accel_mult() читает группы; PhysicsMaterial — для физдвижка.
+	if mat == "ice":
+		var pm := PhysicsMaterial.new()
+		pm.friction = 0.12
+		pm.bounce = 0.05
+		body.physics_material_override = pm
+		body.add_to_group("ice")
+	elif mat == "sand":
+		var pm2 := PhysicsMaterial.new()
+		pm2.friction = 1.4
+		body.physics_material_override = pm2
+		body.add_to_group("sand")
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = size
 	mi.mesh = bm
-	mi.material_override = _mats.get(p.get("mat", "grass"), _mats["grass"])
+	# крошащаяся платформа получает свой «хрупкий» вид — иначе игрок не может её предвидеть
+	if p.has("crumble"):
+		mi.material_override = _mats["crumble"]
+	else:
+		mi.material_override = _mats.get(mat, _mats["grass"])
 	body.add_child(mi)
 	var cs := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
@@ -176,9 +209,41 @@ func _spawn_platform(p: Dictionary) -> void:
 	cs.shape = bs
 	body.add_child(cs)
 	add_child(body)
+	# опасный блок: касание = смерть (материал "red" или явный флаг hazard)
+	if mat == "red" or bool(p.get("hazard", false)):
+		_spawn_hazard(pos, size)
+	# крошащаяся платформа: через crumble секунд после касания исчезает, потом респавн
+	if p.has("crumble") and not moving:
+		_crumbles.append({"body": body, "mesh": mi, "cs": cs, "t": float(p["crumble"]), "timer": -1.0})
 	# движущаяся ловушка
 	if moving:
 		_traps.append({"node": body, "base": pos, "move": p["move"]})
+
+func _spawn_hazard(pos: Vector3, size: Vector3) -> void:
+	var hz := Area3D.new()
+	hz.position = pos
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	var hm := StandardMaterial3D.new()
+	hm.albedo_color = Color(0.85, 0.25, 0.2)
+	hm.albedo_texture = _block_texture(Color(0.85, 0.25, 0.2), 999)
+	hm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	hm.emission_enabled = true
+	hm.emission = Color(0.8, 0.15, 0.1)
+	hm.emission_energy_multiplier = 0.7
+	mi.material_override = hm
+	hz.add_child(mi)
+	var hcs := CollisionShape3D.new()
+	var hbs := BoxShape3D.new()
+	hbs.size = size + Vector3(0.1, 0.2, 0.1)
+	hcs.shape = hbs
+	hz.add_child(hcs)
+	hz.body_entered.connect(func(b):
+		if b is ParkourPlayer and not b.get("_dead"):
+			b.kill())
+	add_child(hz)
 
 func _spawn_coin(pos: Vector3) -> void:
 	var area := Area3D.new()
@@ -306,6 +371,50 @@ func _physics_process(delta: float) -> void:
 	for c in _coins:
 		if c.visible:
 			c.rotate_y(2.2 * delta)
+	# крошащиеся платформы: тронул → таймер → исчезла → респавн через 2.6с.
+	# FSM по body.visible: таймер активной фазы всегда ≥0, -1 = «ждём касания».
+	# (старая версия с отрицательным таймером-диапазоном мёртвой ветвью не респавнила НИКОГДА)
+	var CRUMBLE_RESPAWN := 2.6
+	for cr in _crumbles:
+		var body: PhysicsBody3D = cr["body"]
+		if not is_instance_valid(body): continue
+		var timer: float = cr["timer"]
+		if body.visible:
+			if timer < 0.0:
+				# ждём касания: игрок стоит на этой платформе?
+				var pl := get_parent().get_node_or_null("Player")
+				if pl and pl.is_on_floor() and _player_on_body(pl, body):
+					cr["timer"] = cr["t"]
+			else:
+				timer -= delta
+				if timer <= 0.0:
+					# рассыпалась
+					body.visible = false
+					_disable_collision(body, true)
+					cr["timer"] = CRUMBLE_RESPAWN
+				else:
+					cr["timer"] = timer
+		else:
+			# исчезла — отсчитываем респавн
+			timer -= delta
+			if timer <= 0.0:
+				body.visible = true
+				_disable_collision(body, false)
+				cr["timer"] = -1.0
+			else:
+				cr["timer"] = timer
+
+func _player_on_body(pl: Node, body: PhysicsBody3D) -> bool:
+	for i in pl.get_slide_collision_count():
+		var col = pl.get_slide_collision(i)
+		if col and col.get_collider() == body:
+			return true
+	return false
+
+func _disable_collision(body: PhysicsBody3D, off: bool) -> void:
+	for ch in body.get_children():
+		if ch is CollisionShape3D:
+			ch.disabled = off
 
 func _spawn_ambient_particles() -> void:
 	# пыль/пузыри в воздухе (живость)

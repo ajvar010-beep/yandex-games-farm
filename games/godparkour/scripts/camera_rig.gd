@@ -21,15 +21,16 @@ func _ready() -> void:
 	sun.rotation_degrees = Vector3(-48, -30, 0)
 	sun.shadow_enabled = false  # на Web лучше без теней для производительности
 	get_parent().call_deferred("add_child", sun)
-	var env := WorldEnvironment.new()
+	# Environment назначаем НАПРЯМУЮ в world_3d (без WorldEnvironment-узла):
+	# call_deferred(add_child) гонит гонку — level.load_level() может выполниться
+	# ДО входа узла в дерево, и тема уровня (hacker-небо) молча не применится.
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color(0.53, 0.75, 0.92)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.7, 0.78, 0.9)
 	e.ambient_light_energy = 0.9
-	env.environment = e
-	get_parent().call_deferred("add_child", env)
+	get_viewport().world_3d.environment = e
 	# облака (процедурные, плавают)
 	_spawn_clouds()
 

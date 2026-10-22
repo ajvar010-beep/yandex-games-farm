@@ -48,16 +48,23 @@ func _process(delta: float) -> void:
 		return
 	_drive()
 
+var _next_plat := 1
+
 func _drive() -> void:
 	var pp: Vector3 = _player.global_position
-	# следующая платформа: первая, чей центр впереди по -z
-	var target := Vector3(0, 0, -9999)
-	for p in _plats:
+	# следующая платформа — ПО ПОРЯДКУ маршрута (serpentine движется и в +z тоже)
+	while _next_plat < _plats.size():
+		var p: Dictionary = _plats[_next_plat]
 		var c := Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
-		if c.z < pp.z - 0.5 and c.z > target.z:
-			target = c
-	if target.z < -9000:
-		return  # финиш достигнут
+		if pp.distance_to(c) < 1.6:
+			_next_plat += 1  # достигли — следующая
+		else:
+			break
+	if _next_plat >= _plats.size():
+		_game.set("_vmove", Vector2.ZERO)
+		return
+	var pt: Dictionary = _plats[_next_plat]
+	var target := Vector3(float(pt["x"]), float(pt["y"]), float(pt["z"]))
 	# курс на цель: dx, dz в локальных осях камеры (~мировые, yaw≈0)
 	var dx := target.x - pp.x
 	var dz := target.z - pp.z
@@ -69,9 +76,10 @@ func _drive() -> void:
 	var on_floor: bool = _player.is_on_floor()
 	var falling: bool = _player.velocity.y < -1.0
 	var jumps: int = _player.get("_jumps")
-	if on_floor and len < maxf(2.5, absf(dz) + 1.5):
-		# близко к краю/цели — прыгаем
+	var dy := target.y - pp.y
+	if on_floor and len < maxf(2.2, len * 0.5 + 1.2) and dy > -1.2:
+		# близко к цели и не падаем вниз — прыгаем
 		_player.tap_jump()
-	elif falling and pp.y < target.y + 0.5 and jumps < 2:
-		# не долетаем — двойной
+	elif falling and dy > 0.3 and jumps < 2:
+		# не долетаем вверх — двойной
 		_player.tap_jump()

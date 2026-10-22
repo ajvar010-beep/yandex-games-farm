@@ -29,6 +29,10 @@ func _ready() -> void:
 	_spawn = global_position
 	_build_visual()
 	_cam = get_parent().get_node_or_null("CameraRig")
+	# серия Нубик/Про/Бог: difficulty укорачивает дугу прыжка (reach ∝ v²/g).
+	# Это РЕАЛЬНАЯ ось сложности (прыжок вперёд), в отличие от сужения sx (⊥ движению).
+	# god 1.3: single-jump reach ~2.6м (pro ~3.4, nub ~3.9) — длинные разрывы требуют двойного.
+	gravity_mult = 1.8 * Variant.difficulty
 
 func _build_visual() -> void:
 	_mesh = Node3D.new()
@@ -159,11 +163,13 @@ func _physics_process(delta: float) -> void:
 	dir.y = 0
 	dir = dir.normalized()
 
-	# скорость
+	# скорость: ускорение зависит от поверхности (лёд скользит, песок тормозит).
+	# move_toward переопределяет трение PhysicsMaterial — поэтому модулируем accel напрямую.
 	var spd := speed
 	var target := dir * spd
-	velocity.x = move_toward(velocity.x, target.x, 40 * delta)
-	velocity.z = move_toward(velocity.z, target.z, 40 * delta)
+	var accel := 40.0 * _floor_accel_mult()
+	velocity.x = move_toward(velocity.x, target.x, accel * delta)
+	velocity.z = move_toward(velocity.z, target.z, accel * delta)
 
 	# гравитация + койот-тайм
 	if is_on_floor():
@@ -231,6 +237,21 @@ func _get_input_dir() -> Vector2:
 # для авто-камеры: пока есть активный ввод — не доворачивать yaw (анти-цикл)
 func is_input_active() -> bool:
 	return _get_input_dir().length() > 0.08
+
+# множитель ускорения по материалу пола: лёд скользкий, песок вязкий
+func _floor_accel_mult() -> float:
+	if not is_on_floor():
+		return 1.0
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col == null: continue
+		var c = col.get_collider()
+		# материал платформы — через группы (level.gd добавляет ice/sand в группы)
+		if c is Node and c.is_in_group("ice"):
+			return 0.25
+		if c is Node and c.is_in_group("sand"):
+			return 1.8
+	return 1.0
 
 # пол под игроком безопасен для revive-точки? (не лава, не ниже порога)
 func _floor_is_safe() -> bool:

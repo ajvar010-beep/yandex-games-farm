@@ -150,6 +150,20 @@ func _on_rv_close(_args) -> void:
 	AudioBus.mute(false)
 	gameplay_start()
 
+# ---------- баннер (пассивный доход в меню) ----------
+
+func show_banner() -> void:
+	if not _sdk_ready or GameState.no_ads: return
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk.adv != null and js.ysdk.adv.showBannerAdv != null:
+		js.ysdk.adv.showBannerAdv()
+
+func hide_banner() -> void:
+	if not _sdk_ready: return
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk.adv != null and js.ysdk.adv.hideBannerAdv != null:
+		js.ysdk.adv.hideBannerAdv()
+
 # ---------- облако ----------
 
 func save(data: Dictionary) -> void:

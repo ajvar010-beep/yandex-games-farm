@@ -5,6 +5,13 @@ extends Node
 ## 3. тутор-лейбл видим (offset != 0)
 ## 4. убийство: kill() замораживает физику, труп не фармит монеты
 ## 5. панели по центру
+## v8-механики (консилиум v7 L-остаток):
+## 6. gravity_mult = 1.8 × Variant.difficulty (реальная ось сложности)
+## 7. ice/sand: _floor_accel_mult 0.25/1.8 (материалы ощущаются)
+## 8. hazard-блок убивает
+## 9. crumble-платформа исчезает после касания и респавнится
+## 10. уровни: спуски, +z-повороты, ≥5 архетипов (не один зигзаг)
+## 11. баннер: show/hide существуют и безопасны без SDK
 ## Запуск: Godot --headless --path . res://tools/rt_test.tscn
 
 var _fails := 0
@@ -102,11 +109,110 @@ func _run() -> void:
 		var h: float = tl.size.y
 		_check(h > 10.0, "tutorial label has height (%.0f) — visible" % h)
 
-	# --- Тест 2: _on_menu роутит (не падает) ---
-	var ok := true
-	# back_to_menu должен существовать в Main
-	ok = main.has_method("back_to_menu")
-	_check(ok, "Main.back_to_menu exists (menu routing target)")
+	# --- Тест 2 (частично): Main.back_to_menu существует ---
+	_check(main.has_method("back_to_menu"), "Main.back_to_menu exists (menu routing target)")
+	# NOTE: game.call("_on_menu") освобождает game (queue_free) — делаем в самом конце
+
+	# --- Тест 6 (v8): difficulty = реальная ось сложности через гравитацию ---
+	var gm: float = player.get("gravity_mult")
+	var expect_gm: float = 1.8 * Variant.difficulty
+	_check(absf(gm - expect_gm) < 0.001, "gravity_mult = 1.8×difficulty (%.2f)" % gm)
+
+	# --- Тест 7 (v8): материалы льда/песка меняют ускорение ---
+	var lvl: Node = game.get("level")
+	# синтетический уровень: ice/sand/grass платформы (load_level напрямую — без game.respawn)
+	lvl.call("load_level", {
+		"name": "test", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "ice"},
+			{"x": 10, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "sand"},
+			{"x": 20, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},
+			{"x": 30, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "wood", "crumble": 0.5},
+		],
+		"coins": [], "checkpoints": [], "hazards": [
+			{"x": 0, "y": 1.4, "z": 12, "sx": 1.2, "sy": 1.6, "sz": 1.2},
+		],
+		"finish": [0, 1.6, 20], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	# игрок мог умереть в лавовом тесте выше — воскрешаем и ставим на лёд
+	player.set("_dead", false)
+	player.set("_jumps", 0)
+	player.global_position = Vector3(0, 0.8, 0)
+	player.velocity = Vector3.ZERO
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_check(player.get("_dead") == false, "synthetic level loaded, player alive")
+	player.velocity = Vector3.ZERO
+	for i in 12:
+		await get_tree().physics_frame
+	_check(absf(player.call("_floor_accel_mult") - 0.25) < 0.001, "ice floor accel 0.25 (slippery)")
+	player.global_position = Vector3(10, 0.8, 0)
+	player.velocity = Vector3.ZERO
+	for i in 12:
+		await get_tree().physics_frame
+	_check(absf(player.call("_floor_accel_mult") - 1.8) < 0.001, "sand floor accel 1.8 (sticky)")
+	player.global_position = Vector3(20, 0.8, 0)
+	player.velocity = Vector3.ZERO
+	for i in 12:
+		await get_tree().physics_frame
+	_check(absf(player.call("_floor_accel_mult") - 1.0) < 0.001, "grass floor accel 1.0 (normal)")
+
+	# --- Тест 8 (v8): hazard-блок убивает ---
+	var died_emitted := [false]
+	var conn: Callable = func(): died_emitted[0] = true
+	player.died.connect(conn)
+	player.set("_dead", false)
+	player.global_position = Vector3(0, 1.4, 12)  # внутри hazard Area3D
+	player.velocity = Vector3.ZERO
+	for i in 8:
+		await get_tree().physics_frame
+	_check(player.get("_dead") == true and died_emitted[0], "hazard block kills player")
+	player.died.disconnect(conn)
+
+	# --- Тест 9 (v8): crumble-платформа исчезает и респавнится ---
+	player.set("_dead", false)
+	player.revive()
+	player.global_position = Vector3(30, 0.9, 0)
+	player.velocity = Vector3.ZERO
+	var crumbles: Array = lvl.get("_crumbles")
+	_check(crumbles.size() == 1, "crumble platform registered (%d)" % crumbles.size())
+	var cr_body: PhysicsBody3D = crumbles[0]["body"]
+	for i in 60:  # стоим 1с — crumble=0.5с должен сработать
+		await get_tree().physics_frame
+	_check(cr_body.visible == false, "crumble platform hides after touch")
+	for i in 200:  # ~3.3с — респавн через 2.6с после скрытия
+		await get_tree().physics_frame
+	_check(cr_body.visible == true, "crumble platform respawns (~2.6s)")
+
+	# --- Тест 10 (v8): уровни разнообразны — спуски, +z, архетипы ---
+	var archs := {}
+	var total_desc := 0
+	var total_plusz := 0
+	for n in range(2, 21):
+		var ff := FileAccess.open("res://levels/%02d.json" % n, FileAccess.READ)
+		if ff == null: continue
+		var d: Dictionary = JSON.parse_string(ff.get_as_text())
+		ff.close()
+		archs[str(d.get("archetype", "?"))] = true
+		var pp: Array = d.get("platforms", [])
+		for i in range(1, pp.size()):
+			var a: Dictionary = pp[i - 1]
+			var b: Dictionary = pp[i]
+			if float(b.get("y", 0)) < float(a.get("y", 0)) - 0.1: total_desc += 1
+			if float(b.get("z", 0)) > float(a.get("z", 0)) + 0.1: total_plusz += 1
+	_check(archs.size() >= 5, "%d route archetypes (v7 had 1)" % archs.size())
+	_check(total_desc >= 15, "%d descent segments (v7 had 0)" % total_desc)
+	_check(total_plusz >= 10, "%d +z turn segments (v7 had 0)" % total_plusz)
+
+	# --- Тест 11 (v8): баннер безопасен без SDK ---
+	var banner_ok := Yandex.has_method("show_banner") and Yandex.has_method("hide_banner")
+	_check(banner_ok, "banner API exists")
+	if banner_ok:
+		Yandex.call("show_banner")  # без SDK должен молча выйти
+		Yandex.call("hide_banner")
+		_check(true, "banner show/hide safe without SDK")
+
+	# --- Тест 2 (финал): _on_menu роутит и НЕ крашит (освобождает game) ---
 	game.call("_on_menu")
 	await get_tree().process_frame
 	_check(true, "_on_menu did not crash")

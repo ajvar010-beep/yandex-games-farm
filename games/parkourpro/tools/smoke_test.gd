@@ -37,12 +37,14 @@ func _init() -> void:
 			var bx = float(b.get("x",0)); var by = float(b.get("y",0)); var bz = float(b.get("z",0))
 			var dxz = Vector2(bx-ax, bz-az).length()
 			var dy = by - ay
-			# прыжок 9.5 force, gravity 22*1.8=39.6 → высота ~1.14; по горизонтали ~7*0.47=3.3 + размеры
-			# учитываем размеры платформ: реальный gap от краёв меньше
+			# Прыжок: force 9.5, gravity 22*1.8*difficulty. Reach ∝ v²/g:
+			#   nub(0.85) single ~3.95м, pro(1.0) ~3.36, god(1.3) ~2.58 (двойной ~4.4).
+			# Проверяем ХУДШИЙ вариант (god) с учётом двойного прыжка: edge_gap ≤ 4.4,
+			# dy ≤ 1.75 (god apex×2). Уровни рассчитаны на двойной прыжок на широких разрывах.
 			var asz = (float(a.get("sx",2)) + float(a.get("sz",2))) * 0.5
 			var bsz = (float(b.get("sx",2)) + float(b.get("sz",2))) * 0.5
 			var edge_gap = dxz - (asz + bsz) * 0.5
-			var reach = (dxz <= 5.5 or edge_gap <= 3.2) and (dy <= 2.4)
+			var reach = (dxz <= 5.5 or edge_gap <= 4.4) and (dy <= 1.75)
 			if not reach:
 				reachable = false
 				print("  gap fail at ", i, " in ", f, " dxz=", snappedf(dxz,0.01), " dy=", snappedf(dy,0.01))

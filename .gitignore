@@ -10,3 +10,4 @@ video/
 council_*.txt
 # промежуточные записи Godot Movie Maker (десятки МБ, пересоздаются одной командой)
 games/*/export/*.avi
+scratch_vid/

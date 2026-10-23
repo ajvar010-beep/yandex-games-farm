@@ -11,6 +11,12 @@ var _rv_rewarded := false
 var _save_data: Dictionary = {}
 var _js_cb_reward: JavaScriptObject
 var _js_cb_close: JavaScriptObject
+# v8.1 (консилиум v8 #9): ВСЕ async-колбэки SDK должны ЖИТЬ до резолва промиса.
+# JavaScriptObject — RefCounted: inline-темпарарь освобождается в конце statement,
+# а .then/.catch/onClose/onError срабатывают на следующем тике → get_proxied_value(id)
+# возвращает undefined → тело колбэка НИКОГДА не выполняется (IAP/restore/облако/
+# лидерборд/sdk_ready/unmute мертвы в реальном Web-билде). Держим вечные ссылки здесь.
+var _live_cbs: Array[JavaScriptObject] = []
 # кэши промис-объектов SDK
 var _player = null
 var _payments = null
@@ -50,21 +56,21 @@ func _fetch_sdk_objects() -> void:
 	# (getPayments для анонимов, getLeaderboards без настроенных ЛБ) _settle не
 	# вызывается, _pending не доходит до 0 и sdk_ready не эмитится (restore/облако мертвы).
 	if js.ysdk.getPlayer != null:
-		js.ysdk.getPlayer().then(JavaScriptBridge.create_callback(func(args):
+		js.ysdk.getPlayer().then(_cb(func(args):
 			if args.size() > 0: _player = args[0]
-			_settle())).catch(JavaScriptBridge.create_callback(func(_e): _settle()))
+			_settle())).catch(_cb(func(_e): _settle()))
 	else:
 		_settle()
 	if js.ysdk.getPayments != null:
-		js.ysdk.getPayments().then(JavaScriptBridge.create_callback(func(args):
+		js.ysdk.getPayments().then(_cb(func(args):
 			if args.size() > 0: _payments = args[0]
-			_settle())).catch(JavaScriptBridge.create_callback(func(_e): _settle()))
+			_settle())).catch(_cb(func(_e): _settle()))
 	else:
 		_settle()
 	if js.ysdk.getLeaderboards != null:
-		js.ysdk.getLeaderboards().then(JavaScriptBridge.create_callback(func(args):
+		js.ysdk.getLeaderboards().then(_cb(func(args):
 			if args.size() > 0: _lb = args[0]
-			_settle())).catch(JavaScriptBridge.create_callback(func(_e): _settle()))
+			_settle())).catch(_cb(func(_e): _settle()))
 	else:
 		_settle()
 
@@ -77,8 +83,15 @@ func is_ready() -> bool:
 	return _sdk_ready
 
 func _setup_js_callbacks() -> void:
-	_js_cb_reward = JavaScriptBridge.create_callback(_on_rv_reward)
-	_js_cb_close = JavaScriptBridge.create_callback(_on_rv_close)
+	_js_cb_reward = _cb(_on_rv_reward)
+	_js_cb_close = _cb(_on_rv_close)
+
+# создаёт JS-колбэк И удерживает ссылку до конца жизни autoload'а (см. _live_cbs).
+# Без этого async-колбэк освобождается до резолва промиса и не вызывается вообще.
+func _cb(fn: Callable) -> JavaScriptObject:
+	var obj := JavaScriptBridge.create_callback(fn)
+	_live_cbs.append(obj)
+	return obj
 
 func gameplay_start() -> void:
 	if not _sdk_ready: return
@@ -107,11 +120,11 @@ func show_fullscreen(on_closed: Callable = Callable()) -> void:
 	# JavaScriptBridge.create_object("Object") = new Object() = {} (документированный API)
 	var opts = JavaScriptBridge.create_object("Object")
 	opts.callbacks = JavaScriptBridge.create_object("Object")
-	opts.callbacks.onClose = JavaScriptBridge.create_callback(func(wasShown):
+	opts.callbacks.onClose = _cb(func(wasShown):
 		AudioBus.mute(false)
 		gameplay_start()
 		if _adv_cb_off.is_valid(): _adv_cb_off.call())
-	opts.callbacks.onError = JavaScriptBridge.create_callback(func(e):
+	opts.callbacks.onError = _cb(func(e):
 		AudioBus.mute(false)
 		gameplay_start()
 		if _adv_cb_off.is_valid(): _adv_cb_off.call())
@@ -135,7 +148,7 @@ func show_rewarded(on_reward: Callable, on_fail: Callable = Callable()) -> void:
 	opts.callbacks = JavaScriptBridge.create_object("Object")
 	opts.callbacks.onRewarded = _js_cb_reward
 	opts.callbacks.onClose = _js_cb_close
-	opts.callbacks.onError = JavaScriptBridge.create_callback(func(e):
+	opts.callbacks.onError = _cb(func(e):
 		AudioBus.mute(false)
 		gameplay_start()
 		if not _rv_rewarded and _rv_fail_cb.is_valid(): _rv_fail_cb.call())
@@ -177,7 +190,7 @@ func load_from_cloud(on_loaded: Callable = Callable()) -> void:
 		if on_loaded.is_valid(): on_loaded.call({})
 		return
 	var js = JavaScriptBridge.get_interface("window")
-	_player.getData().then(JavaScriptBridge.create_callback(func(args):
+	_player.getData().then(_cb(func(args):
 		var dict := {}
 		if args.size() > 0 and args[0] != null:
 			var s: String = str(js.JSON.stringify(args[0]))
@@ -185,7 +198,7 @@ func load_from_cloud(on_loaded: Callable = Callable()) -> void:
 			if parsed is Dictionary: dict = parsed
 		_save_data = dict
 		if on_loaded.is_valid(): on_loaded.call(dict)
-	)).catch(JavaScriptBridge.create_callback(func(e):
+	)).catch(_cb(func(e):
 		if on_loaded.is_valid(): on_loaded.call({})))
 
 func get_save_data() -> Dictionary:
@@ -205,7 +218,7 @@ func purchase(product_id: String, on_ok: Callable, on_fail: Callable = Callable(
 			on_fail.call()
 		return
 	_payments.purchase({"id": product_id}).then(
-		JavaScriptBridge.create_callback(func(args):
+		_cb(func(args):
 			# расходник — consume, чтобы можно было покупать повторно
 			if product_id in CONSUMABLES and args.size() > 0 and args[0] != null:
 				var token: String = str(args[0].purchaseToken)
@@ -213,7 +226,7 @@ func purchase(product_id: String, on_ok: Callable, on_fail: Callable = Callable(
 					_payments.consumePurchase(token)
 			on_ok.call())
 	).catch(
-		JavaScriptBridge.create_callback(func(e):
+		_cb(func(e):
 			if on_fail.is_valid(): on_fail.call())
 	)
 
@@ -222,8 +235,8 @@ func get_purchases(on_list: Callable) -> void:
 		on_list.call([])
 		return
 	_payments.getPurchases().then(
-		JavaScriptBridge.create_callback(func(r): on_list.call(r))
-	).catch(JavaScriptBridge.create_callback(func(e): on_list.call([])))
+		_cb(func(r): on_list.call(r))
+	).catch(_cb(func(e): on_list.call([])))
 
 # ---------- Лидерборды ----------
 
@@ -236,5 +249,5 @@ func get_leaderboard(name: String, on_data: Callable) -> void:
 		on_data.call(null)
 		return
 	_lb.getEntries(name, {"quantityTop": 10, "includeUser": true}).then(
-		JavaScriptBridge.create_callback(func(r): on_data.call(r))
-	).catch(JavaScriptBridge.create_callback(func(e): on_data.call(null)))
+		_cb(func(r): on_data.call(r))
+	).catch(_cb(func(e): on_data.call(null)))

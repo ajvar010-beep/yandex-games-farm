@@ -10,6 +10,11 @@ var best_times: Dictionary = {}  # level -> ms
 var last_daily: String = ""      # YYYY-MM-DD
 var daily_streak: int = 0
 var no_ads: bool = false         # IAP: отключить interstitial
+# v8.1 (консилиум v8 minor): кулдаун интерстишла ЖИВЁТ ЗДЕСЬ, а не на инстансе Game —
+# тот пересоздаётся на каждый вход из меню и кулдаун обнулялся (реклама чаще 130с).
+var last_interstitial_ms: int = 0
+# то же для RV-монет меню (Menu-инстанс пересоздаётся на каждый вход в меню)
+var last_rv_coins_ms: int = 0
 var stars: Dictionary = {}       # level -> 1..3 (рейтинг скорости)
 var lang := "ru"                 # ru | en (авто по SDK)
 
@@ -26,7 +31,7 @@ const TR := {
 	"level": {"ru": "Уровень %d", "en": "Level %d"},
 	"tut0": {"ru": "Беги вперёд: WASD или свайп в левой части экрана", "en": "Run forward: WASD or swipe on the left half"},
 	"tut1": {"ru": "Прыгай: Space или тап правой части", "en": "Jump: Space or tap on the right half"},
-	"tut2": {"ru": "Двойной прыжок в воздухе! Дойди до кольца ⭕", "en": "Double jump in mid-air! Reach the ring ⭕"},
+	"tut2": {"ru": "Высокую стену одиночным не взять — прыгни ВТОРОЙ раз в воздухе! Дойди до кольца ⭕", "en": "The tall wall needs a DOUBLE jump — tap jump again mid-air! Reach the ring ⭕"},
 	"fail": {"ru": "Провал!", "en": "Failed!"},
 	"lava": {"ru": "Упал в лаву...", "en": "Fell into lava..."},
 	"lava_n": {"ru": "Упал в лаву... (%d/%d)", "en": "Fell into lava... (%d/%d)"},

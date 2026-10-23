@@ -10,6 +10,10 @@ var _mats: Dictionary = {}
 var _coins: Array[Node3D] = []
 var _traps: Array[Dictionary] = []
 var _crumbles: Array[Dictionary] = []
+# v8.1 (консилиум v8 #6): маршрут уровня (центры платформ + финиш) для авто-камеры.
+# Камера ведётся по СТАТИЧНОЙ геометрии, а не по вектору скорости: ввод camera-relative,
+# поэтому доворот по velocity создаёт петлю «камера↔ввод». Маршрут петли не имеет.
+var _route: Array[Vector3] = []
 
 const COLORS := {
 	"grass": Color(0.35, 0.72, 0.35),
@@ -77,9 +81,17 @@ func load_level(def: Dictionary) -> void:
 	_coins.clear()
 	_traps.clear()
 	_crumbles.clear()
+	_route.clear()
 	_spawn_ambient_particles()
 
 	var plats: Array = def.get("platforms", [])
+	# маршрут для авто-камеры: центры платформ в порядке прохождения + финиш
+	for p in plats:
+		var pd: Dictionary = p
+		_route.append(Vector3(float(pd.get("x", 0)), float(pd.get("y", 0)), float(pd.get("z", 0))))
+	var fin_route: Array = def.get("finish", [])
+	if fin_route.size() == 3:
+		_route.append(Vector3(float(fin_route[0]), float(fin_route[1]), float(fin_route[2])))
 	# серия Нубик/Про/Бог: difficulty сужает боковую ширину sx и ускоряет mover'ы.
 	# Глубину sz и позиции НЕ трогаем — иначе разрывы вырастут и god-уровни станут
 	# непроходимыми (smoke-тест валидирует только базовый JSON). Проходимость сохраняется.
@@ -116,6 +128,24 @@ func load_level(def: Dictionary) -> void:
 	# лава-плоскость на y=0
 	_spawn_lava(def.get("lava_y", -6.0), def.get("lava_size", 220.0))
 
+# v8.1 (консилиум v8 #6): точка маршрута ВПЕРЕДИ игрока — цель для авто-камеры.
+# Берём ближайшую к игроку точку маршрута и отступаем вперёд на lookahead — камера
+# разворачивается по ходу уровня (включая +z-колени серпантина), НЕ по вектору
+# скорости: ввод camera-relative, и доворот по velocity дал бы петлю камера↔ввод.
+# Возвращает нулевой вектор, если маршрут пуст (уровень не загружен).
+func route_ahead_point(from_pos: Vector3, lookahead: int = 2) -> Vector3:
+	if _route.is_empty():
+		return Vector3.ZERO
+	var best := 0
+	var best_d := from_pos.distance_squared_to(_route[0])
+	for i in range(1, _route.size()):
+		var d := from_pos.distance_squared_to(_route[i])
+		if d < best_d:
+			best_d = d
+			best = i
+	var idx := mini(best + lookahead, _route.size() - 1)
+	return _route[idx]
+
 # процедурная пиксельная текстура блока 16×16 (жанровая конвенция майнкрафта).
 # Детерминированный шум по базовому цвету + «шапка» сверху для grass-подобных.
 func _block_texture(base: Color, seed: int) -> ImageTexture:
@@ -138,10 +168,14 @@ func _apply_hacker_theme() -> void:
 	if env:
 		env.background_color = Color(0.01, 0.04, 0.02)
 		env.ambient_light_color = Color(0.1, 0.45, 0.15)
-		env.ambient_light_energy = 0.55
+		env.ambient_light_energy = 0.4
 		env.fog_enabled = true
 		env.fog_light_color = Color(0.02, 0.12, 0.04)
 		env.fog_density = 0.018
+		# v8.1 (#12): матрица ДОЛЖНА светиться — glow на тёмном фоне почти бесплатен
+		env.glow_intensity = 0.9
+		env.glow_bloom = 0.15
+		env.glow_hdr_threshold = 0.85
 	# лава-данные (зелёная)
 	var data := StandardMaterial3D.new()
 	data.albedo_color = Color(0.02, 0.6, 0.1)
@@ -159,7 +193,15 @@ func _apply_default_theme() -> void:
 	if env:
 		env.background_color = Color(0.53, 0.75, 0.92)
 		env.ambient_light_color = Color(0.7, 0.78, 0.9)
-		env.ambient_light_energy = 0.9
+		# v8.1 (#12): 0.9 → 0.45 — контраст ключевым светом, glow/tonemap из camera_rig
+		# сохраняются (эта функция правит ТОТ ЖЕ Environment, не пересоздаёт).
+		env.ambient_light_energy = 0.45
+		# v8.1: дневная тема — glow ТОЛЬКО по HDR-порогу (лава/монеты), без bloom
+		# по всему кадру (иначе небо выбеливается, 51% near-white на lvl11 было).
+		# Сброс обязателен: hacker-тема ставит 0.85/0.15, env общий между уровнями.
+		env.glow_intensity = 0.5
+		env.glow_bloom = 0.0
+		env.glow_hdr_threshold = 1.0
 		env.fog_enabled = true
 		env.fog_light_color = Color(0.6, 0.78, 0.94)
 		env.fog_density = 0.012
@@ -199,7 +241,11 @@ func _spawn_platform(p: Dictionary) -> void:
 	mi.mesh = bm
 	# крошащаяся платформа получает свой «хрупкий» вид — иначе игрок не может её предвидеть
 	if p.has("crumble"):
-		mi.material_override = _mats["crumble"]
+		# v8.1 (minor): у каждой crumble СВОЙ материал-клон — предупреждение мигает
+		# emission, а общий _mats["crumble"] мигнул бы сразу на ВСЕХ крошащихся
+		# платформах уровня. Дешёвый клон раз в load_level, не каждый кадр.
+		var cm: StandardMaterial3D = _mats["crumble"].duplicate()
+		mi.material_override = cm
 	else:
 		mi.material_override = _mats.get(mat, _mats["grass"])
 	body.add_child(mi)
@@ -214,7 +260,8 @@ func _spawn_platform(p: Dictionary) -> void:
 		_spawn_hazard(pos, size)
 	# крошащаяся платформа: через crumble секунд после касания исчезает, потом респавн
 	if p.has("crumble") and not moving:
-		_crumbles.append({"body": body, "mesh": mi, "cs": cs, "t": float(p["crumble"]), "timer": -1.0})
+		_crumbles.append({"body": body, "mesh": mi, "cs": cs, "mat": mi.material_override,
+			"base": pos, "t": float(p["crumble"]), "timer": -1.0})
 	# движущаяся ловушка
 	if moving:
 		_traps.append({"node": body, "base": pos, "move": p["move"]})
@@ -394,6 +441,20 @@ func _physics_process(delta: float) -> void:
 					cr["timer"] = CRUMBLE_RESPAWN
 				else:
 					cr["timer"] = timer
+					# v8.1 (minor): прогрессивное ПРЕДУПРЕЖДЕНИЕ — тряска + мигание
+					# эмиссии, частота/амплитуда растут к моменту распада. Раньше
+					# crumble читался только по статичному цвету — окно 0.7с было
+					# «невидимым» и игрок падал не понимая почему. Трясём МЕШ (не body):
+					# на коллизию/физику не влияет, только визуал.
+					var mesh: MeshInstance3D = cr["mesh"]
+					var cm: StandardMaterial3D = cr["mat"]
+					var frac: float = clampf(1.0 - (timer / cr["t"]), 0.0, 1.0)
+					if is_instance_valid(mesh):
+						var amp := 0.04 + frac * 0.10
+						var sh := randf_range(-amp, amp)
+						mesh.position = Vector3(sh, 0.0, sh)
+					if is_instance_valid(cm):
+						cm.emission_energy_multiplier = 0.4 + (1.5 + frac * 3.0) * absf(sin(timer * (18.0 + frac * 30.0)))
 		else:
 			# исчезла — отсчитываем респавн
 			timer -= delta
@@ -401,6 +462,11 @@ func _physics_process(delta: float) -> void:
 				body.visible = true
 				_disable_collision(body, false)
 				cr["timer"] = -1.0
+				# v8.1 (minor): сброс предупреждения — меш на место, эмиссия базовая
+				var mesh: MeshInstance3D = cr["mesh"]
+				var cm: StandardMaterial3D = cr["mat"]
+				if is_instance_valid(mesh): mesh.position = Vector3.ZERO
+				if is_instance_valid(cm): cm.emission_energy_multiplier = 0.4
 			else:
 				cr["timer"] = timer
 

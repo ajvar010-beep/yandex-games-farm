@@ -11,7 +11,7 @@ const LEVELS_TOTAL := 21
 const RV_COINS := 30          # «📺 +30 ◈» — повторяемый RV-триггер
 const RV_COINS_COOLDOWN_MS := 180_000  # 3 минуты
 
-var _last_rv_coins_ms := 0
+var _rv_btn: Button = null  # v8.1 (#5): кэш кнопки RV-монет для живого отсчёта
 
 func _ready() -> void:
 	_main = get_tree().root.get_node_or_null("Main")
@@ -108,13 +108,18 @@ func _build() -> void:
 		refresh())
 	foot.add_child(snd)
 
-	# RV-монеты (повторяемый триггер, кулдаун 3 мин)
+	# RV-монеты (повторяемый триггер, кулдаун 3 мин).
+	# v8.1 (консилиум v8 minor): во время кулдауна кнопка disabled + живой отсчёт —
+	# раньше тап был тихим no-op без фидбэка («сломалось? не засчитали?»).
 	var rvb := Button.new()
+	rvb.name = "RvCoinsBtn"
 	rvb.text = GameState.L("rv_coins") % RV_COINS
 	rvb.add_theme_font_size_override("font_size", 18)
 	rvb.modulate = Color(0.5, 0.9, 1.0)
 	rvb.pressed.connect(_on_rv_coins)
 	foot.add_child(rvb)
+	_rv_btn = rvb
+	_update_rv_cooldown(rvb)
 
 	var fsp := Control.new()
 	fsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -339,16 +344,39 @@ func _build_series_promo(parent: Control) -> void:
 
 # ---------- обработчики ----------
 func _on_rv_coins() -> void:
+	# v8.1 (minor): кулдаун в GameState (Menu пересоздаётся на каждый вход — иначе терялся)
 	var now := Time.get_ticks_msec()
-	if now - _last_rv_coins_ms < RV_COINS_COOLDOWN_MS and _last_rv_coins_ms != 0:
+	if now - GameState.last_rv_coins_ms < RV_COINS_COOLDOWN_MS and GameState.last_rv_coins_ms != 0:
 		AudioBus.click()
 		return
 	AudioBus.click()
 	Yandex.show_rewarded(func():
-		_last_rv_coins_ms = Time.get_ticks_msec()
+		GameState.last_rv_coins_ms = Time.get_ticks_msec()
 		GameState.add_coins(RV_COINS)
 		AudioBus.buy()
-		refresh())
+		refresh())  # пересборка: монеты, прогресс скина, новая кнопка RV с кэшем _rv_btn
+
+# живой отсчёт кулдауна RV-монет: disabled + «⏳ MM:SS» пока ждём, потом активна
+func _update_rv_cooldown(btn: Button) -> void:
+	if not is_instance_valid(btn): return
+	var now := Time.get_ticks_msec()
+	var remain := 0
+	if GameState.last_rv_coins_ms != 0:
+		remain = RV_COINS_COOLDOWN_MS - (now - GameState.last_rv_coins_ms)
+	if remain > 0:
+		var s := int(ceil(remain / 1000.0))
+		btn.disabled = true
+		btn.text = "⏳ %d:%02d" % [floori(s / 60.0), s % 60]
+		btn.modulate = Color(0.6, 0.6, 0.65)
+	else:
+		btn.disabled = false
+		btn.text = GameState.L("rv_coins") % RV_COINS
+		btn.modulate = Color(0.5, 0.9, 1.0)
+
+func _process(_delta: float) -> void:
+	# живой отсчёт кулдауна RV-монет (кэш кнопки из _build)
+	if _rv_btn and is_instance_valid(_rv_btn):
+		_update_rv_cooldown(_rv_btn)
 
 func _on_daily() -> void:
 	if GameState.can_claim_daily():
@@ -412,6 +440,10 @@ func _iap_ok(coins: int) -> void:
 		GameState.add_coins(coins)
 	else:
 		GameState.no_ads = true
+		# v8.1 (консилиум v8 #4): скрыть УЖЕ ВИДЯЩИЙ баннер немедленно —
+		# show_banner() его больше не покажет (guard no_ads), но висящий
+		# остался бы до входа в уровень → «заплатил 199₽, реклама осталась»
+		Yandex.hide_banner()
 	GameState.save_data()
 	AudioBus.buy()
 	refresh()

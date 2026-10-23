@@ -19,7 +19,12 @@ func _ready() -> void:
 	# свет
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48, -30, 0)
-	sun.shadow_enabled = false  # на Web лучше без теней для производительности
+	# v8.1 (консилиум v8 #12): тени ОБЯЗАТЕЛЬНЫ — без них кубы не читаются объёмно.
+	# ORTHOGONAL + короткая дистанция = дёшево даже на Web/Compatibility.
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	sun.directional_shadow_max_distance = 48.0
+	sun.light_energy = 1.15
 	get_parent().call_deferred("add_child", sun)
 	# Environment назначаем НАПРЯМУЮ в world_3d (без WorldEnvironment-узла):
 	# call_deferred(add_child) гонит гонку — level.load_level() может выполниться
@@ -29,7 +34,19 @@ func _ready() -> void:
 	e.background_color = Color(0.53, 0.75, 0.92)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.7, 0.78, 0.9)
-	e.ambient_light_energy = 0.9
+	# v8.1 (консилиум v8 #12): ambient 0.9→0.45 — контраст ключевым светом вместо
+	# «плоской засветки»; FILMIC-тонмап + glow: эмиссия неона/лавы/монет даёт ореол,
+	# а не клипится в белёсую кашу (46% near-white на lvl21 было).
+	# ВАЖНО: glow_bloom=0 — равномерный bloom выбеливал ДНЕВНОЕ небо (lvl11: 51%
+	# near-white, mean 236). Свечение идёт ТОЛЬКО через glow_hdr_threshold: яркие
+	# эмиссивные поверхности (неон/лава/монеты) светятся, небо/трава — нет.
+	e.ambient_light_energy = 0.45
+	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.glow_enabled = true
+	e.glow_intensity = 0.5
+	e.glow_bloom = 0.0
+	e.glow_strength = 0.9
+	e.glow_hdr_threshold = 1.0
 	get_viewport().world_3d.environment = e
 	# облака (процедурные, плавают)
 	_spawn_clouds()
@@ -54,18 +71,27 @@ var _auto_follow := true
 func _process_auto(delta: float) -> void:
 	if not _auto_follow or not target:
 		return
-	# анти-замкнутый цикл: пока игрок активно рулит — камеру НЕ доворачиваем,
-	# иначе camera-relative ввод «съезжает» вместе с yaw (камера догоняет скорость,
-	# которая сама зависит от базиса камеры)
-	if target is ParkourPlayer and target.has_method("is_input_active") and target.is_input_active():
-		return
-	var v := Vector2.ZERO
-	if target is ParkourPlayer:
+	# v8.1 (консилиум v8 #6): цель — точка МАРШРУТА впереди игрока (Level.route_ahead_point),
+	# а НЕ вектор скорости. Ввод camera-relative (player.gd:162), поэтому доворот по velocity
+	# создавал петлю «камера гонится за скоростью ↔ скорость зависит от камеры» — её и глушил
+	# прежний early-return на is_input_active(), из-за чего авто-камера была МЕРТВА на мобиле
+	# (палец всегда на стике) и все +z-колени серпантина игрались «бегом в камеру».
+	# Маршрут — статичная геометрия, обратной связи нет: «стик вверх» всегда ведёт вперёд по уровню.
+	var mv := Vector2.ZERO
+	var lvl: Node = get_parent().get_node_or_null("Level") if get_parent() else null
+	if lvl and lvl.has_method("route_ahead_point"):
+		var ahead: Vector3 = lvl.route_ahead_point(target.global_position, 2)
+		if ahead != Vector3.ZERO:
+			var d: Vector3 = ahead - target.global_position
+			mv = Vector2(d.x, d.z)
+	# фолбэк (маршрут ещё не построен): по вектору скорости, как было
+	if mv.length() < 0.35 and target is ParkourPlayer:
 		var vel: Vector3 = target.velocity
-		v = Vector2(vel.x, vel.z)
-	if v.length() > 1.0:
-		var want_yaw := atan2(-v.x, -v.y)
-		_yaw = lerp_angle(_yaw, want_yaw, 2.5 * delta)
+		mv = Vector2(vel.x, vel.z)
+	if mv.length() > 1.0:
+		var want_yaw := atan2(-mv.x, -mv.y)
+		# lerp_angle сглаживает разворот — мгновенных рывков нет ни на одном кадре
+		_yaw = lerp_angle(_yaw, want_yaw, 3.0 * delta)
 
 var _clouds: Array[MeshInstance3D] = []
 

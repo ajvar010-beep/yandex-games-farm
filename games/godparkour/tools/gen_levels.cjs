@@ -47,8 +47,12 @@ function addSegment(st, r, cfg) {
     const nz = st.pos.z + st.dir * (fwd + 2.0);
     const nx = st.pos.x + (r() * 2.0 - 1.0) * (prof === 'shaft' ? 0.5 : 1);
     const ny = st.pos.y + dy;
-    // ограничения мира: y ∈ [-4, 8], |x| ≤ 9
-    const y = Math.max(-4, Math.min(8, ny));
+    // ограничения мира: y ∈ [-4, yMax], |x| ≤ 9.
+    // v8.1 (консилиум v8 #1): yMax ПО АРХЕТИПУ — плоская шапка 8 превращала
+    // climb/shaft/movers/mixed в плоские коридоры наверху (22 шага shaft × dy 1.35
+    // ≈ 30м подъёма упиралось в 8 к 6-му шагу) — вертикальность, главная фишка
+    // архетипов, терялась. Нижний кламп -4 общий (лава на -6).
+    const y = Math.max(-4, Math.min(st.yMax, ny));
     const x = Math.max(-9, Math.min(9, nx));
     const w = Math.max(1.3, wBase - r() * 0.5);
     const p = {
@@ -64,21 +68,39 @@ function addSegment(st, r, cfg) {
     st.pos = { x: p.x, y: p.y, z: p.z };
     st.i++;
     // монеты: каждая 3-я платформа; 25% — на боковых уступах (риск/награда)
-    if (st.i % 3 === 0) {
+    const hasCoin = st.i % 3 === 0;
+    if (hasCoin) {
       const side = r() < 0.25 ? (r() < 0.5 ? -1 : 1) * (1.4 + r() * 0.6) : 0;
       st.coins.push([snap(p.x + side), snap(p.y + 1.0), snap(p.z)]);
     }
-    // hazard-блоки: рядом с путём, нужно обходить (не на самой платформе!)
-    if (hazardP && r() < hazardP) {
-      const off = (r() < 0.5 ? -1 : 1) * (w * 0.5 + 0.9);
+    // hazard-блоки: v8.1 (консилиум v8 #2) — НА пути, а не сбоку. Раньше off = w*0.5+0.9
+    // ставил блок ЗА край платформы: бегущий прямо игрок его не задевал → «косметика».
+    // Теперь: низкий блок (sy 0.45) в ЦЕНТРЕ прохода, верх kill-зоны p.y+0.95 →
+    // подъём ног 0.55м — перепрыгивается даже god (apex 0.88м, double 1.76м);
+    // на широких (w ≥ 2.6) можно и оббежать сбоку (дорожка ≥ 0.8м). Настоящий gauntlet.
+    // Guards: НЕ на платформе с монетой (смерть при сборе) и НЕ перед чекпоинтом (см. ниже).
+    if (hazardP && r() < hazardP && !hasCoin && !p.crumble && !p.move) {
       st.hazards.push({
-        x: snap(p.x + off), y: snap(p.y + 0.9), z: snap(p.z),
-        sx: 1, sy: 1.6, sz: 1
+        x: snap(p.x), y: snap(p.y + 0.625), z: snap(p.z),
+        sx: 0.9, sy: 0.45, sz: 0.9
       });
+      st._hazI = st.i;  // чекпоинт на этой платформе НЕ ставить (респавн в kill-зону)
     }
-    // чекпоинты на 50% и 75% общего пути
-    if (st.i === st.cp1 || st.i === st.cp2) {
+    // чекпоинты на 50% и 75% общего пути.
+    // v8.1 (консилиум v8 #10): чекпоинт ТОЛЬКО на стабильной платформе (без move/crumble).
+    // Раньше он ставился ровно на индексе cp1/cp2, который мог быть mover'ом — платформа
+    // уезжала, а респавн телепортировал игрока в СТАТИЧНУЮ (пустую) точку (L19: 75% падений).
+    // Теперь цель — «первая стабильная платформа НЕ РАНЬШЕ cpN», т.е. флаг может чуть
+    // сместиться вперёд, но всегда стоит на твёрдой земле.
+    // v8.1 (#2): и НЕ на платформе с hazard — иначе респавн/revive телепортирует
+    // прямо в kill-зону (бесконечный луп смертей на месте).
+    const stable = !p.move && !p.crumble && st.i !== st._hazI;
+    if (stable && !st._cp1done && st.i >= st.cp1) {
       st.checkpoints.push([snap(p.x), snap(p.y + 0.6), snap(p.z)]);
+      st._cp1done = true;
+    } else if (stable && !st._cp2done && st.i >= st.cp2) {
+      st.checkpoints.push([snap(p.x), snap(p.y + 0.6), snap(p.z)]);
+      st._cp2done = true;
     }
   }
   st.dir = dir !== undefined ? dir : st.dir;
@@ -86,7 +108,13 @@ function addSegment(st, r, cfg) {
 
 function genLevel(n) {
   const r = rng(1000 + n * 77);
-  // --- Уровень 1 = тутор (не меняем) ---
+  // --- Уровень 1 = тутор ---
+  // v8.1 (консилиум v8 minor): предпоследняя платформа ПОДНЯТА на +1.4 — одиночный
+  // прыжок её не берёт ни в одном варианте (apex: nub 1.34, pro 1.14, god 0.84),
+  // а двойной берёт с запасом (2×apex ≥ 1.68) — тутор ЧЕСТНО тренирует двойной
+  // прыжок (38% hop'ов god-серии требуют его, раньше lvl1 об этом не учил).
+  // Чекпоинт ПЕРЕНЕСЁН на платформу z=-18: старый [0,0.5,-15] висел в ПРОРЫХЕ
+  // между платформами — респавн после смерти ронял игрока в лаву (луп смертей).
   if (n === 1) {
     return {
       name: 'Обучение',
@@ -96,12 +124,12 @@ function genLevel(n) {
         { x: 0, y: 0, z: -6, sx: 5, sy: 1, sz: 5, mat: 'grass' },
         { x: 0, y: 0.2, z: -12, sx: 4.5, sy: 1, sz: 4.5, mat: 'stone' },
         { x: 0, y: 0.4, z: -18, sx: 4, sy: 1, sz: 4, mat: 'stone' },
-        { x: 0, y: 0.6, z: -24, sx: 4, sy: 1, sz: 4, mat: 'wood' },
-        { x: 0, y: 0.8, z: -30, sx: 5, sy: 1, sz: 5, mat: 'gold' },
+        { x: 0, y: 1.8, z: -24, sx: 4, sy: 1, sz: 4, mat: 'wood' },
+        { x: 0, y: 2.2, z: -30, sx: 5, sy: 1, sz: 5, mat: 'gold' },
       ],
-      coins: [[0, 1, -6], [0, 1.2, -12], [0, 1.4, -18], [0, 1.6, -24]],
-      checkpoints: [[0, 0.5, -15]],
-      finish: [0, 1.8, -30],
+      coins: [[0, 1, -6], [0, 1.2, -12], [0, 1.4, -18], [0, 2.6, -24]],
+      checkpoints: [[0, 1.0, -18]],
+      finish: [0, 3.2, -30],
       lava_y: -6.0, lava_size: 260.0
     };
   }
@@ -122,12 +150,26 @@ function genLevel(n) {
   ];
   const arch = ARCHS[Math.min(n, ARCHS.length - 1)];
 
+  // v8.1 (#1): потолок высоты ПО АРХЕТИПУ. Подъём = steps × средний dy, поэтому
+  // «вертикальным» архетипам нужна большая шапка, иначе они сплющивались на y=8:
+  //   shaft (dy~1.35 × 22 шага ≈ 30м), movers/climb (~28м), crumble/mixed (~24м).
+  // Плоские/спускные (ice/gauntlet/descent/serpentine) остаются низкими — им 8 хватает.
+  // Нижняя граница -4 общая (лава на -6, падение = смерть на любой высоте).
+  const YMAX_BY_ARCH = {
+    climb: 18, shaft: 34, crumble: 26, movers: 28, mixed: 24,
+    descent: 12, serpentine: 14, ice: 8, gauntlet: 10,
+  };
+  const yMax = YMAX_BY_ARCH[arch] || 12;
+
   const steps = 10 + Math.floor(n * 1.2);
   const st = {
     plats: [{ x: 0, y: 0, z: 0, sx: 7, sy: 1, sz: 7, mat: 'grass' }],
     coins: [], checkpoints: [], hazards: [],
     pos: { x: 0, y: 0, z: 0 }, dir: -1, i: 0,
     cp1: Math.floor(steps / 2), cp2: Math.floor(steps * 0.75),
+    _cp1done: false, _cp2done: false,  // v8.1 (#10): чекпоинты на стабильных платформах
+    _hazI: -1,  // v8.1 (#2): индекс платформы с hazard — чекпоинт на ней не ставить
+    yMax: yMax,  // v8.1 (#1): потолок высоты ПО АРХЕТИПУ (см. YMAX_BY_ARCH)
   };
 
   const wBase = 3.0 - Math.min(n * 0.06, 1.4);   // 3.0 → 1.6
@@ -165,7 +207,10 @@ function genLevel(n) {
       break;
     }
     case 'ice':
-      seg(steps, { dir: -1, prof: 'flat', mats: ['ice', 'ice', 'stone'], gapBase: gapBase * 0.7, wBase: wBase + 0.4 });
+      // v8.1 (minor): лёд скользит по-настоящему (accel 0.25×), но скольжение было
+      // ничем не наказуемо. Низкие hazard-блоки НА пути: на льду нельзя резко
+      // затормозить/свернуть — проезд требует ЗАРАНЕЕ прыгать. Механика + угроза.
+      seg(steps, { dir: -1, prof: 'flat', mats: ['ice', 'ice', 'stone'], gapBase: gapBase * 0.7, wBase: wBase + 0.4, hazardP: 0.14 });
       break;
     case 'crumble':
       seg(steps, { dir: -1, prof: 'climb', mats: ['wood', 'wood', 'stone'], crumbleP: 0.45, gapBase: gapBase * 0.85 });
@@ -218,6 +263,7 @@ for (let n = 1; n <= 20; n++) {
   const checkpoints = [];
   let pos = { x: 0, y: 0, z: 0 };
   let dir = -1;
+  let cpDone = false;
   const steps = 24;
   const mats = ['neon', 'dark', 'stone'];
   for (let i = 1; i <= steps; i++) {
@@ -236,7 +282,12 @@ for (let n = 1; n <= 20; n++) {
     platforms.push(p);
     pos = { x: p.x, y: p.y, z: p.z };
     if (i % 2 === 0) coins.push([snap(pos.x), snap(pos.y + 1.0), snap(pos.z)]);
-    if (i === 12) checkpoints.push([snap(pos.x), snap(pos.y + 0.6), snap(pos.z)]);
+    // v8.1 (#10): чекпоинт на ПЕРВОЙ стабильной платформе не раньше i=12 (без move) —
+    // раньше он стоял ровно на i=12, а это mover (i%4===0) → респавн в пустоту.
+    if (!cpDone && i >= 12 && !p.move) {
+      checkpoints.push([snap(pos.x), snap(pos.y + 0.6), snap(pos.z)]);
+      cpDone = true;
+    }
   }
   platforms.push({ x: snap(pos.x), y: snap(pos.y + 0.5), z: snap(pos.z + dir * 3.2), sx: 5, sy: 1, sz: 5, mat: 'gold' });
   const def = {

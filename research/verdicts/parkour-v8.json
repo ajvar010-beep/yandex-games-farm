@@ -1,0 +1,49 @@
+{
+  "game": "parkour-series",
+  "title": "Про Паркур v8 (Нубик/Про/Бог)",
+  "date": "2026-10-23",
+  "verdict": 4.92,
+  "axes": {
+    "mechanic": 5.81,
+    "vibe": 5.31,
+    "monetization": 3.83,
+    "realization": 4.35
+  },
+  "keep": false,
+  "judges": 10,
+  "threshold": 8.0,
+  "calibration": "Нубик-конкурент 5.51, Melon 7.67 — v8 (4.92) НИЖЕ прямого конкурента",
+  "critical_flaws": [
+    "coins_collected не сбрасывается между уровнями → win-double компаундится экспоненциально, экономика и IAP-спрос уничтожены",
+    "coins_collected не сбрасывается в load_level → эксплойт экономики + неверный HUD",
+    "Inline JavaScriptBridge.create_callback temporaries are freed before the promise resolves — every SDK promise path (IAP credit, restore, cloud save, leaderboard, sdk_ready signal, interstitial unmute) is dead in the real Web build",
+    "Плоский пайплайн света: нет теней, нет glow, LINEAR-тонмап, ambient 0.9 → ОБА кадра выглядят бюджетно, неон-21 НЕ светится"
+  ],
+  "major_flaws": [
+    "Кламп y=8 вырождает climb/shaft/movers/mixed в плоские коридоры — вертикальность (главная фишка архетипов) теряется",
+    "Gauntlet: hazard-блоки чисто косметические — стоят СБОКУ платформы и никогда не перекрывают путь; игрок бегущий прямо их не задевает",
+    "Покупка «Без рекламы» (199₽) не скрывает уже показанный баннер в меню — игрок заплатил, а баннер висит",
+    "Авто-камера НЕ доворачивает пока игрок рулит → на мобильных serpentine/U-повороты дезориентируют",
+    "Фантомный авто-прыжок на revive/resume/тап по панели (замороженный _jump_buffer)",
+    "Труп-кубики (RigidBody3D) не освобождаются — копятся между смертями и УТЕКАЮТ в следующий уровень",
+    "Checkpoints placed on MOVER platforms store the STATIC base position — respawn/restart teleports the player to a point the platform has already left (27-75% drop into the void)",
+    "kill()/_explode() spawns ~6 RigidBody3D debris parented to Player that are NEVER freed — they accumulate every death for the whole level, degrading FPS on weak Android"
+  ],
+  "minor": [
+    "Crumble без прогрессивного предупреждения (тряска/мигание/отсчёт) — 0.7с окно читается только по статичному цвету",
+    "Тутор не тренирует и не требует двойной прыжок — хотя 38% hop'ов под god и 8% под pro требуют его",
+    "Par/3★ не зависит от difficulty-варианта и не отражает crumble + реальное cautious-время — 3★ требует почти идеальной игры, вопреки комментарию",
+    "Ice скользит по-настоящему, но на ice-уровнях скольжение ничем не наказуемо — механика есть, угрозы нет",
+    "Кнопка «📺 +30◈» в меню не блокируется во время кулдауна 3 мин — тихий no-op без фидбэка",
+    "Кулдаун интерстишла 130с хранится на инстансе Game и сбрасывается при входе из меню",
+    "Кубики распада спавнятся со двойным офсетом (~0.85-1.45 м выше тела)",
+    "Джойстик выходит за нижний край экрана на 60px, не учитывает safe-area"
+  ],
+  "refuted": [
+    "Чекпоинт стоит НА crumble-платформе (LVL8 cp2) — respawn/платный revive роняет игрока на крошащуюся платформу с 0.7с и нулевой скоростью → луп смертей",
+    "Standalone hazard blocks overlap the walkable top surface of platforms by up to 44%, while single-jump apex (0.88-1.14m) is below the 1.40m needed to clear them — on ice/sand the dodge is unreliable",
+    "Иконка — пейзажная каша без персонажа/лица, хотя процедурный герой с глазами уже есть в коде",
+    "lvl11 (gauntlet) пересвечен и низкоконтрастен; красные hazard-блоки (механика «касание=смерть») почти невидимы в витринном кадре",
+    "Обложка 800×470 — плоский скриншот без брендинга серии: нет тайтла, персонажа, хуков «3 варианта / 21 уровень / ХАКЕР»"
+  ]
+}

@@ -11,7 +11,6 @@ var level_num := 1
 var coins_collected := 0
 var _time_ms := 0
 var _running := false
-var _last_interstitial := 0
 var _death_pos := Vector3.ZERO
 var _deaths := 0
 var _revives_used := 0  # цепочка revive (0..max)
@@ -67,6 +66,11 @@ func load_level(n: int) -> void:
 	_revives_used = 0
 	_new_record = false
 	_won = false
+	# v8.1 (консилиум v8 #3/#5): монеты СБРАСЫВАЕМ на каждый уровень — иначе
+	# win-double (bonus = coins_collected + 20) компаундится между уровнями
+	# через _on_next на том же узле Game → 59 млн ◈ за сессию, sink 1146 берётся
+	# к 7-8 уровню, IAP-спрос = 0.
+	coins_collected = 0
 	_lvl_label.text = GameState.L("level") % n
 	_update_coins()
 	_timer_label.text = "0.0"
@@ -74,7 +78,10 @@ func load_level(n: int) -> void:
 	if n == 1:
 		_show_tutorial_step(0)
 
-# par-время уровня: путь / средняя скорость + ожидание движущихся платформ
+# par-время уровня: путь / скорость + ожидание mover/crumble + hazards.
+# v8.1 (консилиум v8 minor): par должен отражать РЕАЛЬНОЕ cautious-время, а не
+# «идеальный спидран». Раньше: dist/4.5 + mover — не учитывал ни difficulty-вариант,
+# ни crumble, ни hazards → 3★ (par×1.2) требовала почти идеальной игры.
 func _calc_par(def: Dictionary) -> float:
 	var plats: Array = def.get("platforms", [])
 	if plats.size() < 2:
@@ -82,6 +89,7 @@ func _calc_par(def: Dictionary) -> float:
 	var dist := 0.0
 	var prev := Vector3.ZERO
 	var mover_wait := 0.0
+	var crumble_n := 0
 	for i in plats.size():
 		var p: Dictionary = plats[i]
 		var cur := Vector3(float(p.get("x", 0)), float(p.get("y", 0)), float(p.get("z", 0)))
@@ -93,8 +101,16 @@ func _calc_par(def: Dictionary) -> float:
 			var mv: Dictionary = p["move"]
 			var spd := maxf(0.5, float(mv.get("speed", 2.0)))
 			mover_wait += 0.75 * (PI / spd)
-	# средняя эффективная скорость с прыжками ~4.5 м/с
-	return maxf(8.0, dist / 4.5 + mover_wait * 0.5)
+		# crumble: каждое крошение — ~0.35с осторожности (тайминг прыжка, не стоять)
+		if p.has("crumble"):
+			crumble_n += 1
+	# hazards (красные блоки): каждый требует выверенного прыжка — ~0.4с
+	var haz_n: int = (def.get("hazards", []) as Array).size()
+	# эффективная скорость с прыжками ПАДАЕТ с difficulty: god-гравитация (×1.35)
+	# укорачивает reach → больше двойных прыжков, медленнее. base 4.5 / difficulty.
+	var spd_eff := 4.5 / maxf(0.8, Variant.difficulty)
+	var par := dist / spd_eff + mover_wait * 0.5 + crumble_n * 0.35 + haz_n * 0.4
+	return maxf(8.0, par)
 
 func _procedural_level(n: int) -> Dictionary:
 	# авто-генерация, если нет файла уровня
@@ -451,9 +467,12 @@ func _on_next() -> void:
 
 func _maybe_interstitial() -> void:
 	if GameState.no_ads: return
+	# v8.1 (minor): кулдаун — в GameState (переживает вход в меню). Time.get_ticks_msec()
+	# монотонный в рамках сессии процесса; на reload страницы сбрасывается вместе с
+	# GameState — допустимо (новая сессия = новый показ разрешён правилами Яндекса).
 	var now := Time.get_ticks_msec()
-	if now - _last_interstitial > INTERSTITIAL_COOLDOWN_MS:
-		_last_interstitial = now
+	if now - GameState.last_interstitial_ms > INTERSTITIAL_COOLDOWN_MS:
+		GameState.last_interstitial_ms = now
 		Yandex.show_fullscreen()
 
 func _toggle_pause() -> void:
@@ -479,12 +498,27 @@ var _joy_id := -1
 var _joy_center := Vector2.ZERO
 
 func _build_touch_input() -> void:
-	# виртуальный джойстик слева
+	# виртуальный джойстик слева.
+	# v8.1 (консилиум v8 minor): с учётом safe-area. Раньше position.y=-160 при
+	# размере 220 → низ бокса на +60px НИЖЕ края экрана (отрезан на мобилах с
+	# жестовой навигацией). Теперь: safe-area окна + полный размер бокса выше низа.
+	var joy_size := Vector2(220, 220)
+	var safe_bottom := 16.0
+	var safe_left := 16.0
+	# DisplayServer.get_display_safe_area() — Rect2i в экранных координатах
+	# (Window.get_safe_area() в Godot 4.7 НЕТ — rt_test поймал «Nonexistent function»).
+	# На десктопе возвращает весь прямоугольник окна → maxf оставляет дефолт 16.
+	var sa: Rect2i = DisplayServer.get_display_safe_area()
+	var win_size: Vector2i = DisplayServer.window_get_size()
+	if sa.size.x > 0 and sa.size.y > 0:
+		safe_bottom = maxf(16.0, float(win_size.y - (sa.position.y + sa.size.y)))
+		safe_left = maxf(16.0, float(sa.position.x))
 	_joy_base = Control.new()
 	_joy_base.name = "JoyBase"
 	_joy_base.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_joy_base.position = Vector2(40, -160)
-	_joy_base.custom_minimum_size = Vector2(220, 220)
+	# низ бокса — точно на safe_bottom от нижнего края (не ниже)
+	_joy_base.position = Vector2(safe_left + 12.0, -(joy_size.y + safe_bottom))
+	_joy_base.custom_minimum_size = joy_size
 	hud.add_child(_joy_base)
 	var bg := Panel.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -508,6 +542,11 @@ func _input(event: InputEvent) -> void:
 				_joy_active = true
 				_joy_id = event.index
 				_joy_center = event.position
+			elif ui != null and ui.visible:
+				# v8.1 (#7): панель открыта (смерть/победа/пауза) — тап идёт по её
+				# кнопкам, НЕ по игре. Без этого тап «Ожить» (x=640=half) дёргал
+				# tap_jump() → фантомный прыжок с уступа сразу после revive.
+				pass
 			else:
 				player.tap_jump()
 		else:

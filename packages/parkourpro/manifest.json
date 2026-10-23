@@ -1,7 +1,7 @@
 {
   "id": "parkourpro",
   "engine": "godot-4.7.2-web",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "orientation": "landscape",
   "touch": true,
   "monetization": [

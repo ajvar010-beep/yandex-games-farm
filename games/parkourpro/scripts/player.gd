@@ -18,6 +18,10 @@ var _max_jumps := 2
 var _dead := false
 var _spawn := Vector3.ZERO
 var _last_safe := Vector3.ZERO   # последняя точка на полу — для честного revive
+# v8.1 (#11): кубики смерти спавнятся в Level (пересоздаётся на load_level) с авто-деспавном,
+# а НЕ в Player. Иначе ~6-8 RigidBody3D копились на каждую смерть и утекали между уровнями
+# (тот же Game-узел при _on_next) → растущий счётчик узлов/draw-call, FPS-деградация.
+var _debris: Array[Node] = []
 
 var _cam: Node3D
 var _mesh: Node3D
@@ -108,6 +112,8 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	_dead = false
 	_jumps = 0
+	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок при возрождении
+	_clear_debris()     # v8.1 (#11): кубики прошлой смерти долой
 	if _mesh: _mesh.visible = true
 
 func kill() -> void:
@@ -120,17 +126,45 @@ func kill() -> void:
 func _explode() -> void:
 	# разлетаемся кубиками
 	if not _mesh: return
+	# хост debris: Level (пересоздаётся на load_level → автоочистка при смене уровня).
+	# Фолбэк на Game если Level не найден (напр. в тестах).
+	var host: Node = get_parent().get_node_or_null("Level") if get_parent() else null
+	if host == null: host = get_parent()
+	if host == null: return
 	var parts := _mesh.get_children()
 	for p in parts:
 		if p is MeshInstance3D:
 			var rb := RigidBody3D.new()
-			rb.position = p.position
-			rb.add_child(p.duplicate())
+			var part := (p as MeshInstance3D).duplicate()
+			# v8.1 (#11/minor): ОБНУЛЯЕМ локальную позицию дубликата — иначе она
+			# складывается с мировой позицией rb (двойной офсет 0.85-1.45м, критик v8)
+			(part as Node3D).position = Vector3.ZERO
+			rb.add_child(part)
 			# случайный импульс
 			rb.linear_velocity = Vector3(randf_range(-3,3), randf_range(3,6), randf_range(-3,3))
 			rb.angular_velocity = Vector3(randf_range(-8,8), randf_range(-8,8), randf_range(-8,8))
-			_mesh.get_parent().add_child(rb)
+			host.add_child(rb)
+			# МИРОВАЯ позиция части ПОСЛЕ add_child: вне дерева set_global_position
+			# бьёт «!is_inside_tree()» (global_transform недоступен)
+			rb.global_position = p.global_position
+			_debris.append(rb)
+			# авто-деспавн через 2с — кубики не копятся и не плавают в следующем уровне.
+			# Timer — РЕБЁНОК rb: если rb освобождён рано (_clear_debris при revive),
+			# таймер освобождается вместе с ним и НЕ стреляет по freed-объекту
+			# (иначе лямбда-захват rb даёт «Lambda capture freed» в логах).
+			var t := Timer.new()
+			t.wait_time = 2.0
+			t.one_shot = true
+			rb.add_child(t)
+			t.timeout.connect(rb.queue_free)
+			t.start()
 	_mesh.visible = false
+
+# очистка debris: зовётся при возрождении/респавне (кубики прошлой смерти долой)
+func _clear_debris() -> void:
+	for d in _debris:
+		if is_instance_valid(d): d.queue_free()
+	_debris.clear()
 
 func revive() -> void:
 	_dead = false
@@ -138,6 +172,7 @@ func revive() -> void:
 	global_position = _last_safe + Vector3.UP * 0.5
 	velocity = Vector3.ZERO
 	_jumps = 0
+	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок (см. tap_jump)
 	_coyote = COYOTE_TIME
 	if _mesh: _mesh.visible = true
 
@@ -288,6 +323,11 @@ func _do_jump() -> void:
 
 # мобильный тап (из Game)
 func tap_jump() -> void:
+	# v8.1 (консилиум v8 #7): НЕ буферизуем прыжок пока мёртв. Тап по кнопке
+	# «Ожить»/панели (правая половина экрана) раньше ставил _jump_buffer=0.15,
+	# а revive() не сбрасывал его → персонаж сам прыгал с уступа, тратя купленный
+	# за RV revive. Гард + сброс в revive/respawn + ui.visible-гард в Game._input.
+	if _dead: return
 	_jump_buffer = 0.15
 
 func _animate_limbs(run: float) -> void:

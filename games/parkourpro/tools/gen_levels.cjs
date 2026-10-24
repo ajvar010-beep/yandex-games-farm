@@ -26,11 +26,83 @@ function rng(seed) {
 const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
 const snap = (v) => Math.round(v * 2) / 2;
 
+// v8.2 (крит): СОФТЛОК НАВИСАНИЯ. Верхний ярус серпантина/mixed вставал над нижним
+// с просветом 0.7м < капсулы игрока 1.4м → lvl 5/9/16/19/20/21 непроходимы.
+// smoke_test v8 проверял только gap/dy СОСЕДНИХ платформ и это пропускал.
+// Инвариант: для любой пары НЕсоседних платформ (|i-j|≥2) с XZ-перекрытием >0.3м
+// просвет ≥1.9м (1.4 капсула + 0.5 запас на прыжок под нависанием). Нарушение →
+// поднять верхнюю платформу И весь хвост маршрута (dy между ними сохраняется,
+// плавность маршрута не ломается). Мутирует plats in-place; ВОЗВРАЩАЕТ lift[i] —
+// суммарный подъём платформы i, чтобы вызывающий сдвинул монеты/чекпоинты/hazard.
+function fixOverhangs(plats) {
+  const CLEARANCE = 1.9;
+  const lift = new Array(plats.length).fill(0);
+  // Полный проход за раз (без раннего break): за проход чиним ВСЕ пары. Подъём
+  // монотонный (только +y) и применяется к хвосту маршрута от hiI, поэтому
+  // конфликт «нижняя раньше, верхняя позже» разрешается поднятием «позже».
+  // При равных y верхняя = с БОЛЬШИМ индексом (дальше по маршруту).
+  for (let pass = 0; pass < 80; pass++) {
+    let changed = false;
+    for (let i = 0; i < plats.length; i++) {
+      for (let j = i + 1; j < plats.length; j++) {
+        if (j - i < 2) continue;
+        const a = plats[i], b = plats[j];
+        const ox = (a.sx + b.sx) / 2 - Math.abs(a.x - b.x);
+        const oz = (a.sz + b.sz) / 2 - Math.abs(a.z - b.z);
+        if (ox <= 0.3 || oz <= 0.3) continue;
+        // hi = платформа с большим y (при равенстве — с большим индексом = позже)
+        const hiIsB = (b.y > a.y) || (b.y === a.y);
+        const lo = hiIsB ? a : b, hi = hiIsB ? b : a;
+        const hiI = hiIsB ? j : i;
+        const clearance = (hi.y - hi.sy / 2) - (lo.y + lo.sy / 2);
+        if (clearance < CLEARANCE) {
+          const d = Math.ceil((CLEARANCE - clearance) * 2) / 2; // snap 0.5
+          for (let k = hiI; k < plats.length; k++) { plats[k].y = snap(plats[k].y + d); lift[k] += d; }
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+  return lift;
+}
+
+// применить подъём платформ к декорациям (монеты/чекпоинты/hazard), привязанным
+// к индексу платформы _pi (см. addSegment). Сдвигает y на lift[_pi].
+function liftDecorations(arr, lift, yGet, ySet) {
+  for (const d of arr) {
+    const li = lift[d._pi];
+    if (li) ySet(d, snap(yGet(d) + li));
+  }
+}
+
 // сегмент маршрута: len шагов в направлении dir(±1) с профилем высоты
 function addSegment(st, r, cfg) {
   const { len, dir, prof, mats, wBase, gapBase, moverP, crumbleP, hazardP } = cfg;
   // направление задаём В НАЧАЛЕ сегмента (иначе поворот применяется с опозданием на сегмент)
-  if (dir !== undefined) st.dir = dir;
+  if (dir !== undefined) {
+    // v8.2 (крит): U-ПОВОРОТ = СЛЕДУЮЩАЯ БОКОВАЯ ДОРОЖКА (x-lane, монотонно +4.5).
+    // Возвратное колено идёт РЯДОМ с исходящим, а не НАД ним: вертикальный зазор
+    // требовал бы +2.7м за один шаг (просвет 1.9 + sy 0.8), а предел прыжка god
+    // 1.75м — стекинг колен был физически непроходим (софтлок lvl 5/9/16/19/20/21).
+    // Шаг дорожки 4.5: соседние колена НЕ перекрываются по XZ даже при джиттере ±0.5
+    // (worst dx 3.5 > (w1+w2)/2 − 0.3 ≈ 2.7), а шпилька-поворот worst dx 5.5 +
+    // fwd ~4 → edge_gap ~3.7 ≤ 4.4 — проходима двойным прыжком.
+    if (st.dir !== undefined && dir !== st.dir) {
+      st.flipN += 1;
+      // ВЕРШИНА ШПИЛЬКИ: переходная платформа МЕЖДУ дорожками — диагональный
+      // прыжок 4.5x+4z (edge_gap ~5.1) не берётся даже двойным (лимит 4.4),
+      // через apex — два прыжка ~2.6м каждый.
+      const tz = st.pos.z + st.dir * ((cfg.gapBase || 1.6) + 2.0);
+      st.plats.push({
+        x: snap(st.xBase + 2.25), y: snap(st.pos.y + 0.35), z: snap(tz),
+        sx: 2.2, sy: 0.8, sz: 2.2, mat: 'stone'
+      });
+      st.pos = { x: st.plats[st.plats.length - 1].x, y: st.plats[st.plats.length - 1].y, z: tz };
+      st.xBase = st.flipN * 4.5;
+    }
+    st.dir = dir;
+  }
   for (let i = 0; i < len; i++) {
     const t = i / Math.max(1, len - 1);
     let dy;
@@ -45,15 +117,17 @@ function addSegment(st, r, cfg) {
     const gap = gapBase + r() * 0.6;
     const fwd = prof === 'shaft' ? gap * 0.6 : gap;
     const nz = st.pos.z + st.dir * (fwd + 2.0);
-    const nx = st.pos.x + (r() * 2.0 - 1.0) * (prof === 'shaft' ? 0.5 : 1);
+    // x — вокруг БАЗЫ дорожки колена (v8.2). НЕ random-walk: дрейф возвращал колено
+    // в зону перекрытия с нижним ярусом. Разброс ±0.5 (shaft ±0.4 — компактная колонна).
+    const nx = st.xBase + (r() * 2.0 - 1.0) * (prof === 'shaft' ? 0.4 : 0.5);
     const ny = st.pos.y + dy;
-    // ограничения мира: y ∈ [-4, yMax], |x| ≤ 9.
+    // ограничения мира: y ∈ [-4, yMax], |x| ≤ 16 (v8.2: расширено — дорожки колен).
     // v8.1 (консилиум v8 #1): yMax ПО АРХЕТИПУ — плоская шапка 8 превращала
     // climb/shaft/movers/mixed в плоские коридоры наверху (22 шага shaft × dy 1.35
     // ≈ 30м подъёма упиралось в 8 к 6-му шагу) — вертикальность, главная фишка
     // архетипов, терялась. Нижний кламп -4 общий (лава на -6).
     const y = Math.max(-4, Math.min(st.yMax, ny));
-    const x = Math.max(-9, Math.min(9, nx));
+    const x = Math.max(-16, Math.min(16, nx));
     const w = Math.max(1.3, wBase - r() * 0.5);
     const p = {
       x: snap(x), y: snap(y), z: snap(nz),
@@ -65,13 +139,16 @@ function addSegment(st, r, cfg) {
     }
     if (crumbleP && r() < crumbleP && !p.move) p.crumble = 0.7;
     st.plats.push(p);
+    const _pi = st.plats.length - 1;  // индекс платформы — для liftDecorations (v8.2)
     st.pos = { x: p.x, y: p.y, z: p.z };
     st.i++;
     // монеты: каждая 3-я платформа; 25% — на боковых уступах (риск/награда)
     const hasCoin = st.i % 3 === 0;
     if (hasCoin) {
       const side = r() < 0.25 ? (r() < 0.5 ? -1 : 1) * (1.4 + r() * 0.6) : 0;
-      st.coins.push([snap(p.x + side), snap(p.y + 1.0), snap(p.z)]);
+      const c = [snap(p.x + side), snap(p.y + 1.0), snap(p.z)];
+      c._pi = _pi;
+      st.coins.push(c);
     }
     // hazard-блоки: v8.1 (консилиум v8 #2) — НА пути, а не сбоку. Раньше off = w*0.5+0.9
     // ставил блок ЗА край платформы: бегущий прямо игрок его не задевал → «косметика».
@@ -82,7 +159,7 @@ function addSegment(st, r, cfg) {
     if (hazardP && r() < hazardP && !hasCoin && !p.crumble && !p.move) {
       st.hazards.push({
         x: snap(p.x), y: snap(p.y + 0.625), z: snap(p.z),
-        sx: 0.9, sy: 0.45, sz: 0.9
+        sx: 0.9, sy: 0.45, sz: 0.9, _pi
       });
       st._hazI = st.i;  // чекпоинт на этой платформе НЕ ставить (респавн в kill-зону)
     }
@@ -96,10 +173,12 @@ function addSegment(st, r, cfg) {
     // прямо в kill-зону (бесконечный луп смертей на месте).
     const stable = !p.move && !p.crumble && st.i !== st._hazI;
     if (stable && !st._cp1done && st.i >= st.cp1) {
-      st.checkpoints.push([snap(p.x), snap(p.y + 0.6), snap(p.z)]);
+      const cp = [snap(p.x), snap(p.y + 0.6), snap(p.z)]; cp._pi = _pi;
+      st.checkpoints.push(cp);
       st._cp1done = true;
     } else if (stable && !st._cp2done && st.i >= st.cp2) {
-      st.checkpoints.push([snap(p.x), snap(p.y + 0.6), snap(p.z)]);
+      const cp = [snap(p.x), snap(p.y + 0.6), snap(p.z)]; cp._pi = _pi;
+      st.checkpoints.push(cp);
       st._cp2done = true;
     }
   }
@@ -166,6 +245,7 @@ function genLevel(n) {
     plats: [{ x: 0, y: 0, z: 0, sx: 7, sy: 1, sz: 7, mat: 'grass' }],
     coins: [], checkpoints: [], hazards: [],
     pos: { x: 0, y: 0, z: 0 }, dir: -1, i: 0,
+    xBase: 0, flipN: 0,  // v8.2: боковая дорожка колена (U-поворот → новая lane)
     cp1: Math.floor(steps / 2), cp2: Math.floor(steps * 0.75),
     _cp1done: false, _cp2done: false,  // v8.1 (#10): чекпоинты на стабильных платформах
     _hazI: -1,  // v8.1 (#2): индекс платформы с hazard — чекпоинт на ней не ставить
@@ -235,16 +315,24 @@ function genLevel(n) {
       seg(steps, { dir: -1, prof: 'climb' });
   }
 
-  // финишная платформа
-  const fp = st.pos;
+  // финишная платформа (по последней платформе маршрута)
+  const fp = st.plats[st.plats.length - 1];
   st.plats.push({ x: snap(fp.x), y: snap(fp.y + 0.5), z: snap(fp.z + st.dir * 3.5), sx: 6, sy: 1, sz: 6, mat: 'gold' });
+
+  // v8.2 (крит): софтлок нависаний — ПОСЛЕ финиша (финиш 6×6 тоже может нависнуть).
+  // Подъём платформ синхронно сдвигает монеты/чекпоинты/hazard (привязаны по _pi).
+  const lift = fixOverhangs(st.plats);
+  liftDecorations(st.coins, lift, (d) => d[1], (d, v) => { d[1] = v; });
+  liftDecorations(st.checkpoints, lift, (d) => d[1], (d, v) => { d[1] = v; });
+  liftDecorations(st.hazards, lift, (d) => d.y, (d, v) => { d.y = v; });
+  const fp2 = st.plats[st.plats.length - 1];  // финишная платформа (после подъёмов)
   return {
     name: `Уровень ${n}`,
     archetype: arch,
     start: [0, 2, 0],
     platforms: st.plats, coins: st.coins, checkpoints: st.checkpoints,
-    hazards: st.hazards,
-    finish: [snap(fp.x), snap(fp.y + 1.6), snap(fp.z + st.dir * 3.5)],
+    hazards: st.hazards.map(({ _pi, ...h }) => h),  // _pi — служебное, в JSON не идёт
+    finish: [snap(fp2.x), snap(fp2.y + 1.1), snap(fp2.z)],  // точка-триггер над верхом платформы
     lava_y: -6.0, lava_size: 320.0
   };
 }
@@ -266,37 +354,56 @@ for (let n = 1; n <= 20; n++) {
   let cpDone = false;
   const steps = 24;
   const mats = ['neon', 'dark', 'stone'];
+  let xBase = 0, flipN = 0;  // v8.2: дорожки колен (см. addSegment)
   for (let i = 1; i <= steps; i++) {
     // два колена: вперёд и назад (серпантин в матрице)
-    if (i === 9 || i === 17) dir = -dir;
-    const nx = pos.x + (r() * 2.2 - 1.1);
+    if (i === 9 || i === 17) {
+      dir = -dir;
+      flipN += 1;
+      xBase = flipN * 4.5;
+    }
+    // v8.2: x вокруг дорожки колена (не random-walk) — иначе возвратное колено
+    // ложилось НАД исходящим с просветом -0.8м (софтлок, lvl21 был непроходим)
+    const nx = xBase + (r() * 2.0 - 1.0) * 0.5;
     const nz = pos.z + dir * (2.2 + 1.6 + r() * 0.5);
     const ny = pos.y + (i % 3 === 0 ? -(0.4 + r() * 0.5) : (r() * 0.9 - 0.2));
     const w = 2.2 + r() * 0.8;
     const p = {
-      x: snap(Math.max(-9, Math.min(9, nx))), y: snap(Math.max(-4, Math.min(8, ny))), z: snap(nz),
+      x: snap(Math.max(-16, Math.min(16, nx))), y: snap(Math.max(-4, Math.min(8, ny))), z: snap(nz),
       sx: snap(w), sy: 0.6, sz: snap(w),
       mat: mats[i % 3]
     };
     if (i % 4 === 0) p.move = { axis: r() < 0.5 ? 'x' : 'y', range: 1.8, speed: 1.4 + r() * 1.4 };
     platforms.push(p);
+    const _pi = platforms.length - 1;  // индекс платформы — для liftDecorations (v8.2)
     pos = { x: p.x, y: p.y, z: p.z };
-    if (i % 2 === 0) coins.push([snap(pos.x), snap(pos.y + 1.0), snap(pos.z)]);
+    if (i % 2 === 0) {
+      const c = [snap(pos.x), snap(pos.y + 1.0), snap(pos.z)];
+      c._pi = _pi;
+      coins.push(c);
+    }
     // v8.1 (#10): чекпоинт на ПЕРВОЙ стабильной платформе не раньше i=12 (без move) —
     // раньше он стоял ровно на i=12, а это mover (i%4===0) → респавн в пустоту.
     if (!cpDone && i >= 12 && !p.move) {
-      checkpoints.push([snap(pos.x), snap(pos.y + 0.6), snap(pos.z)]);
+      const cp = [snap(pos.x), snap(pos.y + 0.6), snap(pos.z)]; cp._pi = _pi;
+      checkpoints.push(cp);
       cpDone = true;
     }
   }
   platforms.push({ x: snap(pos.x), y: snap(pos.y + 0.5), z: snap(pos.z + dir * 3.2), sx: 5, sy: 1, sz: 5, mat: 'gold' });
+  // v8.2 (крит): софтлок нависаний (lvl21: старт 7×7 и plat15 перекрывались с
+  // просветом -0.8м — уровень был непроходим). Подъём синхронит декорации.
+  const lift = fixOverhangs(platforms);
+  liftDecorations(coins, lift, (d) => d[1], (d, v) => { d[1] = v; });
+  liftDecorations(checkpoints, lift, (d) => d[1], (d, v) => { d[1] = v; });
+  const fp = platforms[platforms.length - 1];
   const def = {
     name: 'ХАКЕР',
     theme: 'hacker',
     archetype: 'serpentine',
     start: [0, 2, 0],
     platforms, coins, checkpoints,
-    finish: [snap(pos.x), snap(pos.y + 1.6), snap(pos.z + dir * 3.2)],
+    finish: [snap(fp.x), snap(fp.y + 1.0), snap(fp.z)],  // над верхом финишной платформы
     lava_y: -6.0, lava_size: 320.0
   };
   fs.writeFileSync(path.join(OUT, '21.json'), JSON.stringify(def, null, 0));

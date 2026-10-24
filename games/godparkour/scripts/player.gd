@@ -44,9 +44,13 @@ func _build_visual() -> void:
 	var col: Color = GameState.SKINS.get(GameState.current_skin, GameState.SKINS["nub"])["color"]
 	_body_mat = StandardMaterial3D.new()
 	_body_mat.albedo_color = col
+	_body_mat.albedo_texture = _char_texture(col, 1234, "body")
+	_body_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	_body_mat.roughness = 0.7
 	_head_mat = StandardMaterial3D.new()
 	_head_mat.albedo_color = col.lightened(0.35)
+	_head_mat.albedo_texture = _char_texture(col.lightened(0.35), 5678, "head")
+	_head_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	# тело
 	var body := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -63,17 +67,33 @@ func _build_visual() -> void:
 	head.position.y = 1.45
 	head.material_override = _head_mat
 	_mesh.add_child(head)
-	# глаза
+	# глаза + брови + рот (лицо на +z, вперёд по движению)
+	var face_mat := StandardMaterial3D.new()
+	face_mat.albedo_color = Color(0.08, 0.08, 0.12)
 	for sx in [-1.0, 1.0]:
 		var eye := MeshInstance3D.new()
 		var em := BoxMesh.new()
 		em.size = Vector3(0.08, 0.08, 0.02)
 		eye.mesh = em
 		eye.position = Vector3(sx * 0.13, 1.47, 0.29)
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.1, 0.1, 0.15)
-		eye.material_override = m
+		eye.material_override = face_mat
 		_mesh.add_child(eye)
+		# бровь над глазом — придаёт «направление взгляда»
+		var brow := MeshInstance3D.new()
+		var bm2 := BoxMesh.new()
+		bm2.size = Vector3(0.11, 0.025, 0.02)
+		brow.mesh = bm2
+		brow.position = Vector3(sx * 0.13, 1.55, 0.29)
+		brow.material_override = face_mat
+		_mesh.add_child(brow)
+	# рот
+	var mouth := MeshInstance3D.new()
+	var mm := BoxMesh.new()
+	mm.size = Vector3(0.16, 0.03, 0.02)
+	mouth.mesh = mm
+	mouth.position = Vector3(0, 1.33, 0.29)
+	mouth.material_override = face_mat
+	_mesh.add_child(mouth)
 	# ноги
 	for sx in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
@@ -102,6 +122,39 @@ func _build_visual() -> void:
 	shape.shape = cap
 	shape.position.y = 0.75
 	add_child(shape)
+
+## Серая шумовая карта 32×32 (вокруг 1.0) — в Godot albedo_color × texture,
+## поэтому цвет скина сохраняется, а текстура даёт только рельеф/фактуру.
+## body: вертикальные складки одежды; head: мелкий ровный шум (кожа).
+func _char_texture(_col: Color, seed: int, style: String) -> ImageTexture:
+	const S := 32
+	var img := Image.create_empty(S, S, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	for y in S:
+		for x in S:
+			var v := 1.0
+			if style == "body":
+				# вертикальные складки + пояс
+				v += rng.randf_range(-0.05, 0.05)
+				if (x + (y >> 2)) % 8 < 1:
+					v -= 0.10
+				if y == S / 2 or y == S / 2 + 1:
+					v -= 0.18
+			else:
+				v += rng.randf_range(-0.04, 0.04)
+			# bevel-кромка: верх светлее, низ темнее — грани читаются
+			if y < 2:
+				v += 0.07
+			elif y >= S - 2:
+				v -= 0.09
+			if x < 1:
+				v += 0.04
+			elif x >= S - 1:
+				v -= 0.05
+			v = clampf(v, 0.0, 1.0)
+			img.set_pixel(x, y, Color(v, v, v, 1.0))
+	return ImageTexture.create_from_image(img)
 
 func set_spawn(p: Vector3) -> void:
 	_spawn = p
@@ -247,7 +300,7 @@ func _physics_process(delta: float) -> void:
 
 	# поворот модели по направлению движения
 	if dir.length() > 0.1 and _mesh:
-		var target_yaw := atan2(-dir.x, -dir.z)
+		var target_yaw := atan2(dir.x, dir.z)
 		_mesh.rotation.y = lerp_angle(_mesh.rotation.y, target_yaw, 12 * delta)
 		# тутор: первое движение (шаг 0→1)
 		var game := get_parent()

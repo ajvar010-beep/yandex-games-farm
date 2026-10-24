@@ -34,7 +34,7 @@ func _make_materials() -> void:
 	for k in COLORS:
 		var m := StandardMaterial3D.new()
 		m.albedo_color = COLORS[k]
-		m.albedo_texture = _block_texture(COLORS[k], k.hash())
+		m.albedo_texture = _block_texture(COLORS[k], k.hash(), k)
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		m.roughness = 0.85
 		_mats[k] = m
@@ -148,18 +148,77 @@ func route_ahead_point(from_pos: Vector3, lookahead: int = 2) -> Vector3:
 
 # процедурная пиксельная текстура блока 16×16 (жанровая конвенция майнкрафта).
 # Детерминированный шум по базовому цвету + «шапка» сверху для grass-подобных.
-func _block_texture(base: Color, seed: int) -> ImageTexture:
-	var img := Image.create_empty(16, 16, false, Image.FORMAT_RGBA8)
+## Процедурная пиксель-текстура блока 32×32 (стиль под материал).
+## Три слоя: крупная пятнистость (рельеф/грунт) + мелкий шум + стиль-деталь
+## (волокна/трещины/искры/штрихи). Bevel-кромка: светлая сверху-слева, тёмная
+## снизу-справа — блоки читаются объёмными кубами, а не плоскими плашками.
+func _block_texture(base: Color, seed: int, style: String = "stone") -> ImageTexture:
+	const S := 32
+	const CELLS := 8
+	const CW := float(S) / float(CELLS)
+	var img := Image.create_empty(S, S, false, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	for y in 16:
-		for x in 16:
-			var n := rng.randf_range(-0.10, 0.10)
-			var c := base * (1.0 + n)
-			# пиксельная сетка-рамка чуть темнее — блоки читаются отдельными кубами
+	# 1) крупная клеточная пятнистость — органический рельеф (не «ТВ-статик»)
+	var cell_n: Array[float] = []
+	for i in CELLS * CELLS:
+		cell_n.append(rng.randf_range(-0.15, 0.15))
+	# 2) мелкий пиксельный шум
+	var fine: Array[float] = []
+	for i in S * S:
+		fine.append(rng.randf_range(-0.045, 0.045))
+	# 3) редкие акцентные пиксели (искры золота / камешки песка)
+	var sparks := {}
+	var spark_n := 10 if style in ["gold", "ice", "sand"] else 5
+	for i in spark_n:
+		sparks[Vector2i(rng.randi_range(1, S - 2), rng.randi_range(1, S - 2))] = true
+	for y in S:
+		for x in S:
+			var cx := int(float(x) / CW)
+			var cy := int(float(y) / CW)
+			var m := 1.0 + cell_n[cy * CELLS + cx] + fine[y * S + x]
+			var c := base * m
+			match style:
+				"wood":  # горизонтальные волокна + сучок
+					if int(y + sin(float(x) * 0.55) * 1.4) % 5 == 0:
+						c = c.darkened(0.20)
+					elif int(y + sin(float(x) * 0.55) * 1.4) % 5 == 1:
+						c = c.lightened(0.07)
+					if (x - 11) * (x - 11) + (y - 20) * (y - 20) < 5:
+						c = c.darkened(0.28)
+				"grass":  # зелёные «blade»-штрихи светлее + тёмные проплешины
+					if (x * 7 + y * 3) % 11 == 0:
+						c = c.lightened(0.14)
+					elif (x * 5 + y * 9) % 17 == 0:
+						c = c.darkened(0.16)
+				"stone", "red", "dark":  # трещины — ломаные тёмные линии
+					if abs((x * 3 + y * 5 + seed) % 29 - 14) < 1:
+						c = c.darkened(0.24)
+					elif (x + y * 2 + seed) % 23 == 0:
+						c = c.lightened(0.09)
+				"sand":  # мелкая рябь-точки
+					if (x * x + y * 3) % 7 == 0:
+						c = c.lightened(0.10)
+					elif (x + y * y) % 9 == 0:
+						c = c.darkened(0.10)
+				"ice":  # диагональные блики-штрихи
+					if (x + y) % 6 == 0:
+						c = c.lightened(0.18)
+					elif (x - y + S) % 9 == 0:
+						c = c.darkened(0.10)
+				"gold", "dirt":
+					if (x * 3 + y * 7 + seed) % 13 == 0:
+						c = c.darkened(0.16)
+			# акцентные искры
+			if sparks.has(Vector2i(x, y)):
+				c = c.lightened(0.45) if style in ["gold", "ice"] else c.darkened(0.35)
+			# bevel-кромка: верх/лево светлее, низ/право темнее → объёмный куб
 			if x == 0 or y == 0:
-				c = c.darkened(0.22)
-			img.set_pixel(x, y, Color(c.r, c.g, c.b, 1.0))
+				c = c.lightened(0.16)
+			if x == S - 1 or y == S - 1:
+				c = c.darkened(0.24)
+			c.a = 1.0
+			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
 
 func _apply_hacker_theme() -> void:

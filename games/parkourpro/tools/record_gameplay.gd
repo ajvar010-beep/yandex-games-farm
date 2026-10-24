@@ -52,11 +52,22 @@ var _next_plat := 1
 
 func _drive() -> void:
 	var pp: Vector3 = _player.global_position
-	# следующая платформа — ПО ПОРЯДКУ маршрута (serpentine движется и в +z тоже)
+	# следующая платформа — ПО ПОРЯДКУ маршрута (serpentine движется и в +z тоже).
+	# v8.2: «достигли» = СТОИМ НА платформе: горизонталь внутри полугабарита +
+	# НОГИ игрока на высоте верха платформы (origin игрока — ступни, не центр капсулы).
+	# Прежняя 3D-дистанция <1.6 срабатывала на ПРОЛЕТАЮЩЕМ в воздухе игроке И на
+	# стоящем на ПРЕДЫДУЩЕЙ платформе в зоне перекрытия (lvl5: старт 7×7 соседствует
+	# с plat1 — next переключался сразу на 2, D/half_cur считались для чужой пары →
+	# прыжок не в ту фазу → промах → лава).
 	while _next_plat < _plats.size():
 		var p: Dictionary = _plats[_next_plat]
 		var c := Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
-		if pp.distance_to(c) < 1.6:
+		var half_p := (float(p.get("sx", 2)) + float(p.get("sz", 2))) * 0.25
+		var horiz := Vector2(pp.x - c.x, pp.z - c.z).length()
+		var top := float(p["y"]) + float(p.get("sy", 1)) * 0.5
+		var on_plat: bool = _player.is_on_floor()
+		var standing: bool = horiz < half_p and absf(pp.y - top) < 0.6 and on_plat
+		if standing:
 			_next_plat += 1  # достигли — следующая
 		else:
 			break
@@ -97,8 +108,12 @@ func _drive() -> void:
 	var on_floor: bool = _player.is_on_floor()
 	var jumps: int = _player.get("_jumps")
 	var dy := target.y - pp.y
-	if on_floor and edge_gap > 0.05 and len <= D - half_cur + 0.6 and dy > -3.0:
-		# разрыв впереди и мы в 0.6м от края — отрыв (поздний = максимум дальности)
+	# v8.2: прыжок нужен и для ПОДЪЁМА (dy>0.2), не только для разрывов. lvl5:
+	# платформа 1 на 1м выше стартовой с перекрывающимся пятном (edge_gap<0) —
+	# прежний гард `edge_gap>0.05` не пускал прыжок → автопилот сходил с края в лаву.
+	var need_jump := edge_gap > 0.05 or dy > 0.2
+	if on_floor and need_jump and len <= D - half_cur + 0.6 and dy > -3.0:
+		# разрыв/ступенька впереди и мы в 0.6м от края — отрыв (поздний = максимум дальности)
 		_player.tap_jump()
 	elif not on_floor and jumps < 2 and _player.velocity.y < 0.0 and len > half_next * 0.8 and dy > -3.0:
 		# в воздухе, начали падать, до цели ещё далеко — двойной прыжок

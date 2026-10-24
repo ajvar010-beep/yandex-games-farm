@@ -11,6 +11,11 @@ var _rv_rewarded := false
 var _save_data: Dictionary = {}
 var _js_cb_reward: JavaScriptObject
 var _js_cb_close: JavaScriptObject
+var _js_int_close: JavaScriptObject
+var _js_int_err: JavaScriptObject
+var _js_cb_err: JavaScriptObject
+var _js_lb_err: JavaScriptObject
+var _rv_settled := false  # reward ИЛИ fail уже доставлен — не вызывать fail дважды (onError→onClose)
 # v8.1 (консилиум v8 #9): ВСЕ async-колбэки SDK должны ЖИТЬ до резолва промиса.
 # JavaScriptObject — RefCounted: inline-темпарарь освобождается в конце statement,
 # а .then/.catch/onClose/onError срабатывают на следующем тике → get_proxied_value(id)
@@ -85,6 +90,20 @@ func is_ready() -> bool:
 func _setup_js_callbacks() -> void:
 	_js_cb_reward = _cb(_on_rv_reward)
 	_js_cb_close = _cb(_on_rv_close)
+	# v8.3 (консилиум v8.2, критик-код MAJOR): колбэки интерстишиала создавались
+	# _cb() на КАЖДЫЙ показ → _live_cbs рос навсегда (2 объекта/показ). Создаём
+	# один раз; per-call логика читает _adv_cb_off в момент вызова.
+	_js_int_close = _cb(func(_args): _on_adv_done())
+	_js_int_err = _cb(func(_args): _on_adv_done())
+	_js_cb_err = _cb(_on_rv_error)
+	_js_lb_err = _cb(func(_e): pass)
+
+func _on_adv_done() -> void:
+	AudioBus.mute(false)
+	gameplay_start()
+	var cb := _adv_cb_off
+	_adv_cb_off = Callable()  # v8.3 minor: сброс — onError+onClose не дёргают дважды
+	if cb.is_valid(): cb.call()
 
 # создаёт JS-колбэк И удерживает ссылку до конца жизни autoload'а (см. _live_cbs).
 # Без этого async-колбэк освобождается до резолва промиса и не вызывается вообще.
@@ -120,14 +139,8 @@ func show_fullscreen(on_closed: Callable = Callable()) -> void:
 	# JavaScriptBridge.create_object("Object") = new Object() = {} (документированный API)
 	var opts = JavaScriptBridge.create_object("Object")
 	opts.callbacks = JavaScriptBridge.create_object("Object")
-	opts.callbacks.onClose = _cb(func(wasShown):
-		AudioBus.mute(false)
-		gameplay_start()
-		if _adv_cb_off.is_valid(): _adv_cb_off.call())
-	opts.callbacks.onError = _cb(func(e):
-		AudioBus.mute(false)
-		gameplay_start()
-		if _adv_cb_off.is_valid(): _adv_cb_off.call())
+	opts.callbacks.onClose = _js_int_close
+	opts.callbacks.onError = _js_int_err
 	js.ysdk.adv.showFullscreenAdv(opts)
 
 func show_rewarded(on_reward: Callable, on_fail: Callable = Callable()) -> void:
@@ -143,25 +156,40 @@ func show_rewarded(on_reward: Callable, on_fail: Callable = Callable()) -> void:
 		return
 	AudioBus.mute(true)
 	gameplay_stop()
+	_rv_settled = false
 	var js = JavaScriptBridge.get_interface("window")
 	var opts = JavaScriptBridge.create_object("Object")
 	opts.callbacks = JavaScriptBridge.create_object("Object")
 	opts.callbacks.onRewarded = _js_cb_reward
 	opts.callbacks.onClose = _js_cb_close
-	opts.callbacks.onError = _cb(func(e):
-		AudioBus.mute(false)
-		gameplay_start()
-		if not _rv_rewarded and _rv_fail_cb.is_valid(): _rv_fail_cb.call())
+	opts.callbacks.onError = _js_cb_err
 	js.ysdk.adv.showRewardedVideo(opts)
 
 func _on_rv_reward(_args) -> void:
 	_rv_rewarded = true
+	_rv_settled = true
 	if _rv_reward_cb.is_valid():
 		_rv_reward_cb.call()
+
+func _on_rv_error(_args) -> void:
+	AudioBus.mute(false)
+	gameplay_start()
+	_settle_rv_fail()
 
 func _on_rv_close(_args) -> void:
 	AudioBus.mute(false)
 	gameplay_start()
+	_settle_rv_fail()
+
+# v8.3 (консилиум v8.2, критик-монетизация MAJOR): закрытие БЕЗ onRewarded —
+# штатная ситуация SDK (зритель закрыл раньше порога). Без fail-колбэка панель
+# смерти/победы уже скрыта, _running=false → игрок без UI. Возвращаем панель.
+# _rv_settled: onError→onClose не должны дёргать fail дважды (панель ×2).
+func _settle_rv_fail() -> void:
+	if _rv_settled: return
+	_rv_settled = true
+	if _rv_fail_cb.is_valid():
+		_rv_fail_cb.call()
 
 # ---------- баннер (пассивный доход в меню) ----------
 
@@ -242,7 +270,9 @@ func get_purchases(on_list: Callable) -> void:
 
 func submit_score(name: String, score: int) -> void:
 	if not _sdk_ready or _lb == null: return
-	_lb.setScore(name, score)
+	# v9.1 (консилиум v8.2, критик-код minor): .catch обязателен — без него
+	# реджект setScore (ЛБ не настроены/аноним) = unhandled rejection в консоли.
+	_lb.setScore(name, score).catch(_js_lb_err)
 
 func get_leaderboard(name: String, on_data: Callable) -> void:
 	if not _sdk_ready or _lb == null:

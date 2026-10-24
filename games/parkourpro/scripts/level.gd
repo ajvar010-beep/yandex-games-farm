@@ -10,6 +10,9 @@ var _mats: Dictionary = {}
 var _coins: Array[Node3D] = []
 var _traps: Array[Dictionary] = []
 var _crumbles: Array[Dictionary] = []
+# v9.1 minor: кэш ссылки на игрока — get_node_or_null("Player") каждый кадр на
+# каждую ждущую crumble-платформу = лишний tree-lookup ×60fps ×N платформ.
+var _player_ref: Node3D = null
 # v8.1 (консилиум v8 #6): маршрут уровня (центры платформ + финиш) для авто-камеры.
 # Камера ведётся по СТАТИЧНОЙ геометрии, а не по вектору скорости: ввод camera-relative,
 # поэтому доворот по velocity создаёт петлю «камера↔ввод». Маршрут петли не имеет.
@@ -73,6 +76,17 @@ func _make_materials() -> void:
 	fin.emission = Color(0.3, 0.9, 0.95)
 	fin.emission_energy_multiplier = 1.8
 	_mats["finish"] = fin
+	# v9.1 (консилиум v8.2, критик-код MAJOR): hazard-текстура кэшируется — в v8.2
+	# каждый _spawn_hazard создавал НОВЫЙ _block_texture(999) + материал; на
+	# gauntlet lvl11/17 это 7-12 одинаковых 32×32-текстур на КАЖДУЮ перезагрузку.
+	var haz := StandardMaterial3D.new()
+	haz.albedo_color = Color(0.85, 0.25, 0.2)
+	haz.albedo_texture = _block_texture(Color(0.85, 0.25, 0.2), 999)
+	haz.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	haz.emission_enabled = true
+	haz.emission = Color(0.8, 0.15, 0.1)
+	haz.emission_energy_multiplier = 0.7
+	_mats["hazard"] = haz
 
 func load_level(def: Dictionary) -> void:
 	# очистка
@@ -82,6 +96,7 @@ func load_level(def: Dictionary) -> void:
 	_traps.clear()
 	_crumbles.clear()
 	_route.clear()
+	_player_ref = null  # v9.1: игрок может пересоздаваться — кэш перечитается в _physics_process
 	_spawn_ambient_particles()
 
 	var plats: Array = def.get("platforms", [])
@@ -319,11 +334,15 @@ func _spawn_platform(p: Dictionary) -> void:
 		_spawn_hazard(pos, size)
 	# крошащаяся платформа: через crumble секунд после касания исчезает, потом респавн
 	if p.has("crumble") and not moving:
+		# v9.1 minor: maxf — crumble:0 из JSON не должен ломать FSM (деление на 0)
 		_crumbles.append({"body": body, "mesh": mi, "cs": cs, "mat": mi.material_override,
-			"base": pos, "t": float(p["crumble"]), "timer": -1.0})
+			"base": pos, "t": maxf(0.05, float(p["crumble"])), "timer": -1.0})
 	# движущаяся ловушка
 	if moving:
-		_traps.append({"node": body, "base": pos, "move": p["move"]})
+		# v9.1 (критик-код minor): фаза — накапливаемое игровое время, НЕ wall-clock.
+		# Time.get_ticks_msec() тикает на паузе → после unpause платформа
+		# телепортировалась в другую фазу (игрок, стоявший на ней, падал).
+		_traps.append({"node": body, "base": pos, "move": p["move"], "phase_t": 0.0})
 
 func _spawn_hazard(pos: Vector3, size: Vector3) -> void:
 	var hz := Area3D.new()
@@ -332,14 +351,7 @@ func _spawn_hazard(pos: Vector3, size: Vector3) -> void:
 	var bm := BoxMesh.new()
 	bm.size = size
 	mi.mesh = bm
-	var hm := StandardMaterial3D.new()
-	hm.albedo_color = Color(0.85, 0.25, 0.2)
-	hm.albedo_texture = _block_texture(Color(0.85, 0.25, 0.2), 999)
-	hm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	hm.emission_enabled = true
-	hm.emission = Color(0.8, 0.15, 0.1)
-	hm.emission_energy_multiplier = 0.7
-	mi.material_override = hm
+	mi.material_override = _mats["hazard"]  # v9.1: общий кэш-материал (см. _make_materials)
 	hz.add_child(mi)
 	var hcs := CollisionShape3D.new()
 	var hbs := BoxShape3D.new()
@@ -458,6 +470,9 @@ func _spawn_lava(y: float, size: float) -> void:
 	add_child(body)
 
 func _physics_process(delta: float) -> void:
+	# v9: кэш игрока — обновляем в начале кадра (нужен и magnet'у, и crumble)
+	if _player_ref == null or not is_instance_valid(_player_ref):
+		_player_ref = get_parent().get_node_or_null("Player")
 	# движение платформ-ловушек
 	for t in _traps:
 		var mv: Dictionary = t["move"]
@@ -465,7 +480,10 @@ func _physics_process(delta: float) -> void:
 		var axis: String = mv.get("axis", "x")
 		var range: float = mv.get("range", 3.0)
 		var spd: float = mv.get("speed", 2.0)
-		var phase := sin(Time.get_ticks_msec() * 0.001 * spd)
+		# v9.1: phase_t накапливается только когда не на паузе → детерминированно,
+		# без скачка после unpause (было Time.get_ticks_msec — wall-clock).
+		t["phase_t"] = t.get("phase_t", 0.0) + delta
+		var phase := sin(float(t["phase_t"]) * spd)
 		var off := phase * range
 		var np: Vector3 = t["base"]
 		match axis:
@@ -473,10 +491,18 @@ func _physics_process(delta: float) -> void:
 			"y": np.y += off
 			"z": np.z += off
 		node.position = np
-	# вращение монет
+	# вращение монет + v9 МАГНИТ: купленный апгрейд притягивает монеты в радиусе
+	# (1.5 + 1.5×уровень) метров к игроку — левитацией, физику не трогаем.
+	var magnet_lvl: int = GameState.upgrade_level("magnet")
+	var magnet_r: float = 1.5 + 1.5 * magnet_lvl if magnet_lvl > 0 else 0.0
 	for c in _coins:
 		if c.visible:
 			c.rotate_y(2.2 * delta)
+			if magnet_lvl > 0 and is_instance_valid(_player_ref):
+				var to_p: Vector3 = _player_ref.global_position - c.global_position
+				var d := to_p.length()
+				if d < magnet_r and d > 0.05:
+					c.global_position += to_p.normalized() * minf(9.0 * delta, d)
 	# крошащиеся платформы: тронул → таймер → исчезла → респавн через 2.6с.
 	# FSM по body.visible: таймер активной фазы всегда ≥0, -1 = «ждём касания».
 	# (старая версия с отрицательным таймером-диапазоном мёртвой ветвью не респавнила НИКОГДА)
@@ -488,7 +514,7 @@ func _physics_process(delta: float) -> void:
 		if body.visible:
 			if timer < 0.0:
 				# ждём касания: игрок стоит на этой платформе?
-				var pl := get_parent().get_node_or_null("Player")
+				var pl := _player_ref
 				if pl and pl.is_on_floor() and _player_on_body(pl, body):
 					cr["timer"] = cr["t"]
 			else:

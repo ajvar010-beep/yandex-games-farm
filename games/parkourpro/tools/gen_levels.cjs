@@ -67,6 +67,73 @@ function fixOverhangs(plats) {
   return lift;
 }
 
+// v9.1 (консилиум v8.2, критик-геймплей MAJOR): MOVER-КРАШ. Движущаяся платформа
+// на синус-траектории заезжает ПОД соседнюю (просвет < капсулы 1.45м) или
+// врезается в неё объёмом → игрока на mover'е выдавливает (в лаву/сквозь
+// геометрию). Замер v8.2: 162 intersect + 67 crush на 16 уровнях. fixOverhangs
+// проверял только БАЗОВЫЕ позиции и только |i-j|≥2 — траектории mover'ов были
+// вне инварианта, smoke_test давал ложный зелёный.
+// Здесь: swept-проверка ВСЕЙ траектории (шаг 0.25м) против ВСЕХ платформ.
+// Ремонт: урезать range (0.25-шагами) → если и при 0.25 нарушение — снять move
+// (платформа статична, базовая позиция уже валидна). Поднимать mover НЕЛЬЗЯ:
+// y участвует в dy-проходимости соседей (fixOverhangs её уже уложил).
+// Coplanar-сращивание (|dy| ≤ 0.25) безвредно — пропускаем (старт/финиш-пады).
+const MOVER_CLEARANCE = 1.9; // тот же контракт, что fixOverhangs (1.4 капсула + 0.5)
+function moverHits(plats, i, range) {
+  const a = plats[i];
+  const N = Math.max(2, Math.ceil(range / 0.25));
+  for (let k = -N; k <= N; k++) {
+    const off = (range * k) / N;
+    const sx = a.x + (a.move.axis === 'x' ? off : 0);
+    const sy = a.y + (a.move.axis === 'y' ? off : 0);
+    const sz = a.z + (a.move.axis === 'z' ? off : 0);
+    for (let j = 0; j < plats.length; j++) {
+      if (j === i) continue;
+      const b = plats[j];
+      // если b ТОЖЕ mover — проверять и его экстремумы (оба двигаются);
+      // иначе достаточно базовой позиции b.
+      const offs = b.move ? [-b.move.range, 0, b.move.range] : [0];
+      for (const bo of offs) {
+        const bx = b.x + (b.move && b.move.axis === 'x' ? bo : 0);
+        const by = b.y + (b.move && b.move.axis === 'y' ? bo : 0);
+        const bz = b.z + (b.move && b.move.axis === 'z' ? bo : 0);
+        const ox = (a.sx + b.sx) / 2 - Math.abs(sx - bx);
+        const oz = (a.sz + b.sz) / 2 - Math.abs(sz - bz);
+        if (ox <= 0.3 || oz <= 0.3) continue;
+        const dy = Math.abs(sy - by);
+        if (dy <= 0.25) continue; // coplanar: верхи совпадают, сращивание безопасно
+        const oy = (a.sy + b.sy) / 2 - dy;
+        if (oy > 0) return true;  // врезание объёмом — выдавливание игрока
+        const hi = sy >= by ? { y: sy, sy: a.sy } : { y: by, sy: b.sy };
+        const lo = sy >= by ? { y: by, sy: b.sy } : { y: sy, sy: a.sy };
+        if ((hi.y - hi.sy / 2) - (lo.y + lo.sy / 2) < MOVER_CLEARANCE) return true;
+      }
+    }
+  }
+  return false;
+}
+function fixMovers(plats) {
+  const stats = { kept: 0, trimmed: 0, removed: 0 };
+  for (let i = 0; i < plats.length; i++) {
+    const p = plats[i];
+    if (!p.move) continue;
+    let range = Math.round(p.move.range * 4) / 4; // snap 0.25
+    // y-mover: платформа не должна уходить выше двойного прыжка god (~1.68м)
+    if (p.move.axis === 'y') range = Math.min(range, 1.0);
+    const orig = range;
+    while (range >= 0.25 && moverHits(plats, i, range)) range -= 0.25;
+    if (range < 0.25) {
+      delete p.move;
+      stats.removed++;
+    } else {
+      p.move.range = range;
+      if (range < orig) stats.trimmed++;
+      stats.kept++;
+    }
+  }
+  return stats;
+}
+
 // применить подъём платформ к декорациям (монеты/чекпоинты/hazard), привязанным
 // к индексу платформы _pi (см. addSegment). Сдвигает y на lift[_pi].
 function liftDecorations(arr, lift, yGet, ySet) {
@@ -135,7 +202,10 @@ function addSegment(st, r, cfg) {
       mat: pick(r, mats)
     };
     if (moverP && r() < moverP) {
-      p.move = { axis: r() < 0.6 ? 'x' : 'z', range: 1.2 + r() * 1.8, speed: 1.1 + r() * 1.4 };
+      // v9.1: range уже, чем в v8 (1.2-3.0) — на тесных коленах серпантина mover
+      // с большим ходом физически проходит сквозь соседей (162 intersect v8.2).
+      // fixMovers всё равно режет до безопасного, но лучше стартовать ближе к нему.
+      p.move = { axis: r() < 0.6 ? 'x' : 'z', range: 0.9 + r() * 1.1, speed: 1.1 + r() * 1.4 };
     }
     if (crumbleP && r() < crumbleP && !p.move) p.crumble = 0.7;
     st.plats.push(p);
@@ -325,6 +395,9 @@ function genLevel(n) {
   liftDecorations(st.coins, lift, (d) => d[1], (d, v) => { d[1] = v; });
   liftDecorations(st.checkpoints, lift, (d) => d[1], (d, v) => { d[1] = v; });
   liftDecorations(st.hazards, lift, (d) => d.y, (d, v) => { d.y = v; });
+  // v9.1 (крит): mover-краш — ПОСЛЕ fixOverhangs/lift (проверка по финальным y).
+  const mv = fixMovers(st.plats);
+  if (mv.trimmed || mv.removed) console.log(`L${n} movers: kept ${mv.kept}, trimmed ${mv.trimmed}, removed ${mv.removed}`);
   const fp2 = st.plats[st.plats.length - 1];  // финишная платформа (после подъёмов)
   return {
     name: `Уровень ${n}`,
@@ -396,6 +469,8 @@ for (let n = 1; n <= 20; n++) {
   const lift = fixOverhangs(platforms);
   liftDecorations(coins, lift, (d) => d[1], (d, v) => { d[1] = v; });
   liftDecorations(checkpoints, lift, (d) => d[1], (d, v) => { d[1] = v; });
+  const mv21 = fixMovers(platforms);  // v9.1 (крит): mover-краш, ПОСЛЕ lift
+  if (mv21.trimmed || mv21.removed) console.log(`L21 movers: kept ${mv21.kept}, trimmed ${mv21.trimmed}, removed ${mv21.removed}`);
   const fp = platforms[platforms.length - 1];
   const def = {
     name: 'ХАКЕР',

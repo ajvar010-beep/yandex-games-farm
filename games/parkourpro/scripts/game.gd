@@ -31,6 +31,7 @@ func _ready() -> void:
 	player.name = "Player"
 	add_child(player)
 	player.died.connect(_on_player_died)
+	player.shield_absorbed.connect(_update_shield_hud)  # v9: щит поглотил смерть
 
 	cam_rig = preload("res://scripts/camera_rig.gd").new()
 	cam_rig.name = "CameraRig"
@@ -51,8 +52,15 @@ func load_level(n: int) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	var def: Dictionary = {}
 	if f:
-		def = JSON.parse_string(f.get_as_text()) as Dictionary
+		var parsed = JSON.parse_string(f.get_as_text())
 		f.close()
+		# v9.1 (консилиум v8.2, критик-код MAJOR): битый/пустой JSON → parse_string
+		# даёт null (НЕ Dictionary) → load_level(null) крашил игру. Фолбэк на
+		# процедурный уровень — тот же, что при отсутствии файла.
+		if parsed is Dictionary and not (parsed as Dictionary).is_empty():
+			def = parsed
+		else:
+			def = _procedural_level(n)
 	else:
 		def = _procedural_level(n)
 	level.load_level(def)
@@ -149,9 +157,10 @@ func _process(delta: float) -> void:
 		# честный спидран-таймер: копим только активное время (без панелей/видео)
 		_time_ms += int(delta * 1000.0)
 		_timer_label.text = "%.1f" % (_time_ms / 1000.0)
-	# падение за край
+	# падение за край — через kill(), а не напрямую в _on_player_died:
+	# v9: только kill() знает про щит (поглощает смерть до died-сигнала).
 	if player.global_position.y < -5.0 and _running:
-		_on_player_died()
+		player.kill()
 
 func _on_coin() -> void:
 	if not _running: return  # труп не фармит монеты
@@ -161,6 +170,12 @@ func _on_coin() -> void:
 
 func _update_coins() -> void:
 	_coins_label.text = "◈ %d" % coins_collected
+
+# v9: HUD-счётчик щитов — пустая строка, если щитов нет (не мусорит интерфейс)
+func _update_shield_hud() -> void:
+	if _shield_label == null: return
+	var n: int = player.shields
+	_shield_label.text = (GameState.L("shield_n") % n) if n > 0 else ""
 
 func _on_checkpoint(pos: Vector3) -> void:
 	player.set_spawn(pos)
@@ -191,6 +206,7 @@ func _on_player_died() -> void:
 var _lvl_label: Label
 var _coins_label: Label
 var _timer_label: Label
+var _shield_label: Label  # v9: счётчик щитов (виден только когда shields>0)
 
 func _build_hud() -> void:
 	hud = Control.new()
@@ -229,6 +245,16 @@ func _build_hud() -> void:
 	_coins_label.add_theme_constant_override("shadow_offset_x", 2)
 	_coins_label.add_theme_constant_override("shadow_offset_y", 2)
 	top.add_child(_coins_label)
+
+	# v9: счётчик щитов (прокачка) — между монетами и паузой, виден при shields>0
+	_shield_label = Label.new()
+	_shield_label.add_theme_font_size_override("font_size", 30)
+	_shield_label.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
+	_shield_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
+	_shield_label.add_theme_constant_override("shadow_offset_x", 2)
+	_shield_label.add_theme_constant_override("shadow_offset_y", 2)
+	top.add_child(_shield_label)
+	_update_shield_hud()
 
 	# таймер (спидран)
 	_timer_label = Label.new()
@@ -463,7 +489,10 @@ func _on_next() -> void:
 	AudioBus.click()
 	_hide_panel()
 	_maybe_interstitial()
-	load_level(level_num + 1)
+	# v9.1 (консилиум v8.2, критик-код minor): после финала (21 ХАКЕР) load_level(22)
+	# молча играл 01.json с номером «Уровень 22» в HUD. Явный цикл на 1 (NG+:
+	# фарм монет/звёзд на пройденных уровнях — стандарт жанра).
+	load_level(1 if level_num >= 21 else level_num + 1)
 
 func _maybe_interstitial() -> void:
 	if GameState.no_ads: return
@@ -533,6 +562,23 @@ func _build_touch_input() -> void:
 	knob_p.self_modulate = Color(1,1,1,0.35)
 	_joy_knob.add_child(knob_p)
 
+	# v9: кнопка РЫВКА справа (над зоной тапа-прыжка). Показываем только если
+	# апгрейд dash куплен — иначе мертвая кнопка путает. Тап по ней ловится в
+	# _input по _dash_btn_rect (в экранных координатах).
+	if GameState.upgrade_level("dash") > 0:
+		_dash_btn = Button.new()
+		_dash_btn.name = "DashBtn"
+		_dash_btn.text = "»»"
+		_dash_btn.add_theme_font_size_override("font_size", 30)
+		_dash_btn.custom_minimum_size = Vector2(96, 96)
+		_dash_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		_dash_btn.position = Vector2(-120.0 - safe_left, -(120.0 + safe_bottom + 96.0))
+		_dash_btn.modulate = Color(1, 1, 1, 0.55)
+		_dash_btn.pressed.connect(func(): player.try_dash())
+		hud.add_child(_dash_btn)
+
+var _dash_btn: Button = null
+
 func _input(event: InputEvent) -> void:
 	# мобильный: левая половина — джойстик, правая — прыжок
 	if event is InputEventScreenTouch:
@@ -546,6 +592,10 @@ func _input(event: InputEvent) -> void:
 				# v8.1 (#7): панель открыта (смерть/победа/пауза) — тап идёт по её
 				# кнопкам, НЕ по игре. Без этого тап «Ожить» (x=640=half) дёргал
 				# tap_jump() → фантомный прыжок с уступа сразу после revive.
+				pass
+			elif _dash_btn != null and _dash_btn.get_global_rect().has_point(event.position):
+				# v9: тап по кнопке рывка — НЕ прыжок. Сам рывок дёрнет Button.pressed.
+				# global_rect читаем в момент тапа (не кэш) — всегда верен при ресайзе.
 				pass
 			else:
 				player.tap_jump()

@@ -4,12 +4,17 @@ extends CharacterBody3D
 
 signal died
 signal landed
+signal shield_absorbed  # v9: щит поглотил смерть — HUD обновляет счётчик
 
 @export var speed := 7.0
 @export var jump_force := 9.5
 @export var gravity_mult := 1.8
 
 const COYOTE_TIME := 0.12
+# v9: базовые значения физики — апгрейды ПРОКАЧКИ считаются от них,
+# а не от текущего speed/jump_force (иначе покупка компаундилась бы).
+const BASE_SPEED := 7.0
+const BASE_JUMP := 9.5
 
 var _coyote := 0.0
 var _jump_buffer := 0.0
@@ -18,6 +23,11 @@ var _max_jumps := 2
 var _dead := false
 var _spawn := Vector3.ZERO
 var _last_safe := Vector3.ZERO   # последняя точка на полу — для честного revive
+# v9: прокачка
+var shields := 0                 # щиты на уровень (поглощают смерть) — читает game.gd
+var _dash_cd := 0.0
+var _dash_time := 0.0
+var _dash_dir := Vector3.ZERO
 # v8.1 (#11): кубики смерти спавнятся в Level (пересоздаётся на load_level) с авто-деспавном,
 # а НЕ в Player. Иначе ~6-8 RigidBody3D копились на каждую смерть и утекали между уровнями
 # (тот же Game-узел при _on_next) → растущий счётчик узлов/draw-call, FPS-деградация.
@@ -37,6 +47,20 @@ func _ready() -> void:
 	# Это РЕАЛЬНАЯ ось сложности (прыжок вперёд), в отличие от сужения sx (⊥ движению).
 	# god 1.3: single-jump reach ~2.6м (pro ~3.4, nub ~3.9) — длинные разрывы требуют двойного.
 	gravity_mult = 1.8 * Variant.difficulty
+	apply_upgrades()
+
+# v9: ПРОКАЧКА — постоянные апгрейды из GameState.upgrades. gravity_mult НЕ трогаем
+# (ось сложности серии); апгрейды усиливают игрока ВНУТРИ своей difficulty.
+# Базовая игра (upgrades={}) даёт ровно значения v8.2 — уровни проходимы без прокачки.
+# Щиты здесь НЕ пополняем: их расход должен сохраняться между смертями уровня;
+# пополнение — только на старте уровня (game.gd::load_level → refill_shields()).
+func apply_upgrades() -> void:
+	speed = BASE_SPEED * (1.0 + 0.05 * GameState.upgrade_level("speed"))
+	jump_force = BASE_JUMP * (1.0 + 0.03 * GameState.upgrade_level("jump"))
+	_max_jumps = 2 + (1 if GameState.upgrade_level("extra_jump") > 0 else 0)
+
+func refill_shields() -> void:
+	shields = GameState.upgrade_level("shield")
 
 func _build_visual() -> void:
 	_mesh = Node3D.new()
@@ -167,10 +191,28 @@ func respawn() -> void:
 	_jumps = 0
 	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок при возрождении
 	_clear_debris()     # v8.1 (#11): кубики прошлой смерти долой
+	_dash_cd = 0.0      # v9: рывок снова доступен
+	_dash_time = 0.0
+	apply_upgrades()    # v9: speed/jump/max_jumps на старт уровня
+	refill_shields()    # v9: щиты пополняются на старт/рестарт УРОВНЯ (не на revive)
 	if _mesh: _mesh.visible = true
 
 func kill() -> void:
 	if _dead: return
+	# v9: ЩИТ поглощает смерть — мгновенный возврат в последнюю безопасную точку,
+	# без распада на кубики и без панели смерти (игра продолжается). Расход щитов
+	# сохраняется до конца уровня; пополнение — в respawn() (старт/рестарт уровня).
+	# _last_safe гарантированно на настоящем полу (см. _floor_is_safe) — не лава.
+	if shields > 0:
+		shields -= 1
+		AudioBus.shield()
+		global_position = _last_safe + Vector3.UP * 0.5
+		velocity = Vector3.ZERO
+		_jumps = 0
+		_jump_buffer = 0.0
+		_coyote = COYOTE_TIME
+		shield_absorbed.emit()
+		return
 	_dead = true
 	AudioBus.die()
 	_explode()
@@ -227,12 +269,16 @@ func revive() -> void:
 	_jumps = 0
 	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок (см. tap_jump)
 	_coyote = COYOTE_TIME
+	_dash_cd = 0.0      # v9
+	_dash_time = 0.0
 	if _mesh: _mesh.visible = true
 
 func _input(event: InputEvent) -> void:
 	if _dead: return
 	if event.is_action_pressed("jump"):
 		_jump_buffer = 0.15
+	if event.is_action_pressed("dash"):
+		try_dash()
 	# мобильный тап = прыжок (обработаем в Game через тап по экрану)
 
 func _physics_process(delta: float) -> void:
@@ -258,6 +304,16 @@ func _physics_process(delta: float) -> void:
 	var accel := 40.0 * _floor_accel_mult()
 	velocity.x = move_toward(velocity.x, target.x, accel * delta)
 	velocity.z = move_toward(velocity.z, target.z, accel * delta)
+
+	# v9: РЫВОК (dash) — короткий горизонтальный burst поверх обычного бега.
+	# vy НЕ меняем (нет бесконечного полёта), cd 2.5с. Базовый double-jump уже
+	# покрывает все gap уровней — dash удобство, не требование прохождения.
+	if _dash_cd > 0.0: _dash_cd -= delta
+	if _dash_time > 0.0:
+		_dash_time -= delta
+		var dspeed := speed + 6.0 + 2.0 * GameState.upgrade_level("dash")
+		velocity.x = _dash_dir.x * dspeed
+		velocity.z = _dash_dir.z * dspeed
 
 	# гравитация + койот-тайм
 	if is_on_floor():
@@ -373,6 +429,26 @@ func _do_jump() -> void:
 		AudioBus.double_jump()
 	else:
 		AudioBus.jump()
+
+# v9: рывок вперёд (dash). Требует купленного апгрейда "dash". Направление —
+# текущий ввод (или последнее направление движения, если ввода нет).
+func try_dash() -> void:
+	if _dead: return
+	if GameState.upgrade_level("dash") <= 0: return
+	if _dash_cd > 0.0: return
+	var d := _get_input_dir()
+	var basis := Basis.IDENTITY
+	if _cam: basis = _cam.global_transform.basis
+	var dir := (basis * Vector3(d.x, 0, d.y))
+	dir.y = 0
+	if dir.length() < 0.05:
+		dir = Vector3(velocity.x, 0, velocity.z)  # по инерции, если нет ввода
+	if dir.length() < 0.05:
+		dir = -_mesh.global_transform.basis.z if _mesh else Vector3.FORWARD
+	_dash_dir = dir.normalized()
+	_dash_time = 0.18
+	_dash_cd = 2.5
+	AudioBus.dash()
 
 # мобильный тап (из Game)
 func tap_jump() -> void:

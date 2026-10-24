@@ -212,6 +212,77 @@ func _run() -> void:
 		Yandex.call("hide_banner")
 		_check(true, "banner show/hide safe without SDK")
 
+	# --- Тесты 12-15 (v9): ПРОКАЧКА ---
+	# запоминаем состояние GameState, чтобы не испортить реальный сейв
+	var _sv_coins: int = GameState.coins
+	var _sv_up: Dictionary = GameState.upgrades.duplicate()
+
+	# 12a. apply_upgrades: пустые апгрейды = базовые значения v8.2
+	GameState.upgrades = {}
+	player.call("apply_upgrades")
+	_check(absf(player.speed - 7.0) < 0.001 and absf(player.jump_force - 9.5) < 0.001 and player.get("_max_jumps") == 2,
+		"apply_upgrades({}) = base v8.2 values (spd=%.2f jmp=%.2f mj=%d)" % [player.speed, player.jump_force, player.get("_max_jumps")])
+	# 12b. прокачанный: speed+25%, jump+15%, тройной прыжок
+	GameState.upgrades = {"speed": 5, "jump": 5, "extra_jump": 1}
+	player.call("apply_upgrades")
+	_check(absf(player.speed - 8.75) < 0.001 and absf(player.jump_force - 10.925) < 0.001 and player.get("_max_jumps") == 3,
+		"apply_upgrades(maxed) = 8.75/10.925/3 (spd=%.2f jmp=%.3f mj=%d)" % [player.speed, player.jump_force, player.get("_max_jumps")])
+
+	# 13. buy_upgrade: списание + отказ при нехватке
+	GameState.upgrades = {}
+	GameState.coins = 200
+	var bought: bool = GameState.buy_upgrade("speed")  # цена 60
+	_check(bought and GameState.coins == 140 and GameState.upgrade_level("speed") == 1,
+		"buy_upgrade deducts cost and levels up (coins=%d lvl=%d)" % [GameState.coins, GameState.upgrade_level("speed")])
+	GameState.coins = 10
+	var rejected: bool = GameState.buy_upgrade("speed")  # цена след. уровня 120 > 10
+	_check(not rejected and GameState.coins == 10 and GameState.upgrade_level("speed") == 1,
+		"buy_upgrade rejects when coins insufficient")
+
+	# 14. save/load round-trip апгрейдов
+	GameState.upgrades = {"magnet": 2, "shield": 1}
+	GameState.save_data()
+	GameState.upgrades = {}
+	GameState.load_data()
+	_check(GameState.upgrade_level("magnet") == 2 and GameState.upgrade_level("shield") == 1,
+		"upgrades survive save/load round-trip")
+
+	# 15. shield: поглощает смерть (возврат на _last_safe), второй удар убивает
+	GameState.upgrades = {"shield": 1}
+	player.call("apply_upgrades")
+	player.call("refill_shields")
+	player.set("_dead", false)
+	player.set("_last_safe", Vector3(0, 1.0, 0))
+	player.global_position = Vector3(0, 0.9, 0)
+	player.set("shields", 1)
+	player.kill()
+	_check(player.get("_dead") == false and player.get("shields") == 0 and absf(player.global_position.y - 1.5) < 0.01,
+		"shield absorbs death: alive=%s shields=%d pos.y=%.2f" % [not player.get("_dead"), player.get("shields"), player.global_position.y])
+	# щитов больше нет → обычная смерть
+	player.kill()
+	_check(player.get("_dead") == true, "second death without shield kills normally")
+
+	# 16. dash: доступен с апгрейдом, не меняет vy, cooldown ставится
+	GameState.upgrades = {"dash": 1}
+	player.set("_dead", false)
+	player.velocity = Vector3.ZERO
+	player.set("_dash_cd", 0.0)
+	player.set("_dash_time", 0.0)
+	player.call("try_dash")
+	_check(player.get("_dash_time") > 0.0 and player.get("_dash_cd") > 2.0 and absf(player.velocity.y) < 0.001,
+		"dash activates with cooldown, vy untouched (t=%.2f cd=%.2f)" % [player.get("_dash_time"), player.get("_dash_cd")])
+	# без апгрейда dash не работает
+	GameState.upgrades = {}
+	player.set("_dash_cd", 0.0)
+	player.set("_dash_time", 0.0)
+	player.call("try_dash")
+	_check(player.get("_dash_time") == 0.0, "dash locked without upgrade")
+
+	# восстанавливаем GameState (тесты не должны портить прогресс)
+	GameState.upgrades = _sv_up
+	GameState.coins = _sv_coins
+	GameState.save_data()
+
 	# --- Тест 2 (финал): _on_menu роутит и НЕ крашит (освобождает game) ---
 	game.call("_on_menu")
 	await get_tree().process_frame

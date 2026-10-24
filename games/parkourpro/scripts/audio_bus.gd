@@ -31,6 +31,8 @@ func _gen_tone(freq: float, dur: float, kind := "square") -> AudioStreamWAV:
 				s = sign(sin(TAU * freq * t))
 			"noise":
 				s = randf_range(-1.0, 1.0)
+			"saw":
+				s = 2.0 * fmod(freq * t, 1.0) - 1.0
 			_:
 				s = sin(TAU * freq * t)
 		data[i] = int(clamp(s * env * 0.5, -1.0, 1.0) * 127.0) & 0xFF
@@ -53,6 +55,9 @@ func _play(wav: AudioStreamWAV, vol := 1.0) -> void:
 func jump() -> void:  _play(_gen_tone(520, 0.09, "square"), 0.5)
 func double_jump() -> void: _play(_gen_tone(720, 0.10, "square"), 0.5)
 func coin() -> void:  _play(_gen_tone(980, 0.07), 0.45)
+# v9: рывок (быстрый «вжух») и щит (низкий «бум», спас от падения)
+func dash() -> void:  _play(_gen_tone(300, 0.12, "saw"), 0.5)
+func shield() -> void: _play(_gen_tone(180, 0.22, "noise"), 0.6)
 func checkpoint() -> void: _play(_gen_tone(660, 0.12), 0.6)
 func die() -> void:   _play(_gen_tone(140, 0.25, "noise"), 0.7)
 func win() -> void:

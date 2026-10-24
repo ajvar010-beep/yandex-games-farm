@@ -16,6 +16,7 @@ var last_interstitial_ms: int = 0
 # то же для RV-монет меню (Menu-инстанс пересоздаётся на каждый вход в меню)
 var last_rv_coins_ms: int = 0
 var stars: Dictionary = {}       # level -> 1..3 (рейтинг скорости)
+var upgrades: Dictionary = {}    # v9: id -> уровень апгрейда (прокачка характеристик)
 var lang := "ru"                 # ru | en (авто по SDK)
 
 signal lang_changed              # SDK определил язык — меню/HUD перестраиваются
@@ -73,12 +74,33 @@ const TR := {
 	"lb_unavailable": {"ru": "лидерборд недоступен", "en": "leaderboard unavailable"},
 	"lb_you": {"ru": "... #%d ты (%s): %s", "en": "... #%d you (%s): %s"},
 	"sec": {"ru": " с", "en": " s"},
-	"series_hdr": {"ru": "— СЕРИЯ —", "en": "— SERIES —"},
-	"series_nub": {"ru": "Сложно? Начни с «Нубик Паркур» — там легче. А мастера ждут в «Бог Паркур»!", "en": "Too hard? Start with Nubik Parkour — it's easier. Masters await in God of Parkour!"},
-	"series_pro": {"ru": "Новичкам — «Нубик Паркур» (легче). Хардкорщикам — «Бог Паркур» (уже/быстрее)!", "en": "Beginners: Nubik Parkour (easier). Hardcore: God of Parkour (narrower/faster)!"},
-	"series_god": {"ru": "Это вершина серии. Младшие братья: «Нубик Паркур» и «Про Паркур».", "en": "This is the peak of the series. Its brothers: Nubik Parkour and Pro Parkour."},
+	# v9: серия Нубик/Про/Бог ПЕРЕФОРМАТИРОВАНА в 4 разные игры (2D-гонка, 3D-паркур,
+	# майнинг, файтинг). Сестринские игры ещё не опубликованы — кросс-промо на
+	# несуществующие товары в сторе = риск модерации. Нейтральная цель вместо имён.
+	"series_hdr": {"ru": "— ЦЕЛЬ —", "en": "— GOAL —"},
+	"series_nub": {"ru": "Пройди все 21 уровень, собери 63 звезды и открой все скины!", "en": "Beat all 21 levels, collect 63 stars and unlock every skin!"},
+	"series_pro": {"ru": "Пройди все 21 уровень, собери 63 звезды и открой все скины!", "en": "Beat all 21 levels, collect 63 stars and unlock every skin!"},
+	"series_god": {"ru": "Пройди все 21 уровень, собери 63 звезды и открой все скины!", "en": "Beat all 21 levels, collect 63 stars and unlock every skin!"},
 	"daily_double_q": {"ru": "🎖 +%d ◈ получено!\nУдвоить награду за видео?", "en": "🎖 +%d ◈ claimed!\nDouble the reward for a video?"},
 	"no_thanks": {"ru": "Нет, спасибо", "en": "No, thanks"},
+	# v9: прокачка (второй sink монет ◈ — постоянные апгрейды характеристик)
+	"upgrades_hdr": {"ru": "— ПРОКАЧКА —", "en": "— UPGRADES —"},
+	"up_speed": {"ru": "Скорость", "en": "Speed"},
+	"up_jump": {"ru": "Прыжок", "en": "Jump"},
+	"up_extra_jump": {"ru": "Тройной", "en": "Triple jump"},
+	"up_shield": {"ru": "Щит", "en": "Shield"},
+	"up_dash": {"ru": "Рывок", "en": "Dash"},
+	"up_magnet": {"ru": "Магнит", "en": "Magnet"},
+	"up_desc_speed": {"ru": "+5% скорости бега за уровень", "en": "+5% run speed per level"},
+	"up_desc_jump": {"ru": "+3% высоты прыжка за уровень", "en": "+3% jump height per level"},
+	"up_desc_extra_jump": {"ru": "Третий прыжок в воздухе", "en": "Third mid-air jump"},
+	"up_desc_shield": {"ru": "Щит спасает от падения (×ур.)", "en": "Shield saves a fall (×lvl)"},
+	"up_desc_dash": {"ru": "Рывок вперёд: Shift / кнопка", "en": "Dash forward: Shift / button"},
+	"up_desc_magnet": {"ru": "Притягивает монеты рядом", "en": "Attracts nearby coins"},
+	"up_level_n": {"ru": "Ур. %d/%d", "en": "Lv. %d/%d"},
+	"up_buy": {"ru": "◈ %d", "en": "◈ %d"},
+	"up_max": {"ru": "МАКС", "en": "MAX"},
+	"shield_n": {"ru": "🛡 %d", "en": "🛡 %d"},
 }
 
 func L(key: String) -> String:
@@ -100,11 +122,55 @@ const SKINS := {
 	"hacker": {"name": "Хакер", "color": Color(0.05, 0.18, 0.08), "cost": 666, "rv": false},
 }
 
+# v9: ПРОКАЧКА — постоянные апгрейды характеристик за ◈ (второй sink после скинов).
+# Баланс: апгрейды ОБЛЕГЧАЮТ, но все 21 уровень проходимы и без них (базовые
+# значения = v8.2). Цены нарастают ~×1.7; суммарный sink ≈4400 ◈.
+# "effect" — множитель/шаг на уровень, читается в player.gd::apply_upgrades().
+const UPGRADES := {
+	"speed":      {"max": 5, "costs": [60, 120, 200, 320, 480]},
+	"jump":       {"max": 5, "costs": [70, 140, 230, 360, 540]},
+	"extra_jump": {"max": 1, "costs": [400]},
+	"shield":     {"max": 3, "costs": [150, 300, 500]},
+	"dash":       {"max": 3, "costs": [120, 260, 450]},
+	"magnet":     {"max": 3, "costs": [80, 160, 280]},
+}
+const UPGRADE_ORDER := ["speed", "jump", "extra_jump", "shield", "dash", "magnet"]
+
+func upgrade_level(id: String) -> int:
+	return int(upgrades.get(id, 0))
+
+func upgrade_maxed(id: String) -> bool:
+	if not UPGRADES.has(id): return true
+	return upgrade_level(id) >= int(UPGRADES[id]["max"])
+
+func upgrade_cost(id: String) -> int:
+	# цена СЛЕДУЮЩего уровня (или -1 если макс)
+	if not UPGRADES.has(id): return -1
+	var lv := upgrade_level(id)
+	var costs: Array = UPGRADES[id]["costs"]
+	if lv >= costs.size(): return -1
+	return int(costs[lv])
+
+func buy_upgrade(id: String) -> bool:
+	var cost := upgrade_cost(id)
+	if cost < 0 or coins < cost: return false
+	coins -= cost
+	upgrades[id] = upgrade_level(id) + 1
+	save_data()  # покупка — немедленный save (не debounce)
+	return true
+
 func _ready() -> void:
 	_setup_fonts()
 	load_data()
 	# GameState — первый autoload, Yandex ещё не в дереве; коннектим отложенно
 	_connect_yandex.call_deferred()
+
+func _notification(what: int) -> void:
+	# v9.1: debounce save (add_coins не пишет сразу) → при закрытии вкладки
+	# принудительно сбрасываем dirty-сейв, иначе последние монеты теряются.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE:
+		if _save_dirty:
+			save_data()
 
 func _connect_yandex() -> void:
 	if Yandex.is_ready():
@@ -151,10 +217,37 @@ func _merge_cloud(d: Dictionary) -> void:
 	for k in d.get("stars", {}):
 		if not stars.has(k) or int(d["stars"][k]) > int(stars[k]):
 			stars[k] = d["stars"][k]
+	# v9: апгрейды — maxi по каждому (облако не откатывает прогресс)
+	for k in d.get("upgrades", {}):
+		upgrades[k] = maxi(upgrade_level(str(k)), int(d["upgrades"][k]))
 	save_data()
 
 func add_coins(n: int) -> void:
 	coins += n
+	# v9.1 (консилиум v8.2, критик-код minor): save_data на КАЖДУЮ монету = 150+
+	# синхронных FileAccess+JSON+cloud-посылок за прохождение. Debounce: помечаем
+	# dirty, flush через 1.5с one-shot таймером; немедленный save остаётся в
+	# ключевых точках (complete_level, покупки, merge). Потеря ≤1.5с монет при
+	# краше вкладки приемлемо (cloud мерджит по maxi).
+	_save_dirty = true
+	_flush_soon()
+
+var _save_dirty := false
+var _flush_pending := false
+
+func _flush_soon() -> void:
+	if _flush_pending: return
+	_flush_pending = true
+	var t := get_tree().create_timer(1.5)
+	t.timeout.connect(_on_flush_timeout)
+
+func _on_flush_timeout() -> void:
+	_flush_pending = false
+	if _save_dirty:
+		save_data()
+
+func flush_save() -> void:
+	_save_dirty = false
 	save_data()
 
 func unlock_skin(id: String) -> void:
@@ -192,6 +285,7 @@ func stars_of(level: int) -> int:
 # ---------- persistence (Yandex cloud или localStorage fallback) ----------
 
 func save_data() -> void:
+	_save_dirty = false
 	var data := {
 		"coins": coins,
 		"unlocked": unlocked_skins,
@@ -203,6 +297,7 @@ func save_data() -> void:
 		"daily_streak": daily_streak,
 		"no_ads": no_ads,
 		"stars": stars,
+		"upgrades": upgrades,  # v9
 	}
 	# ОБА хранилища: локал работает всегда, облако — когда SDK готов
 	var f := FileAccess.open("user://save.json", FileAccess.WRITE)
@@ -232,6 +327,7 @@ func _apply(d: Dictionary) -> void:
 	daily_streak = int(d.get("daily_streak", 0))
 	no_ads = bool(d.get("no_ads", false))
 	stars = Dictionary(d.get("stars", {}))
+	upgrades = Dictionary(d.get("upgrades", {}))  # v9
 
 func add_stars(level: int, n: int) -> void:
 	var key := str(level)

@@ -17,6 +17,11 @@ var _revives_used := 0  # цепочка revive (0..max)
 
 const MAX_REVIVES := 5
 const INTERSTITIAL_COOLDOWN_MS := 130_000  # не чаще ~130с (детская аудитория)
+# v9.1 (консилиум v9, критик-монетизация MAJOR): win-double платил coins+20 =
+# 24..32◈ на 16/21 уровне — МЕНЬШЕ пассивного menu-RV (+30◈ за тап без игры).
+# Инверсия ценности тренировала игнорировать RV-триггер с наивысшим намерением
+# (сразу после реального прохождения). Флор гарантирует: win-double > menu-RV всегда.
+const RV_WIN_BONUS_FLOOR := 40
 
 func _ready() -> void:
 	level = ParkourLevel.new()
@@ -31,6 +36,7 @@ func _ready() -> void:
 	player.name = "Player"
 	add_child(player)
 	player.died.connect(_on_player_died)
+	player.shield_absorbed.connect(_update_shield_hud)  # v9: щит поглотил смерть
 
 	cam_rig = preload("res://scripts/camera_rig.gd").new()
 	cam_rig.name = "CameraRig"
@@ -51,8 +57,15 @@ func load_level(n: int) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	var def: Dictionary = {}
 	if f:
-		def = JSON.parse_string(f.get_as_text()) as Dictionary
+		var parsed = JSON.parse_string(f.get_as_text())
 		f.close()
+		# v9.1 (консилиум v8.2, критик-код MAJOR): битый/пустой JSON → parse_string
+		# даёт null (НЕ Dictionary) → load_level(null) крашил игру. Фолбэк на
+		# процедурный уровень — тот же, что при отсутствии файла.
+		if parsed is Dictionary and not (parsed as Dictionary).is_empty():
+			def = parsed
+		else:
+			def = _procedural_level(n)
 	else:
 		def = _procedural_level(n)
 	level.load_level(def)
@@ -73,6 +86,7 @@ func load_level(n: int) -> void:
 	coins_collected = 0
 	_lvl_label.text = GameState.L("level") % n
 	_update_coins()
+	_update_shield_hud()  # v9.1: щиты видны сразу на старте уровня, не после первого урона
 	_timer_label.text = "0.0"
 	# тутор-подсказка на 1 уровне
 	if n == 1:
@@ -109,7 +123,18 @@ func _calc_par(def: Dictionary) -> float:
 	# эффективная скорость с прыжками ПАДАЕТ с difficulty: god-гравитация (×1.35)
 	# укорачивает reach → больше двойных прыжков, медленнее. base 4.5 / difficulty.
 	var spd_eff := 4.5 / maxf(0.8, Variant.difficulty)
-	var par := dist / spd_eff + mover_wait * 0.5 + crumble_n * 0.35 + haz_n * 0.4
+	# v9.1 (консилиум v9, критик-геймплей minor): множитель mover_wait 0.5→0.7 —
+	# skilled-модель на L3 опаздывала на 0.2с к порогу 3★ (единственный уровень, где
+	# цель «63 звезды» была недостижима честной игрой). Параметрический замер
+	# (scratch/star_param.cjs): 0.7 даёт 21/21 при минимальном раздутии par
+	# (важно: par теперь ещё и знаменатель лидерборд-скора).
+	var par := dist / spd_eff + mover_wait * 0.7 + crumble_n * 0.35 + haz_n * 0.4
+	# v9.2 (консилиум v9.1 minor): лидерборд-par БЕЗ флора 8.0. score=1000×par/time
+	# пропорционален par, и maxf(8.0) раздувал L1 (nat-par 6.7 → 8.0) → кемпинг L1
+	# оставался оптимумом доски (1839 vs L2 1663), вопреки комментарию у submit_score.
+	# Флор звёзд остаётся в _stars_earned — 8.0 нужен там, чтобы пар 3★ на коротком
+	# туториале не был тривиальным; на лидерборд он больше не влияет.
+	_par_raw = par
 	return maxf(8.0, par)
 
 func _procedural_level(n: int) -> Dictionary:
@@ -149,9 +174,10 @@ func _process(delta: float) -> void:
 		# честный спидран-таймер: копим только активное время (без панелей/видео)
 		_time_ms += int(delta * 1000.0)
 		_timer_label.text = "%.1f" % (_time_ms / 1000.0)
-	# падение за край
+	# падение за край — через kill(), а не напрямую в _on_player_died:
+	# v9: только kill() знает про щит (поглощает смерть до died-сигнала).
 	if player.global_position.y < -5.0 and _running:
-		_on_player_died()
+		player.kill()
 
 func _on_coin() -> void:
 	if not _running: return  # труп не фармит монеты
@@ -161,6 +187,12 @@ func _on_coin() -> void:
 
 func _update_coins() -> void:
 	_coins_label.text = "◈ %d" % coins_collected
+
+# v9: HUD-счётчик щитов — пустая строка, если щитов нет (не мусорит интерфейс)
+func _update_shield_hud() -> void:
+	if _shield_label == null: return
+	var n: int = player.shields
+	_shield_label.text = (GameState.L("shield_n") % n) if n > 0 else ""
 
 func _on_checkpoint(pos: Vector3) -> void:
 	player.set_spawn(pos)
@@ -172,8 +204,17 @@ func _on_finish() -> void:
 	_running = false
 	_new_record = GameState.is_new_record(level_num, _time_ms)
 	GameState.complete_level(level_num, _time_ms)
-	# сабмит в лидерборд (чем меньше время, тем лучше → инвертируем в очки)
-	var score: int = maxi(1, 1_000_000 - _time_ms)
+	# v9.1 (консилиум v9, критик-монетизация MAJOR): score = par-эффективность ×1000,
+	# НЕ 1e6−мс. Старая формула монотонно падала с длиной уровня → доска структурно
+	# вознаграждала кемпинг самого короткого lv1 (туториал), а не кампанию 21 уровня:
+	# поздние уровни только ухудшали лучший скор, который хранит setScore. Нормализация
+	# по par: прохождение длинного уровня в par даёт ~1000 (сопоставимо с коротким),
+	# быстрее par → выше.
+	# v9.2 (minor): берём _par_raw БЕЗ флора 8.0 — флор раздувал par L1 (6.7→8.0)
+	# и кемпинг L1 оставался оптимумом (замер критика: 1839 vs L2 1663). Без флора
+	# теоретический максимум скора одинаков для всех дистанционных уровней (~1944 =
+	# 1000×8.75/4.5), оптимум — играть всю кампанию быстро.
+	var score: int = maxi(1, int(round(1000.0 * _par_raw / maxf(0.1, _time_ms / 1000.0))))
 	Yandex.submit_score("parkour_time", score)
 	_show_win()
 
@@ -191,6 +232,7 @@ func _on_player_died() -> void:
 var _lvl_label: Label
 var _coins_label: Label
 var _timer_label: Label
+var _shield_label: Label  # v9: счётчик щитов (виден только когда shields>0)
 
 func _build_hud() -> void:
 	hud = Control.new()
@@ -229,6 +271,16 @@ func _build_hud() -> void:
 	_coins_label.add_theme_constant_override("shadow_offset_x", 2)
 	_coins_label.add_theme_constant_override("shadow_offset_y", 2)
 	top.add_child(_coins_label)
+
+	# v9: счётчик щитов (прокачка) — между монетами и паузой, виден при shields>0
+	_shield_label = Label.new()
+	_shield_label.add_theme_font_size_override("font_size", 30)
+	_shield_label.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
+	_shield_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.7))
+	_shield_label.add_theme_constant_override("shadow_offset_x", 2)
+	_shield_label.add_theme_constant_override("shadow_offset_y", 2)
+	top.add_child(_shield_label)
+	_update_shield_hud()
 
 	# таймер (спидран)
 	_timer_label = Label.new()
@@ -360,12 +412,18 @@ func _on_restart() -> void:
 	if _deaths >= 2:
 		_maybe_interstitial()
 	player.respawn()
+	_update_shield_hud()  # v9.1: respawn() пополнил щиты — отразить в HUD (не stale)
 	_running = true
 
 func _on_menu() -> void:
 	AudioBus.click()
 	# родитель — GameHolder (без скрипта): Main ищем от корня, иначе софтлок «В меню»
 	get_tree().paused = false
+	# v9.2 (консилиум v9.1 minor): если выход в меню произошёл во время рекламы,
+	# сбросить ad-флаг — иначе запаздывающий _on_adv_done снимет уже ПОЛЬЗОВАТЕЛЬСКУЮ
+	# паузу (рассинхрон состояния). Yandex — autoload, метод всегда доступен.
+	if Yandex.get("_paused_by_adv"):
+		Yandex.set("_paused_by_adv", false)
 	var main := get_tree().root.get_node_or_null("Main")
 	if main:
 		main.back_to_menu()
@@ -416,7 +474,8 @@ func _advance_tutorial(trigger: String = "") -> void:
 			if _tutorial_step == 2:
 				_show_tutorial_step(99)  # скрыть
 
-var _par_sec := 20.0  # par-время уровня: путь / средняя скорость
+var _par_sec := 20.0  # par-время уровня: путь / средняя скорость (с флором 8.0 для звёзд)
+var _par_raw := 20.0  # v9.2: par БЕЗ флора — только для лидерборд-скора (см. _calc_par)
 var _new_record := false
 var _won := false
 
@@ -438,18 +497,23 @@ func _show_win() -> void:
 	var body := GameState.L("time_coins") % [t, coins_collected]
 	if _new_record:
 		body += "\n" + GameState.L("new_record")
-	_show_panel(GameState.L("finish") % _star_str(stars), body, GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
+	_show_panel(GameState.L("finish") % _star_str(stars), body, _double_btn_text(), _on_double_coins, GameState.L("next"), _on_next)
+
+# v9.2: текст кнопки = фактическая сумма бонуса (та же формула, что в _on_double_coins)
+func _double_btn_text() -> String:
+	return GameState.L("double_win") % maxi(coins_collected + 20, RV_WIN_BONUS_FLOOR)
 
 func _on_double_coins() -> void:
 	AudioBus.click()
 	_hide_panel()
 	Yandex.show_rewarded(func():
-		# удваиваем + фикс-бонус 20: смотреть видео выгодно даже на бедных уровнях
-		var bonus := coins_collected + 20
+		# удваиваем + фикс-бонус 20, но не меньше флора (см. RV_WIN_BONUS_FLOOR):
+		# смотреть видео на финише выгодно ВСЕГДА — даже беднее menu-RV не бывает
+		var bonus := maxi(coins_collected + 20, RV_WIN_BONUS_FLOOR)
 		GameState.add_coins(bonus)
 		coins_collected += bonus
 		AudioBus.buy()
-		_show_panel(GameState.L("doubled"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu),
+		_show_panel(GameState.L("bonus_got"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu),
 		func():
 			# ошибка рекламы — возвращаем панель победы без удвоения
 			_show_win_panel())
@@ -457,13 +521,16 @@ func _on_double_coins() -> void:
 func _show_win_panel() -> void:
 	var t := "%.1f" % (_time_ms / 1000.0)
 	var star_str := _star_str(_stars_earned())
-	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
+	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], _double_btn_text(), _on_double_coins, GameState.L("next"), _on_next)
 
 func _on_next() -> void:
 	AudioBus.click()
 	_hide_panel()
 	_maybe_interstitial()
-	load_level(level_num + 1)
+	# v9.1 (консилиум v8.2, критик-код minor): после финала (21 ХАКЕР) load_level(22)
+	# молча играл 01.json с номером «Уровень 22» в HUD. Явный цикл на 1 (NG+:
+	# фарм монет/звёзд на пройденных уровнях — стандарт жанра).
+	load_level(1 if level_num >= 21 else level_num + 1)
 
 func _maybe_interstitial() -> void:
 	if GameState.no_ads: return
@@ -533,6 +600,23 @@ func _build_touch_input() -> void:
 	knob_p.self_modulate = Color(1,1,1,0.35)
 	_joy_knob.add_child(knob_p)
 
+	# v9: кнопка РЫВКА справа (над зоной тапа-прыжка). Показываем только если
+	# апгрейд dash куплен — иначе мертвая кнопка путает. Тап по ней ловится в
+	# _input по _dash_btn_rect (в экранных координатах).
+	if GameState.upgrade_level("dash") > 0:
+		_dash_btn = Button.new()
+		_dash_btn.name = "DashBtn"
+		_dash_btn.text = "»»"
+		_dash_btn.add_theme_font_size_override("font_size", 30)
+		_dash_btn.custom_minimum_size = Vector2(96, 96)
+		_dash_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		_dash_btn.position = Vector2(-120.0 - safe_left, -(120.0 + safe_bottom + 96.0))
+		_dash_btn.modulate = Color(1, 1, 1, 0.55)
+		_dash_btn.pressed.connect(func(): player.try_dash())
+		hud.add_child(_dash_btn)
+
+var _dash_btn: Button = null
+
 func _input(event: InputEvent) -> void:
 	# мобильный: левая половина — джойстик, правая — прыжок
 	if event is InputEventScreenTouch:
@@ -546,6 +630,10 @@ func _input(event: InputEvent) -> void:
 				# v8.1 (#7): панель открыта (смерть/победа/пауза) — тап идёт по её
 				# кнопкам, НЕ по игре. Без этого тап «Ожить» (x=640=half) дёргал
 				# tap_jump() → фантомный прыжок с уступа сразу после revive.
+				pass
+			elif _dash_btn != null and _dash_btn.get_global_rect().has_point(event.position):
+				# v9: тап по кнопке рывка — НЕ прыжок. Сам рывок дёрнет Button.pressed.
+				# global_rect читаем в момент тапа (не кэш) — всегда верен при ресайзе.
 				pass
 			else:
 				player.tap_jump()

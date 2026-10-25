@@ -1,4 +1,4 @@
-# Чеклист загрузки «Бог Паркур» в Яндекс Игры
+# Чеклист загрузки «Бог Паркура» в Яндекс Игры
 
 Готово к копипасту в консоль: https://yandex.com/games/developer
 
@@ -16,11 +16,11 @@
 - [ ] Email для обратной связи
 
 ## Русский (вкладка «Русский») — из packages/godparkour/texts/*.ru.txt
-- [ ] Название: Бог Паркур
+- [ ] Название: Бог Паркура
 - [ ] SEO / Короткое / Об игре / Как играть — скопировать из файлов
 
 ## English (вкладка «English») — из packages/godparkour/texts/*.en.txt
-- [ ] Title: God of Parkour
+- [ ] Title: Parkour God
 - [ ] SEO / Short / About / How to play — скопировать из файлов
 
 ## Медиа (packages/godparkour/media/)

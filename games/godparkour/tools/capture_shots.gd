@@ -34,11 +34,14 @@ func _run() -> void:
 
 func _shoot_menu(lang: String) -> void:
 	# витрина progression-системы: звёзды на кнопках, скины, магазин
-	GameState.coins = 340
+	GameState.coins = 840
 	GameState.max_level = 14
 	GameState.stars = {"1": 3, "2": 3, "3": 2, "4": 3, "5": 2, "6": 1, "7": 3}
 	GameState.unlocked_skins = ["nub", "pro"]
 	GameState.current_skin = "pro"
+	# v9: витрина ПРОКАЧКИ — часть апгрейдов куплена (видны уровни), часть доступна
+	# за текущие ◈ (видна цена), часть ещё не по карману (виден рост).
+	GameState.upgrades = {"speed": 3, "jump": 2, "shield": 1}
 	var main: Node = load("res://scenes/Main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
 	for i in 8:

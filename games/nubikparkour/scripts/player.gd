@@ -4,12 +4,17 @@ extends CharacterBody3D
 
 signal died
 signal landed
+signal shield_absorbed  # v9: щит поглотил смерть — HUD обновляет счётчик
 
 @export var speed := 7.0
 @export var jump_force := 9.5
 @export var gravity_mult := 1.8
 
 const COYOTE_TIME := 0.12
+# v9: базовые значения физики — апгрейды ПРОКАЧКИ считаются от них,
+# а не от текущего speed/jump_force (иначе покупка компаундилась бы).
+const BASE_SPEED := 7.0
+const BASE_JUMP := 9.5
 
 var _coyote := 0.0
 var _jump_buffer := 0.0
@@ -17,7 +22,21 @@ var _jumps := 0
 var _max_jumps := 2
 var _dead := false
 var _spawn := Vector3.ZERO
-var _last_safe := Vector3.ZERO   # последняя точка на полу — для честного revive
+var _last_safe := Vector3.ZERO   # мировая точка на полу — для честного revive
+# v9.2 (консилиум v9.1, MAJOR): _last_safe — устаревающий снимок мира. На mover'е
+# платформа уезжает, на crumble — исчезает, и щит/платный revive телепортировали в
+# воздух (25 crumble + 100 mover'ов на 19/21 уровне → все заряды впустую + смерть).
+# Храним ссылку на collider + локальный офсет: для движущейся платформы to_global()
+# пересчитывает точку в её ТЕКУЩУЮ позицию (пол «едет» вместе с игроком), для
+# исчезнувшей crumble is_instance_valid() == false → фолбэк на _spawn.
+var _last_safe_collider: Node = null
+var _last_safe_local := Vector3.ZERO
+# v9: прокачка
+var shields := 0                 # щиты на уровень (поглощают смерть) — читает game.gd
+var _shield_lock := false        # v9.2 minor: щит сработал в этом кадре — не списывать второй
+var _dash_cd := 0.0
+var _dash_time := 0.0
+var _dash_dir := Vector3.ZERO
 # v8.1 (#11): кубики смерти спавнятся в Level (пересоздаётся на load_level) с авто-деспавном,
 # а НЕ в Player. Иначе ~6-8 RigidBody3D копились на каждую смерть и утекали между уровнями
 # (тот же Game-узел при _on_next) → растущий счётчик узлов/draw-call, FPS-деградация.
@@ -37,6 +56,20 @@ func _ready() -> void:
 	# Это РЕАЛЬНАЯ ось сложности (прыжок вперёд), в отличие от сужения sx (⊥ движению).
 	# god 1.3: single-jump reach ~2.6м (pro ~3.4, nub ~3.9) — длинные разрывы требуют двойного.
 	gravity_mult = 1.8 * Variant.difficulty
+	apply_upgrades()
+
+# v9: ПРОКАЧКА — постоянные апгрейды из GameState.upgrades. gravity_mult НЕ трогаем
+# (ось сложности серии); апгрейды усиливают игрока ВНУТРИ своей difficulty.
+# Базовая игра (upgrades={}) даёт ровно значения v8.2 — уровни проходимы без прокачки.
+# Щиты здесь НЕ пополняем: их расход должен сохраняться между смертями уровня;
+# пополнение — только на старте уровня (game.gd::load_level → refill_shields()).
+func apply_upgrades() -> void:
+	speed = BASE_SPEED * (1.0 + 0.05 * GameState.upgrade_level("speed"))
+	jump_force = BASE_JUMP * (1.0 + 0.03 * GameState.upgrade_level("jump"))
+	_max_jumps = 2 + (1 if GameState.upgrade_level("extra_jump") > 0 else 0)
+
+func refill_shields() -> void:
+	shields = GameState.upgrade_level("shield")
 
 func _build_visual() -> void:
 	_mesh = Node3D.new()
@@ -158,19 +191,47 @@ func _char_texture(_col: Color, seed: int, style: String) -> ImageTexture:
 
 func set_spawn(p: Vector3) -> void:
 	_spawn = p
+	_last_safe = p  # v9.2: старт/чекпоинт всегда на статичном полу — валидный фолбэк
+	_last_safe_collider = null
 
 func respawn() -> void:
 	global_position = _spawn
 	_last_safe = _spawn
+	_last_safe_collider = null  # v9.2: _spawn — статичный старт/чекпоинт, без collider-привязки
+	_shield_lock = false
 	velocity = Vector3.ZERO
 	_dead = false
 	_jumps = 0
 	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок при возрождении
 	_clear_debris()     # v8.1 (#11): кубики прошлой смерти долой
+	_dash_cd = 0.0      # v9: рывок снова доступен
+	_dash_time = 0.0
+	apply_upgrades()    # v9: speed/jump/max_jumps на старт уровня
+	refill_shields()    # v9: щиты пополняются на старт/рестарт УРОВНЯ (не на revive)
 	if _mesh: _mesh.visible = true
 
 func kill() -> void:
 	if _dead: return
+	# v9: ЩИТ поглощает смерть — мгновенный возврат в последнюю безопасную точку,
+	# без распада на кубики и без панели смерти (игра продолжается). Расход щитов
+	# сохраняется до конца уровня; пополнение — в respawn() (старт/рестарт уровня).
+	# v9.2: точка резолвится через _resolve_safe_pos() — collider-aware (mover
+	# уехал → точка едет с ним; crumble исчезла → фолбэк _spawn). Без этого щит
+	# телепортировал в воздух и сгорал впустую (MAJOR консилиума v9.1).
+	# v9.2 minor: guard от двойного списания за один кадр (hazard body_entered +
+	# lava-kill из game._process могут выстрелить синхронно).
+	if shields > 0:
+		if _shield_lock: return  # второй kill() в том же кадре — щит уже сработал
+		_shield_lock = true
+		shields -= 1
+		AudioBus.shield()
+		global_position = _resolve_safe_pos() + Vector3.UP * 0.5
+		velocity = Vector3.ZERO
+		_jumps = 0
+		_jump_buffer = 0.0
+		_coyote = COYOTE_TIME
+		shield_absorbed.emit()
+		return
 	_dead = true
 	AudioBus.die()
 	_explode()
@@ -221,23 +282,29 @@ func _clear_debris() -> void:
 
 func revive() -> void:
 	_dead = false
-	# честный revive: последняя безопасная точка на полу, а не чекпоинт
-	global_position = _last_safe + Vector3.UP * 0.5
+	# честный revive: последняя безопасная точка на полу (v9.2: collider-aware
+	# резолв — не телепортирует в воздух на уехавшем mover'е/исчезнувшей crumble)
+	global_position = _resolve_safe_pos() + Vector3.UP * 0.5
 	velocity = Vector3.ZERO
 	_jumps = 0
 	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок (см. tap_jump)
 	_coyote = COYOTE_TIME
+	_dash_cd = 0.0      # v9
+	_dash_time = 0.0
 	if _mesh: _mesh.visible = true
 
 func _input(event: InputEvent) -> void:
 	if _dead: return
 	if event.is_action_pressed("jump"):
 		_jump_buffer = 0.15
+	if event.is_action_pressed("dash"):
+		try_dash()
 	# мобильный тап = прыжок (обработаем в Game через тап по экрану)
 
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
+	_shield_lock = false  # v9.2: новый кадр — щит снова может поглотить смерть
 	# таймеры
 	if _coyote > 0: _coyote -= delta
 	if _jump_buffer > 0: _jump_buffer -= delta
@@ -259,6 +326,16 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, target.x, accel * delta)
 	velocity.z = move_toward(velocity.z, target.z, accel * delta)
 
+	# v9: РЫВОК (dash) — короткий горизонтальный burst поверх обычного бега.
+	# vy НЕ меняем (нет бесконечного полёта), cd 2.5с. Базовый double-jump уже
+	# покрывает все gap уровней — dash удобство, не требование прохождения.
+	if _dash_cd > 0.0: _dash_cd -= delta
+	if _dash_time > 0.0:
+		_dash_time -= delta
+		var dspeed := speed + 6.0 + 2.0 * GameState.upgrade_level("dash")
+		velocity.x = _dash_dir.x * dspeed
+		velocity.z = _dash_dir.z * dspeed
+
 	# гравитация + койот-тайм
 	if is_on_floor():
 		_jumps = 0
@@ -267,6 +344,10 @@ func _physics_process(delta: float) -> void:
 		# (лава — StaticBody3D с коллизией, is_on_floor на ней true, но revive туда = смерть)
 		if _floor_is_safe():
 			_last_safe = global_position
+			# v9.2: запоминаем КОЛЛАЙДЕР пола + локальный офсет (см. _last_safe_collider)
+			_last_safe_collider = _floor_collider()
+			if _last_safe_collider is Node3D:
+				_last_safe_local = (_last_safe_collider as Node3D).to_local(global_position)
 	else:
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_mult * delta
 
@@ -341,7 +422,7 @@ func _floor_accel_mult() -> float:
 			return 1.8
 	return 1.0
 
-# пол под игроком безопасен для revive-точки? (не лава, не ниже порога)
+# пол под игроком безопасен для revive-точки? (не лава, не hazard, не ниже порога)
 func _floor_is_safe() -> bool:
 	if global_position.y < -3.0:
 		return false  # страховка: слишком низко = над лавой
@@ -352,7 +433,80 @@ func _floor_is_safe() -> bool:
 		var collider = col.get_collider()
 		if collider is Node and collider.is_in_group("lava"):
 			return false
+	# v9.1 (консилиум v9, критик-код MAJOR): hazard — Area3D поверх обычной платформы.
+	# is_on_floor()=true на StaticBody под ним, поэтому _last_safe писался ПРЯМО на
+	# hazard-блок → kill()-щит телепортировал обратно в тот же hazard → все заряды
+	# (950◈) сгорали на одном блоке и всё равно смерть (gauntlet L11/L17). hazard не
+	# даёт slide-коллизий, поэтому опрашиваем пространство на hazard-зоны напрямую.
+	if _overlaps_hazard():
+		return false
 	return true
+
+# v9.2: collider пола под игроком (первая не-lava slide-коллизия кадра) — для
+# привязки _last_safe к движущейся/исчезающей платформе.
+func _floor_collider() -> Node:
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col == null: continue
+		var c = col.get_collider()
+		if c is Node and not c.is_in_group("lava"):
+			return c
+	return null
+
+# v9.2 (консилиум v9.1 MAJOR): актуальная мировая позиция _last_safe.
+# - collider жив (mover уехал) → to_global(локального офсета) = точка ЕДЕТ с полом;
+# - collider мёртв (crumble исчезла) или не Node3D → фолбэк _spawn (старт/чекпоинт,
+#   всегда статичный пол — set_spawn пишет его вместе с _last_safe).
+# Дополнительно проверяем, что в точке resolver'а всё ещё твёрдый пол (raycast вниз)
+# — защита от случая «mover уехал под другую платформу/hazard».
+func _resolve_safe_pos() -> Vector3:
+	var p := _last_safe
+	if _last_safe_collider is Node3D and is_instance_valid(_last_safe_collider):
+		p = (_last_safe_collider as Node3D).to_global(_last_safe_local)
+	elif _last_safe_collider != null and not is_instance_valid(_last_safe_collider):
+		p = _spawn  # узел пола вообще освобождён — точка в воздухе
+	# _spawn (старт/чекпоинт) всегда на статичной платформе без hazard —
+	# валидный фолбэк (генератор это гарантирует, smoke_test проверяет).
+	if not _solid_floor_at(p):
+		p = _spawn
+	return p
+
+# твёрдый ли пол в точке p (raycast вниз на 2м от уровня ног)?
+func _solid_floor_at(p: Vector3) -> bool:
+	var w := get_world_3d()
+	if w == null: return false
+	var space := w.direct_space_state
+	if space == null: return false
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.3, p - Vector3.UP * 1.7)
+	q.exclude = [get_rid()]
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	var hit := space.intersect_ray(q)
+	if hit.is_empty(): return false
+	var c = hit.get("collider")
+	if c is Node and c.is_in_group("lava"): return false
+	return true
+
+# игрок сейчас пересекает hazard-зону (Area3D в группе "hazard")?
+func _overlaps_hazard() -> bool:
+	var w := get_world_3d()
+	if w == null: return false
+	var space := w.direct_space_state
+	if space == null: return false
+	var q := PhysicsShapeQueryParameters3D.new()
+	var sph := SphereShape3D.new()
+	sph.radius = 0.4
+	q.shape = sph
+	q.transform = Transform3D(Basis.IDENTITY, global_position)
+	q.collide_with_areas = true
+	q.collide_with_bodies = false
+	q.collision_mask = 0xFFFFFFFF
+	q.exclude = [get_rid()]
+	for h in space.intersect_shape(q, 8):
+		var c = h.get("collider")
+		if c is Node and c.is_in_group("hazard"):
+			return true
+	return false
 
 func _do_jump() -> void:
 	_jumps += 1
@@ -373,6 +527,26 @@ func _do_jump() -> void:
 		AudioBus.double_jump()
 	else:
 		AudioBus.jump()
+
+# v9: рывок вперёд (dash). Требует купленного апгрейда "dash". Направление —
+# текущий ввод (или последнее направление движения, если ввода нет).
+func try_dash() -> void:
+	if _dead: return
+	if GameState.upgrade_level("dash") <= 0: return
+	if _dash_cd > 0.0: return
+	var d := _get_input_dir()
+	var basis := Basis.IDENTITY
+	if _cam: basis = _cam.global_transform.basis
+	var dir := (basis * Vector3(d.x, 0, d.y))
+	dir.y = 0
+	if dir.length() < 0.05:
+		dir = Vector3(velocity.x, 0, velocity.z)  # по инерции, если нет ввода
+	if dir.length() < 0.05:
+		dir = -_mesh.global_transform.basis.z if _mesh else Vector3.FORWARD
+	_dash_dir = dir.normalized()
+	_dash_time = 0.18
+	_dash_cd = 2.5
+	AudioBus.dash()
 
 # мобильный тап (из Game)
 func tap_jump() -> void:

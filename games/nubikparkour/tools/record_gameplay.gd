@@ -1,6 +1,6 @@
 extends Node
 ## Автопилот для записи gameplay-видео (Godot Movie Maker):
-##   Godot --path . res://tools/record_gameplay.tscn --write-movie export/movie.avi --fixed-fps 60 -- <level> [seconds]
+##   Godot --path . res://tools/record_gameplay.tscn --write-movie export/movie.avi --fixed-fps 60 -- <level> [seconds] [ru|en]
 ## Игрок сам бежит по платформам и прыгает; после ffmpeg кодирует avi → mp4.
 
 var _level := 3
@@ -14,7 +14,9 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0: _level = int(args[0])
 	if args.size() > 1: _max_sec = float(args[1])
-	GameState.lang = "ru"
+	# v9.1 (консилиум v8.2, критик-спек minor): язык из аргументов — EN-видео
+	# требует английского HUD, раньше было жёстко "ru".
+	GameState.lang = String(args[2]) if args.size() > 2 and String(args[2]) in ["ru", "en"] else "ru"
 	GameState.coins = 42
 	_start()
 

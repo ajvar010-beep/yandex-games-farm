@@ -20,7 +20,7 @@
 - [ ] SEO / Короткое / Об игре / Как играть — скопировать из файлов
 
 ## English (вкладка «English») — из packages/nubikparkour/texts/*.en.txt
-- [ ] Title: Nubik Parkour
+- [ ] Title: Noobik Parkour
 - [ ] SEO / Short / About / How to play — скопировать из файлов
 
 ## Медиа (packages/nubikparkour/media/)

@@ -16,6 +16,7 @@ var _js_int_err: JavaScriptObject
 var _js_cb_err: JavaScriptObject
 var _js_lb_err: JavaScriptObject
 var _rv_settled := false  # reward ИЛИ fail уже доставлен — не вызывать fail дважды (onError→onClose)
+var _paused_by_adv := false  # v9.1: мы поставили дерево на паузу ради fullscreen-рекламы
 # v8.1 (консилиум v8 #9): ВСЕ async-колбэки SDK должны ЖИТЬ до резолва промиса.
 # JavaScriptObject — RefCounted: inline-темпарарь освобождается в конце statement,
 # а .then/.catch/onClose/onError срабатывают на следующем тике → get_proxied_value(id)
@@ -99,6 +100,10 @@ func _setup_js_callbacks() -> void:
 	_js_lb_err = _cb(func(_e): pass)
 
 func _on_adv_done() -> void:
+	# v9.1: снять паузу, поставленную в show_fullscreen (симметрично)
+	if _paused_by_adv:
+		_paused_by_adv = false
+		get_tree().paused = false
 	AudioBus.mute(false)
 	gameplay_start()
 	var cb := _adv_cb_off
@@ -134,6 +139,14 @@ func show_fullscreen(on_closed: Callable = Callable()) -> void:
 		return
 	AudioBus.mute(true)
 	gameplay_stop()
+	# v9.1 (консилиум v9, критик-монетизация MAJOR): спека 4.7 — во время
+	# fullscreen-рекламы звук И геймплей НА ПАУЗЕ. Звук глушился, но симуляция
+	# жила → спидран-таймер накручивался за 15-30с рекламы, сжигая звёзды и
+	# лидерборд-скор на каждом ad-переходе. UI-панели PROCESS_MODE_ALWAYS —
+	# кнопки продолжают работать под паузой.
+	if not get_tree().paused:
+		_paused_by_adv = true
+		get_tree().paused = true
 	var js = JavaScriptBridge.get_interface("window")
 	# ВАЖНО: Object.create() без аргумента бросает TypeError в JS-движке;
 	# JavaScriptBridge.create_object("Object") = new Object() = {} (документированный API)

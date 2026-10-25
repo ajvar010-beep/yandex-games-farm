@@ -27,6 +27,24 @@ func _on_lang_changed() -> void:
 func refresh() -> void:
 	_build()
 
+# v9.1 (консилиум v9, критик-монетизация minor): лёгкий тост снизу — фидбек
+# «награда не получена» для menu-RV (раньше тихий no-op при закрытии видео
+# раньше порога onRewarded → падает доверие к RV и повторный opt-in).
+# Авто-скрытие через 2.5с; _clear() на refresh его тоже убьёт — это нормально.
+func _toast(text: String) -> void:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", 18)
+	l.add_theme_color_override("font_color", Color(1, 0.85, 0.4))
+	l.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	l.offset_top = -70
+	l.offset_bottom = -30
+	l.process_mode = Node.PROCESS_MODE_ALWAYS  # реклама может оставить дерево на паузе
+	add_child(l)
+	get_tree().create_timer(2.5).timeout.connect(func():
+		if is_instance_valid(l): l.queue_free())
+
 func _clear() -> void:
 	for c in get_children():
 		c.queue_free()
@@ -371,9 +389,9 @@ func _build_leaderboard(parent: Control) -> void:
 		lb_label.text = "\n".join(lines))
 
 func _fmt_score(v: int) -> String:
-	# очки = 1_000_000 - время_мс → обратно в секунды
-	var ms := 1_000_000 - v
-	return "%.1f%s" % [ms / 1000.0, GameState.L("sec")]
+	# v9.1: score = par-эффективность ×1000 (1000 = ровно в par, >1000 = быстрее).
+	# Старая семантика (1e6−мс → секунды) пала вместе с кемпингом lv1 в лидерборде.
+	return "%d%s" % [v, GameState.L("pts")]
 
 # ---------- кросс-промо серии ----------
 func _build_series_promo(parent: Control) -> void:
@@ -403,7 +421,8 @@ func _on_rv_coins() -> void:
 		GameState.last_rv_coins_ms = Time.get_ticks_msec()
 		GameState.add_coins(RV_COINS)
 		AudioBus.buy()
-		refresh())  # пересборка: монеты, прогресс скина, новая кнопка RV с кэшем _rv_btn
+		refresh(),  # пересборка: монеты, прогресс скина, новая кнопка RV с кэшем _rv_btn
+		func(): _toast(GameState.L("rv_no_reward")))  # v9.1: on_fail-фидбек (кулдаун НЕ ставим — ретрай возможен)
 
 # живой отсчёт кулдауна RV-монет: disabled + «⏳ MM:SS» пока ждём, потом активна
 func _update_rv_cooldown(btn: Button) -> void:
@@ -465,7 +484,8 @@ func _offer_daily_double(got: int) -> void:
 		Yandex.show_rewarded(func():
 			GameState.add_coins(got)
 			AudioBus.buy()
-			refresh()))
+			refresh(),
+			func(): _toast(GameState.L("rv_no_reward"))))  # v9.1: on_fail-фидбек
 	no.pressed.connect(func():
 		AudioBus.click()
 		box.queue_free()
@@ -516,7 +536,8 @@ func _on_skin(id: String) -> void:
 			GameState.unlock_skin(id)
 			GameState.set_skin(id)
 			AudioBus.buy()
-			refresh())
+			refresh(),
+			func(): _toast(GameState.L("rv_no_reward")))  # v9.1: on_fail-фидбек
 	else:
 		if GameState.coins >= s["cost"]:
 			GameState.add_coins(-s["cost"])

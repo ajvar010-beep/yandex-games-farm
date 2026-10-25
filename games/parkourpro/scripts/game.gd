@@ -17,6 +17,11 @@ var _revives_used := 0  # цепочка revive (0..max)
 
 const MAX_REVIVES := 5
 const INTERSTITIAL_COOLDOWN_MS := 130_000  # не чаще ~130с (детская аудитория)
+# v9.1 (консилиум v9, критик-монетизация MAJOR): win-double платил coins+20 =
+# 24..32◈ на 16/21 уровне — МЕНЬШЕ пассивного menu-RV (+30◈ за тап без игры).
+# Инверсия ценности тренировала игнорировать RV-триггер с наивысшим намерением
+# (сразу после реального прохождения). Флор гарантирует: win-double > menu-RV всегда.
+const RV_WIN_BONUS_FLOOR := 40
 
 func _ready() -> void:
 	level = ParkourLevel.new()
@@ -81,6 +86,7 @@ func load_level(n: int) -> void:
 	coins_collected = 0
 	_lvl_label.text = GameState.L("level") % n
 	_update_coins()
+	_update_shield_hud()  # v9.1: щиты видны сразу на старте уровня, не после первого урона
 	_timer_label.text = "0.0"
 	# тутор-подсказка на 1 уровне
 	if n == 1:
@@ -117,7 +123,12 @@ func _calc_par(def: Dictionary) -> float:
 	# эффективная скорость с прыжками ПАДАЕТ с difficulty: god-гравитация (×1.35)
 	# укорачивает reach → больше двойных прыжков, медленнее. base 4.5 / difficulty.
 	var spd_eff := 4.5 / maxf(0.8, Variant.difficulty)
-	var par := dist / spd_eff + mover_wait * 0.5 + crumble_n * 0.35 + haz_n * 0.4
+	# v9.1 (консилиум v9, критик-геймплей minor): множитель mover_wait 0.5→0.7 —
+	# skilled-модель на L3 опаздывала на 0.2с к порогу 3★ (единственный уровень, где
+	# цель «63 звезды» была недостижима честной игрой). Параметрический замер
+	# (scratch/star_param.cjs): 0.7 даёт 21/21 при минимальном раздутии par
+	# (важно: par теперь ещё и знаменатель лидерборд-скора).
+	var par := dist / spd_eff + mover_wait * 0.7 + crumble_n * 0.35 + haz_n * 0.4
 	return maxf(8.0, par)
 
 func _procedural_level(n: int) -> Dictionary:
@@ -187,8 +198,13 @@ func _on_finish() -> void:
 	_running = false
 	_new_record = GameState.is_new_record(level_num, _time_ms)
 	GameState.complete_level(level_num, _time_ms)
-	# сабмит в лидерборд (чем меньше время, тем лучше → инвертируем в очки)
-	var score: int = maxi(1, 1_000_000 - _time_ms)
+	# v9.1 (консилиум v9, критик-монетизация MAJOR): score = par-эффективность ×1000,
+	# НЕ 1e6−мс. Старая формула монотонно падала с длиной уровня → доска структурно
+	# вознаграждала кемпинг самого короткого lv1 (туториал), а не кампанию 21 уровня:
+	# поздние уровни только ухудшали лучший скор, который хранит setScore. Нормализация
+	# по par: прохождение длинного уровня в par даёт ~1000 (сопоставимо с коротким),
+	# быстрее par → выше. Кемпинг lv1 перестаёт быть оптимумом, прогресс мотивирован.
+	var score: int = maxi(1, int(round(1000.0 * _par_sec / maxf(0.1, _time_ms / 1000.0))))
 	Yandex.submit_score("parkour_time", score)
 	_show_win()
 
@@ -386,6 +402,7 @@ func _on_restart() -> void:
 	if _deaths >= 2:
 		_maybe_interstitial()
 	player.respawn()
+	_update_shield_hud()  # v9.1: respawn() пополнил щиты — отразить в HUD (не stale)
 	_running = true
 
 func _on_menu() -> void:
@@ -470,8 +487,9 @@ func _on_double_coins() -> void:
 	AudioBus.click()
 	_hide_panel()
 	Yandex.show_rewarded(func():
-		# удваиваем + фикс-бонус 20: смотреть видео выгодно даже на бедных уровнях
-		var bonus := coins_collected + 20
+		# удваиваем + фикс-бонус 20, но не меньше флора (см. RV_WIN_BONUS_FLOOR):
+		# смотреть видео на финише выгодно ВСЕГДА — даже беднее menu-RV не бывает
+		var bonus := maxi(coins_collected + 20, RV_WIN_BONUS_FLOOR)
 		GameState.add_coins(bonus)
 		coins_collected += bonus
 		AudioBus.buy()

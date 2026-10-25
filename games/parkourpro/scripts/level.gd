@@ -346,6 +346,7 @@ func _spawn_platform(p: Dictionary) -> void:
 
 func _spawn_hazard(pos: Vector3, size: Vector3) -> void:
 	var hz := Area3D.new()
+	hz.add_to_group("hazard")  # v9.1: player._overlaps_hazard() ищет зоны по этой группе
 	hz.position = pos
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()

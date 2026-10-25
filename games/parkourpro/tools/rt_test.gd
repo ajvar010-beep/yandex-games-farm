@@ -158,6 +158,12 @@ func _run() -> void:
 	_check(absf(player.call("_floor_accel_mult") - 1.0) < 0.001, "grass floor accel 1.0 (normal)")
 
 	# --- Тест 8 (v8): hazard-блок убивает ---
+	# v9.1 (консилиум v9, критик-монетизация minor): ГЕРМЕТИЧНОСТЬ. Тест читал
+	# реальный user://save.json; при сохранённом shield:3 щит поглощал смерть и
+	# тест #8 падал (32 pass / 1 fail). Принудительно гасим апгрейды+щиты, чтобы
+	# результат не зависел от сейва машины, на которой гоняют тест.
+	GameState.upgrades = {}
+	player.set("shields", 0)
 	var died_emitted := [false]
 	var conn: Callable = func(): died_emitted[0] = true
 	player.died.connect(conn)
@@ -168,6 +174,9 @@ func _run() -> void:
 		await get_tree().physics_frame
 	_check(player.get("_dead") == true and died_emitted[0], "hazard block kills player")
 	player.died.disconnect(conn)
+
+	# (тест 8b — щит на hazard-платформе — перенесён в конец: он перегружает
+	# уровень и сломал бы тест 9, который зависит от _crumbles синтетического)
 
 	# --- Тест 9 (v8): crumble-платформа исчезает и респавнится ---
 	player.set("_dead", false)
@@ -277,6 +286,100 @@ func _run() -> void:
 	player.set("_dash_time", 0.0)
 	player.call("try_dash")
 	_check(player.get("_dash_time") == 0.0, "dash locked without upgrade")
+
+	# --- 17 (v9.1, MAJOR консилиума v9): щит на hazard-платформе ---
+	# _last_safe НЕ должен писаться на hazard → щит возвращает ДО hazard'а, а не
+	# в него (иначе все заряды 950◈ сгорают на одном блоке и всё равно смерть —
+	# штатная ситуация gauntlet L11/L17). Геометрия — как в генераторе: hazard =
+	# Area3D поверх обычной платформы (y = plat.y + 0.625).
+	GameState.upgrades = {"shield": 1}
+	player.call("apply_upgrades")
+	lvl.call("load_level", {
+		"name": "shield_hazard", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},   # безопасная
+			{"x": 0, "y": 0, "z": -8, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},  # с hazard сверху
+		],
+		"coins": [], "checkpoints": [],
+		"hazards": [{"x": 0, "y": 0.625, "z": -8, "sx": 1.2, "sy": 0.45, "sz": 1.2}],
+		"finish": [0, 1.6, -14], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	player.set("_dead", false)
+	player.call("refill_shields")
+	_check(player.get("shields") == 1, "shield refilled before hazard test")
+	# встаём на безопасную платформу (z=0) — _last_safe фиксируется там
+	player.global_position = Vector3(0, 0.9, 0)
+	player.velocity = Vector3.ZERO
+	for i in 20:
+		await get_tree().physics_frame
+	var safe_before_hz: Vector3 = player.get("_last_safe")
+	_check(absf(safe_before_hz.z) < 1.0, "_last_safe set on safe platform (z=%.1f)" % safe_before_hz.z)
+	# шаг на hazard-платформу (z=-8): on_floor И внутри hazard одновременно
+	var died2 := [false]
+	var conn2: Callable = func(): died2[0] = true
+	player.died.connect(conn2)
+	player.global_position = Vector3(0, 0.9, -8)
+	player.velocity = Vector3.ZERO
+	for i in 6:
+		await get_tree().physics_frame
+	# КЛЮЧ 1: _last_safe НЕ переехал на hazard-платформу
+	var safe_on_hz: Vector3 = player.get("_last_safe")
+	_check(absf(safe_on_hz.z) < 1.0,
+		"hazard floor does NOT update _last_safe (z=%.1f, want ~0)" % safe_on_hz.z)
+	# КЛЮЧ 2: щит поглотил смерть (died НЕ эмитился), игрок жив, щит израсходован,
+	# возвращён на БЕЗОПАСНУЮ платформу (z≈0), а не обратно в hazard
+	_check(player.get("_dead") == false and not died2[0] and player.get("shields") == 0,
+		"shield absorbed hazard death without died-signal (dead=%s shields=%d)" % [player.get("_dead"), player.get("shields")])
+	_check(absf(player.global_position.z) < 1.5,
+		"shield teleport lands AWAY from hazard (z=%.1f, want ~0 not -8)" % player.global_position.z)
+	player.died.disconnect(conn2)
+	GameState.upgrades = {}
+	player.set("shields", 0)
+
+	# --- 18 (v9.1, MAJOR): спидран-таймер НЕ тикает во время интерстишиала ---
+	# show_fullscreen ставит get_tree().paused=true (спека 4.7), _process копает
+	# _time_ms только при not paused. Без SDK (headless) колбэк on_closed
+	# вызывается синхронно, поэтому проверяем сам флаг паузы в обёртке.
+	game.call("load_level", 2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	game.set("_time_ms", 100)
+	game.set("_running", true)
+	var paused_seen := [false]
+	var t_before: int = game.get("_time_ms")
+	# имитируем рекламу: пауза дерева + process-кадры (как во время реального ad)
+	get_tree().paused = true
+	paused_seen[0] = get_tree().paused
+	for i in 10:
+		await get_tree().process_frame
+	var t_during: int = game.get("_time_ms")
+	get_tree().paused = false
+	_check(paused_seen[0] and t_during == t_before,
+		"speedrun timer frozen while tree paused for interstitial (%d -> %d)" % [t_before, t_during])
+	# и наоборот: без паузы таймер честно тикает
+	for i in 5:
+		await get_tree().process_frame
+	_check(game.get("_time_ms") > t_before, "timer resumes after unpause")
+	# прямой тест второй половины механизма: _on_adv_done снимает паузу рекламы.
+	# (show_fullscreen с _sdk_ready=true в headless невыполним — js.ysdk null —
+	# поэтому пауза на показе проверяется чтением кода, а снятие — рантаймом.)
+	get_tree().paused = true
+	Yandex.set("_paused_by_adv", true)
+	Yandex.call("_on_adv_done")
+	_check(get_tree().paused == false and Yandex.get("_paused_by_adv") == false,
+		"_on_adv_done unpauses tree after interstitial (paused=%s)" % get_tree().paused)
+
+	# --- 19 (v9.1, MAJOR): win-double бонус >= menu-RV на всех 21 уровнях ---
+	# (floor RV_WIN_BONUS_FLOOR=40 > RV_COINS=30: инверсия ценности устранена)
+	var floor_ok := true
+	for n in 21:
+		var f2 := FileAccess.open("res://levels/%02d.json" % (n + 1), FileAccess.READ)
+		if f2 == null: floor_ok = false; continue
+		var d2 = JSON.parse_string(f2.get_as_text())
+		f2.close()
+		var lvl_coins: int = ((d2 as Dictionary).get("coins", []) as Array).size()
+		if maxi(lvl_coins + 20, game.RV_WIN_BONUS_FLOOR) < 30: floor_ok = false
+	_check(floor_ok, "win-double bonus (floor %d) >= menu-RV 30 on all 21 levels" % game.RV_WIN_BONUS_FLOOR)
 
 	# восстанавливаем GameState (тесты не должны портить прогресс)
 	GameState.upgrades = _sv_up

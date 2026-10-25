@@ -397,7 +397,7 @@ func _floor_accel_mult() -> float:
 			return 1.8
 	return 1.0
 
-# пол под игроком безопасен для revive-точки? (не лава, не ниже порога)
+# пол под игроком безопасен для revive-точки? (не лава, не hazard, не ниже порога)
 func _floor_is_safe() -> bool:
 	if global_position.y < -3.0:
 		return false  # страховка: слишком низко = над лавой
@@ -408,7 +408,35 @@ func _floor_is_safe() -> bool:
 		var collider = col.get_collider()
 		if collider is Node and collider.is_in_group("lava"):
 			return false
+	# v9.1 (консилиум v9, критик-код MAJOR): hazard — Area3D поверх обычной платформы.
+	# is_on_floor()=true на StaticBody под ним, поэтому _last_safe писался ПРЯМО на
+	# hazard-блок → kill()-щит телепортировал обратно в тот же hazard → все заряды
+	# (950◈) сгорали на одном блоке и всё равно смерть (gauntlet L11/L17). hazard не
+	# даёт slide-коллизий, поэтому опрашиваем пространство на hazard-зоны напрямую.
+	if _overlaps_hazard():
+		return false
 	return true
+
+# игрок сейчас пересекает hazard-зону (Area3D в группе "hazard")?
+func _overlaps_hazard() -> bool:
+	var w := get_world_3d()
+	if w == null: return false
+	var space := w.direct_space_state
+	if space == null: return false
+	var q := PhysicsShapeQueryParameters3D.new()
+	var sph := SphereShape3D.new()
+	sph.radius = 0.4
+	q.shape = sph
+	q.transform = Transform3D(Basis.IDENTITY, global_position)
+	q.collide_with_areas = true
+	q.collide_with_bodies = false
+	q.collision_mask = 0xFFFFFFFF
+	q.exclude = [get_rid()]
+	for h in space.intersect_shape(q, 8):
+		var c = h.get("collider")
+		if c is Node and c.is_in_group("hazard"):
+			return true
+	return false
 
 func _do_jump() -> void:
 	_jumps += 1

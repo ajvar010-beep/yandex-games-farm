@@ -461,31 +461,48 @@ func _floor_collider() -> Node:
 # — защита от случая «mover уехал под другую платформу/hazard».
 func _resolve_safe_pos() -> Vector3:
 	var p := _last_safe
-	if _last_safe_collider is Node3D and is_instance_valid(_last_safe_collider):
-		p = (_last_safe_collider as Node3D).to_global(_last_safe_local)
-	elif _last_safe_collider != null and not is_instance_valid(_last_safe_collider):
-		p = _spawn  # узел пола вообще освобождён — точка в воздухе
+	# v9.3 (консилиум v9.2 minor): is_instance_valid ПЕРЕД `is Node3D` — на freed-
+	# инстансе оператор `is` бросает SCRIPT ERROR («previously freed instance»).
+	if _last_safe_collider != null:
+		if is_instance_valid(_last_safe_collider):
+			if _last_safe_collider is Node3D:
+				p = (_last_safe_collider as Node3D).to_global(_last_safe_local)
+		else:
+			p = _spawn  # узел пола вообще освобождён — точка в воздухе
 	# _spawn (старт/чекпоинт) всегда на статичной платформе без hazard —
 	# валидный фолбэк (генератор это гарантирует, smoke_test проверяет).
 	if not _solid_floor_at(p):
 		p = _spawn
 	return p
 
-# твёрдый ли пол в точке p (raycast вниз на 2м от уровня ног)?
+# v9.3 (консилиум v9.2 MAJOR): твёрдый ли пол в точке p — КАПСУЛ-ОСОЗНАННО.
+# v9.2 проверял ОДИН луч из центра точки: is_on_floor() держится до 0.16м за
+# гранью плиты (капсула r=0.32 опирается на край), _last_safe записывался с
+# таким выносом, и одиночный луч в этой точке мазал мимо своего же пола →
+# щит/revive отбрасывал легальное стояние на _spawn (замер критиков: 342/342
+# over-edge false-negative на узких плитах, до 20% grounded-кадров на L19).
+# 5 лучей (центр + 4 смещения ±0.30 по XZ = радиус капсулы) повторяют опорное
+# пятно капсулы: over-edge-точка валидна, если плита есть хотя бы под частью
+# пятна. Исчезнувшая crumble (collision disabled) по-прежнему false — ни один
+# луч не находит пол (модератор подтвердил пробой: crumble-фикс сохраняется).
 func _solid_floor_at(p: Vector3) -> bool:
 	var w := get_world_3d()
 	if w == null: return false
 	var space := w.direct_space_state
 	if space == null: return false
-	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.3, p - Vector3.UP * 1.7)
-	q.exclude = [get_rid()]
-	q.collide_with_areas = false
-	q.collide_with_bodies = true
-	var hit := space.intersect_ray(q)
-	if hit.is_empty(): return false
-	var c = hit.get("collider")
-	if c is Node and c.is_in_group("lava"): return false
-	return true
+	const R := 0.30
+	var offsets := [Vector3.ZERO, Vector3(R, 0, 0), Vector3(-R, 0, 0), Vector3(0, 0, R), Vector3(0, 0, -R)]
+	for off in offsets:
+		var q := PhysicsRayQueryParameters3D.create(p + off + Vector3.UP * 0.3, p + off - Vector3.UP * 1.7)
+		q.exclude = [get_rid()]
+		q.collide_with_areas = false
+		q.collide_with_bodies = true
+		var hit := space.intersect_ray(q)
+		if hit.is_empty(): continue
+		var c = hit.get("collider")
+		if c is Node and c.is_in_group("lava"): continue  # лава — не пол, пробуем другой луч
+		return true
+	return false
 
 # игрок сейчас пересекает hazard-зону (Area3D в группе "hazard")?
 func _overlaps_hazard() -> bool:

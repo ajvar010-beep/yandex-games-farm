@@ -461,7 +461,7 @@ func _run() -> void:
 	# жив, _resolve_safe_pos() = mover.to_global(_last_safe_local) — точка ЕДЕТ с
 	# платформой. Задаём известный локальный офсет и сверяем с to_global на этом кадре.
 	player.set("_last_safe_collider", mover)
-	player.set("_last_safe_local", Vector3(0.0, 0.5, 0.0))  # v9.2-sync: ЦЕНТР (1.5=край → raycast промах на god)
+	player.set("_last_safe_local", Vector3(0.0, 0.5, 0.0))  # v9.3: ЦЕНТР (1.5=край → граничный raycast флакует на god)
 	var expected: Vector3 = mover.to_global(Vector3(0.0, 0.5, 0.0))
 	var resolved_mover: Vector3 = player.call("_resolve_safe_pos")
 	# Инвариант: resolved == mover.to_global(офсет) на ЭТОМ кадре. Поскольку
@@ -482,6 +482,45 @@ func _run() -> void:
 	var resolved_next: Vector3 = player.call("_resolve_safe_pos")
 	_check(resolved_next.distance_to(expected_next) < 0.01,
 		"resolve tracks animating mover each frame (x=%.2f, Δ=%.4f)" % [resolved_next.x, resolved_next.distance_to(expected_next)])
+
+	# --- 22 (v9.3, MAJOR консилиума v9.2): over-edge стояние на УЗКОЙ статике ---
+	# капсула r=0.32 держит is_on_floor при выносе центра за край плиты; _last_safe
+	# записывается с выносом; v9.2 одиночный луч _solid_floor_at мазал мимо своего же
+	# пола → щит/revive отбрасывал на _spawn (регресс). 5-ray capsule-aware проверка
+	# должна возвращать САМУ точку стояния.
+	GameState.upgrades = {"shield": 1}
+	player.call("apply_upgrades")
+	lvl.call("load_level", {
+		"name": "over_edge", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},   # spawn
+			{"x": 0, "y": 0, "z": -10, "sx": 1.5, "sy": 1, "sz": 1.5, "mat": "stone"},  # узкая
+		],
+		"coins": [], "checkpoints": [], "hazards": [],
+		"finish": [0, 1.6, -16], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	player.set("_dead", false)
+	player.call("refill_shields")
+	# встаём over-edge: центр на 0.20м за краем плиты (край z = -10 - 0.75 = -10.75)
+	player.global_position = Vector3(0, 0.9, -10.95)
+	player.velocity = Vector3.ZERO
+	for i in 20:
+		await get_tree().physics_frame
+	var ls_edge: Vector3 = player.get("_last_safe")
+	# _last_safe записался РЯДОМ с over-edge точкой (is_on_floor держался)
+	_check(absf(ls_edge.z + 10.95) < 0.5 or absf(ls_edge.z + 10.75) < 0.6,
+		"_last_safe recorded at over-edge stance (z=%.2f)" % ls_edge.z)
+	var resolved_edge: Vector3 = player.call("_resolve_safe_pos")
+	# КЛЮЧ: resolve возвращает точку НА узкой плите (z ≈ -10..-11), а не _spawn (z=0)
+	_check(absf(resolved_edge.z + 10.0) < 1.5,
+		"over-edge point KEPT, not bounced to _spawn (z=%.2f, want ~-10 not 0)" % resolved_edge.z)
+	# и _solid_floor_at на over-edge точке = true (5-ray), а в воздухе над лавой = false
+	_check(player.call("_solid_floor_at", Vector3(0, 0.5, -10.95)) == true,
+		"_solid_floor_at(over-edge) true via capsule 5-ray")
+	_check(player.call("_solid_floor_at", Vector3(0, 0.5, 30)) == false,
+		"_solid_floor_at(empty space) false")
+	GameState.upgrades = {}
+	player.set("shields", 0)
 	GameState.upgrades = {}
 	player.set("shields", 0)
 

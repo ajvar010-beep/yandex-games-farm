@@ -129,6 +129,12 @@ func _calc_par(def: Dictionary) -> float:
 	# (scratch/star_param.cjs): 0.7 даёт 21/21 при минимальном раздутии par
 	# (важно: par теперь ещё и знаменатель лидерборд-скора).
 	var par := dist / spd_eff + mover_wait * 0.7 + crumble_n * 0.35 + haz_n * 0.4
+	# v9.2 (консилиум v9.1 minor): лидерборд-par БЕЗ флора 8.0. score=1000×par/time
+	# пропорционален par, и maxf(8.0) раздувал L1 (nat-par 6.7 → 8.0) → кемпинг L1
+	# оставался оптимумом доски (1839 vs L2 1663), вопреки комментарию у submit_score.
+	# Флор звёзд остаётся в _stars_earned — 8.0 нужен там, чтобы пар 3★ на коротком
+	# туториале не был тривиальным; на лидерборд он больше не влияет.
+	_par_raw = par
 	return maxf(8.0, par)
 
 func _procedural_level(n: int) -> Dictionary:
@@ -203,8 +209,12 @@ func _on_finish() -> void:
 	# вознаграждала кемпинг самого короткого lv1 (туториал), а не кампанию 21 уровня:
 	# поздние уровни только ухудшали лучший скор, который хранит setScore. Нормализация
 	# по par: прохождение длинного уровня в par даёт ~1000 (сопоставимо с коротким),
-	# быстрее par → выше. Кемпинг lv1 перестаёт быть оптимумом, прогресс мотивирован.
-	var score: int = maxi(1, int(round(1000.0 * _par_sec / maxf(0.1, _time_ms / 1000.0))))
+	# быстрее par → выше.
+	# v9.2 (minor): берём _par_raw БЕЗ флора 8.0 — флор раздувал par L1 (6.7→8.0)
+	# и кемпинг L1 оставался оптимумом (замер критика: 1839 vs L2 1663). Без флора
+	# теоретический максимум скора одинаков для всех дистанционных уровней (~1944 =
+	# 1000×8.75/4.5), оптимум — играть всю кампанию быстро.
+	var score: int = maxi(1, int(round(1000.0 * _par_raw / maxf(0.1, _time_ms / 1000.0))))
 	Yandex.submit_score("parkour_time", score)
 	_show_win()
 
@@ -409,6 +419,11 @@ func _on_menu() -> void:
 	AudioBus.click()
 	# родитель — GameHolder (без скрипта): Main ищем от корня, иначе софтлок «В меню»
 	get_tree().paused = false
+	# v9.2 (консилиум v9.1 minor): если выход в меню произошёл во время рекламы,
+	# сбросить ad-флаг — иначе запаздывающий _on_adv_done снимет уже ПОЛЬЗОВАТЕЛЬСКУЮ
+	# паузу (рассинхрон состояния). Yandex — autoload, метод всегда доступен.
+	if Yandex.get("_paused_by_adv"):
+		Yandex.set("_paused_by_adv", false)
 	var main := get_tree().root.get_node_or_null("Main")
 	if main:
 		main.back_to_menu()
@@ -459,7 +474,8 @@ func _advance_tutorial(trigger: String = "") -> void:
 			if _tutorial_step == 2:
 				_show_tutorial_step(99)  # скрыть
 
-var _par_sec := 20.0  # par-время уровня: путь / средняя скорость
+var _par_sec := 20.0  # par-время уровня: путь / средняя скорость (с флором 8.0 для звёзд)
+var _par_raw := 20.0  # v9.2: par БЕЗ флора — только для лидерборд-скора (см. _calc_par)
 var _new_record := false
 var _won := false
 
@@ -481,7 +497,11 @@ func _show_win() -> void:
 	var body := GameState.L("time_coins") % [t, coins_collected]
 	if _new_record:
 		body += "\n" + GameState.L("new_record")
-	_show_panel(GameState.L("finish") % _star_str(stars), body, GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
+	_show_panel(GameState.L("finish") % _star_str(stars), body, _double_btn_text(), _on_double_coins, GameState.L("next"), _on_next)
+
+# v9.2: текст кнопки = фактическая сумма бонуса (та же формула, что в _on_double_coins)
+func _double_btn_text() -> String:
+	return GameState.L("double_win") % maxi(coins_collected + 20, RV_WIN_BONUS_FLOOR)
 
 func _on_double_coins() -> void:
 	AudioBus.click()
@@ -493,7 +513,7 @@ func _on_double_coins() -> void:
 		GameState.add_coins(bonus)
 		coins_collected += bonus
 		AudioBus.buy()
-		_show_panel(GameState.L("doubled"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu),
+		_show_panel(GameState.L("bonus_got"), GameState.L("coins_n") % coins_collected, GameState.L("next"), _on_next, GameState.L("menu"), _on_menu),
 		func():
 			# ошибка рекламы — возвращаем панель победы без удвоения
 			_show_win_panel())
@@ -501,7 +521,7 @@ func _on_double_coins() -> void:
 func _show_win_panel() -> void:
 	var t := "%.1f" % (_time_ms / 1000.0)
 	var star_str := _star_str(_stars_earned())
-	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], GameState.L("double"), _on_double_coins, GameState.L("next"), _on_next)
+	_show_panel(GameState.L("finish") % star_str, GameState.L("time_coins") % [t, coins_collected], _double_btn_text(), _on_double_coins, GameState.L("next"), _on_next)
 
 func _on_next() -> void:
 	AudioBus.click()

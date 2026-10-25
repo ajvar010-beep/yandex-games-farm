@@ -1,7 +1,7 @@
 {
   "id": "nubikparkour",
   "engine": "godot-4.7.2-web",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "orientation": "landscape",
   "touch": true,
   "monetization": [

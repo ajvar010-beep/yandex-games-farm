@@ -22,9 +22,18 @@ var _jumps := 0
 var _max_jumps := 2
 var _dead := false
 var _spawn := Vector3.ZERO
-var _last_safe := Vector3.ZERO   # последняя точка на полу — для честного revive
+var _last_safe := Vector3.ZERO   # мировая точка на полу — для честного revive
+# v9.2 (консилиум v9.1, MAJOR): _last_safe — устаревающий снимок мира. На mover'е
+# платформа уезжает, на crumble — исчезает, и щит/платный revive телепортировали в
+# воздух (25 crumble + 100 mover'ов на 19/21 уровне → все заряды впустую + смерть).
+# Храним ссылку на collider + локальный офсет: для движущейся платформы to_global()
+# пересчитывает точку в её ТЕКУЩУЮ позицию (пол «едет» вместе с игроком), для
+# исчезнувшей crumble is_instance_valid() == false → фолбэк на _spawn.
+var _last_safe_collider: Node = null
+var _last_safe_local := Vector3.ZERO
 # v9: прокачка
 var shields := 0                 # щиты на уровень (поглощают смерть) — читает game.gd
+var _shield_lock := false        # v9.2 minor: щит сработал в этом кадре — не списывать второй
 var _dash_cd := 0.0
 var _dash_time := 0.0
 var _dash_dir := Vector3.ZERO
@@ -182,10 +191,14 @@ func _char_texture(_col: Color, seed: int, style: String) -> ImageTexture:
 
 func set_spawn(p: Vector3) -> void:
 	_spawn = p
+	_last_safe = p  # v9.2: старт/чекпоинт всегда на статичном полу — валидный фолбэк
+	_last_safe_collider = null
 
 func respawn() -> void:
 	global_position = _spawn
 	_last_safe = _spawn
+	_last_safe_collider = null  # v9.2: _spawn — статичный старт/чекпоинт, без collider-привязки
+	_shield_lock = false
 	velocity = Vector3.ZERO
 	_dead = false
 	_jumps = 0
@@ -202,11 +215,17 @@ func kill() -> void:
 	# v9: ЩИТ поглощает смерть — мгновенный возврат в последнюю безопасную точку,
 	# без распада на кубики и без панели смерти (игра продолжается). Расход щитов
 	# сохраняется до конца уровня; пополнение — в respawn() (старт/рестарт уровня).
-	# _last_safe гарантированно на настоящем полу (см. _floor_is_safe) — не лава.
+	# v9.2: точка резолвится через _resolve_safe_pos() — collider-aware (mover
+	# уехал → точка едет с ним; crumble исчезла → фолбэк _spawn). Без этого щит
+	# телепортировал в воздух и сгорал впустую (MAJOR консилиума v9.1).
+	# v9.2 minor: guard от двойного списания за один кадр (hazard body_entered +
+	# lava-kill из game._process могут выстрелить синхронно).
 	if shields > 0:
+		if _shield_lock: return  # второй kill() в том же кадре — щит уже сработал
+		_shield_lock = true
 		shields -= 1
 		AudioBus.shield()
-		global_position = _last_safe + Vector3.UP * 0.5
+		global_position = _resolve_safe_pos() + Vector3.UP * 0.5
 		velocity = Vector3.ZERO
 		_jumps = 0
 		_jump_buffer = 0.0
@@ -263,8 +282,9 @@ func _clear_debris() -> void:
 
 func revive() -> void:
 	_dead = false
-	# честный revive: последняя безопасная точка на полу, а не чекпоинт
-	global_position = _last_safe + Vector3.UP * 0.5
+	# честный revive: последняя безопасная точка на полу (v9.2: collider-aware
+	# резолв — не телепортирует в воздух на уехавшем mover'е/исчезнувшей crumble)
+	global_position = _resolve_safe_pos() + Vector3.UP * 0.5
 	velocity = Vector3.ZERO
 	_jumps = 0
 	_jump_buffer = 0.0  # v8.1 (#7): гасим фантомный авто-прыжок (см. tap_jump)
@@ -284,6 +304,7 @@ func _input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
+	_shield_lock = false  # v9.2: новый кадр — щит снова может поглотить смерть
 	# таймеры
 	if _coyote > 0: _coyote -= delta
 	if _jump_buffer > 0: _jump_buffer -= delta
@@ -323,6 +344,10 @@ func _physics_process(delta: float) -> void:
 		# (лава — StaticBody3D с коллизией, is_on_floor на ней true, но revive туда = смерть)
 		if _floor_is_safe():
 			_last_safe = global_position
+			# v9.2: запоминаем КОЛЛАЙДЕР пола + локальный офсет (см. _last_safe_collider)
+			_last_safe_collider = _floor_collider()
+			if _last_safe_collider is Node3D:
+				_last_safe_local = (_last_safe_collider as Node3D).to_local(global_position)
 	else:
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_mult * delta
 
@@ -415,6 +440,51 @@ func _floor_is_safe() -> bool:
 	# даёт slide-коллизий, поэтому опрашиваем пространство на hazard-зоны напрямую.
 	if _overlaps_hazard():
 		return false
+	return true
+
+# v9.2: collider пола под игроком (первая не-lava slide-коллизия кадра) — для
+# привязки _last_safe к движущейся/исчезающей платформе.
+func _floor_collider() -> Node:
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col == null: continue
+		var c = col.get_collider()
+		if c is Node and not c.is_in_group("lava"):
+			return c
+	return null
+
+# v9.2 (консилиум v9.1 MAJOR): актуальная мировая позиция _last_safe.
+# - collider жив (mover уехал) → to_global(локального офсета) = точка ЕДЕТ с полом;
+# - collider мёртв (crumble исчезла) или не Node3D → фолбэк _spawn (старт/чекпоинт,
+#   всегда статичный пол — set_spawn пишет его вместе с _last_safe).
+# Дополнительно проверяем, что в точке resolver'а всё ещё твёрдый пол (raycast вниз)
+# — защита от случая «mover уехал под другую платформу/hazard».
+func _resolve_safe_pos() -> Vector3:
+	var p := _last_safe
+	if _last_safe_collider is Node3D and is_instance_valid(_last_safe_collider):
+		p = (_last_safe_collider as Node3D).to_global(_last_safe_local)
+	elif _last_safe_collider != null and not is_instance_valid(_last_safe_collider):
+		p = _spawn  # узел пола вообще освобождён — точка в воздухе
+	# _spawn (старт/чекпоинт) всегда на статичной платформе без hazard —
+	# валидный фолбэк (генератор это гарантирует, smoke_test проверяет).
+	if not _solid_floor_at(p):
+		p = _spawn
+	return p
+
+# твёрдый ли пол в точке p (raycast вниз на 2м от уровня ног)?
+func _solid_floor_at(p: Vector3) -> bool:
+	var w := get_world_3d()
+	if w == null: return false
+	var space := w.direct_space_state
+	if space == null: return false
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.3, p - Vector3.UP * 1.7)
+	q.exclude = [get_rid()]
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	var hit := space.intersect_ray(q)
+	if hit.is_empty(): return false
+	var c = hit.get("collider")
+	if c is Node and c.is_in_group("lava"): return false
 	return true
 
 # игрок сейчас пересекает hazard-зону (Area3D в группе "hazard")?

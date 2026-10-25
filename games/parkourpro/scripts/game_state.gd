@@ -44,7 +44,13 @@ const TR := {
 	"time_coins": {"ru": "Время: %s сек  •  ◈ %d", "en": "Time: %s s  •  ◈ %d"},
 	"double": {"ru": "◈×2 (видео)", "en": "◈×2 (video)"},
 	"next": {"ru": "Дальше ▶", "en": "Next ▶"},
-	"doubled": {"ru": "◈ Удвоено!", "en": "◈ Doubled!"},
+	"doubled": {"ru": "◈ Удвоено!", "en": "◈ Doubled!"},  # menu daily-double (настоящий ×2)
+	"bonus_got": {"ru": "◈ Бонус получен!", "en": "◈ Bonus received!"},  # v9.2: win-double = честный флэт-бонус
+	# v9.2 (консилиум v9.1 minor): кнопка win-double честно показывает сумму бонуса.
+	# «◈×2» было мёртвой механикой: с флором 40 бонус плоский на всех 21 уровнях
+	# (max монет в уровне = 12 → coins+20 ≤ 32 < 40), собранные монеты ничего не решали.
+	# Отдельный ключ: menu daily-double (настоящий ×2) продолжает использовать "double".
+	"double_win": {"ru": "📺 +%d ◈ (видео)", "en": "📺 +%d ◈ (video)"},
 	"coins_n": {"ru": "Монет: %d", "en": "Coins: %d"},
 	"pause": {"ru": "Пауза", "en": "Paused"},
 	"continue": {"ru": "Продолжить", "en": "Continue"},

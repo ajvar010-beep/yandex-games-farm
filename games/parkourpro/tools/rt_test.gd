@@ -262,6 +262,7 @@ func _run() -> void:
 	player.call("refill_shields")
 	player.set("_dead", false)
 	player.set("_last_safe", Vector3(0, 1.0, 0))
+	player.set("_last_safe_collider", null)  # v9.2: статичный пол — без collider-привязки
 	player.global_position = Vector3(0, 0.9, 0)
 	player.set("shields", 1)
 	player.kill()
@@ -380,6 +381,109 @@ func _run() -> void:
 		var lvl_coins: int = ((d2 as Dictionary).get("coins", []) as Array).size()
 		if maxi(lvl_coins + 20, game.RV_WIN_BONUS_FLOOR) < 30: floor_ok = false
 	_check(floor_ok, "win-double bonus (floor %d) >= menu-RV 30 on all 21 levels" % game.RV_WIN_BONUS_FLOOR)
+
+	# --- 20 (v9.2, MAJOR консилиума v9.1): щит на ИСЧЕЗНУВШЕЙ crumble ---
+	# _last_safe — снимок мира; на crumble платформа рассыпается, и без collider-aware
+	# резолва щит телепортировал в воздух (25 crumble в кампании). Фикс: мёртвый
+	# collider → фолбэк _spawn. Проверяем _resolve_safe_pos() напрямую.
+	GameState.upgrades = {"shield": 1}
+	player.call("apply_upgrades")
+	lvl.call("load_level", {
+		"name": "shield_crumble", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},              # safe (spawn)
+			{"x": 0, "y": 0, "z": -8, "sx": 6, "sy": 1, "sz": 6, "mat": "wood", "crumble": 0.5},
+		],
+		"coins": [], "checkpoints": [], "hazards": [],
+		"finish": [0, 1.6, -14], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	player.set("_dead", false)
+	player.call("set_spawn", Vector3(0, 2, 0))
+	# встаём на crumble-платформу (z=-8), даём _last_safe_collider зафиксироваться
+	player.global_position = Vector3(0, 0.9, -8)
+	player.velocity = Vector3.ZERO
+	for i in 12:
+		await get_tree().physics_frame
+	var crumb_coll = player.get("_last_safe_collider")
+	_check(crumb_coll != null and absf(player.get("_last_safe").z + 8.0) < 1.0,
+		"_last_safe recorded on crumble (collider=%s, z=%.1f)" % [crumb_coll != null, player.get("_last_safe").z])
+	# crumble рассыпалась: РЕАЛЬНЫЙ путь level.gd — body.visible=false +
+	# _disable_collision(body,true); узел остаётся ЖИВ (is_instance_valid=true),
+	# поэтому фолбэк обязан идти через _solid_floor_at (raycast не находит пол).
+	if crumb_coll is Node3D:
+		crumb_coll.visible = false
+		for ch in crumb_coll.get_children():
+			if ch is CollisionShape3D:
+				ch.disabled = true
+	await get_tree().physics_frame
+	var resolved_crumb: Vector3 = player.call("_resolve_safe_pos")
+	# пол в stale-точке исчез → фолбэк _spawn (z=0), НЕ точка на исчезнувшей crumble (z=-8)
+	_check(absf(resolved_crumb.z) < 1.0,
+		"vanished crumble -> shield resolves to _spawn (z=%.1f, want ~0 not -8)" % resolved_crumb.z)
+	# и щит-телепорт реально спасает: kill() на воздухе у crumble → жив, заряд списан
+	player.set("_dead", false)
+	player.call("refill_shields")
+	player.kill()
+	_check(player.get("_dead") == false and player.get("shields") == 0
+		and absf(player.global_position.z) < 1.5,
+		"shield on vanished crumble lands on safe spawn (z=%.1f, alive=%s)" % [player.global_position.z, not player.get("_dead")])
+
+	# --- 21 (v9.2, MAJOR): щит на УЕХАВШЕМ mover'е ---
+	# точка _last_safe должна ЕХАТЬ с платформой (to_global локального офсета), а не
+	# оставаться в stale-мировой позиции (100 mover'ов на 19/21 уровне).
+	lvl.call("load_level", {
+		"name": "shield_mover", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},
+			{"x": 8, "y": 0, "z": 0, "sx": 3, "sy": 1, "sz": 3, "mat": "stone",
+			 "move": {"axis": "x", "range": 3.0, "speed": 2.2}},
+		],
+		"coins": [], "checkpoints": [], "hazards": [],
+		"finish": [16, 1.6, 0], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	player.set("_dead", false)
+	player.call("refill_shields")
+	var traps: Array = lvl.get("_traps")
+	_check(traps.size() == 1, "mover registered in _traps (%d)" % traps.size())
+	var mover: Node3D = traps[0]["node"]
+	# сажаем игрока на mover, ждём фиксации _last_safe_collider == mover
+	player.global_position = Vector3(mover.global_position.x, mover.global_position.y + 1.0, 0)
+	player.velocity = Vector3.ZERO
+	var got_mover := false
+	for i in 40:
+		await get_tree().physics_frame
+		if player.get("_last_safe_collider") == mover:
+			got_mover = true
+			break
+	_check(got_mover, "_last_safe_collider bound to mover after landing")
+	# v9.2: проверяем МЕХАНИЗМ collider-aware резолва напрямую, не борясь с синус-
+	# анимацией level._process (mover качается каждый кадр). Инвариант: пока collider
+	# жив, _resolve_safe_pos() = mover.to_global(_last_safe_local) — точка ЕДЕТ с
+	# платформой. Задаём известный локальный офсет и сверяем с to_global на этом кадре.
+	player.set("_last_safe_collider", mover)
+	player.set("_last_safe_local", Vector3(1.5, 0.5, 0.0))
+	var expected: Vector3 = mover.to_global(Vector3(1.5, 0.5, 0.0))
+	var resolved_mover: Vector3 = player.call("_resolve_safe_pos")
+	# Инвариант: resolved == mover.to_global(офсет) на ЭТОМ кадре. Поскольку
+	# _resolve_safe_pos() всегда берёт ТЕКУЩИЙ global_transform collider'а, точка
+	# следует за mover'ом по построению — stale-баг (фикс-позиция уехавшей платформы)
+	# закрыт. Дополнительно: глобальная позиция mover'а меняется от кадра к кадру
+	# (синус-анимация), а resolved каждый раз совпадает с to_global — не залипает.
+	_check(resolved_mover.distance_to(expected) < 0.01,
+		"resolve follows mover via to_global (Δ=%.3f)" % resolved_mover.distance_to(expected))
+	# следующий кадр — снова точное совпадение с to_global (не залипшая копия).
+	# Требовать dx>0 нельзя: у пика синуса движение за кадр ~0 (флак).
+	# ВАЖНО: убираем игрока с mover'а в воздух — иначе _physics_process (is_on_floor)
+	# перезапишет _last_safe_local реальной точкой стояния и сравнение собьётся.
+	player.global_position = Vector3(0, -4.0, 0)
+	player.velocity = Vector3.ZERO
+	await get_tree().physics_frame
+	var expected_next: Vector3 = mover.to_global(Vector3(1.5, 0.5, 0.0))
+	var resolved_next: Vector3 = player.call("_resolve_safe_pos")
+	_check(resolved_next.distance_to(expected_next) < 0.01,
+		"resolve tracks animating mover each frame (x=%.2f, Δ=%.4f)" % [resolved_next.x, resolved_next.distance_to(expected_next)])
+	GameState.upgrades = {}
+	player.set("shields", 0)
 
 	# восстанавливаем GameState (тесты не должны портить прогресс)
 	GameState.upgrades = _sv_up

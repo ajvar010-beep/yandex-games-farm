@@ -137,6 +137,15 @@ func show_fullscreen(on_closed: Callable = Callable()) -> void:
 		# вне Яндекса рекламы нет — просто продолжаем
 		if on_closed.is_valid(): on_closed.call()
 		return
+	# v9.2 (консилиум v9.1 minor): guard на js.ysdk.adv ДО паузы/mute — иначе
+	# синхронный throw (adv undefined) оставлял дерево на паузе БЕЗ единого
+	# колбэка = жёсткий софтлок (регресс фикса №2: до паузы throw просто ронял
+	# показ, игра продолжалась). По образцу show_banner.
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk.adv == null or js.ysdk.adv.showFullscreenAdv == null:
+		_adv_cb_off = Callable()  # не оставлять висеть — late-колбэк не должен дублить
+		if on_closed.is_valid(): on_closed.call()
+		return
 	AudioBus.mute(true)
 	gameplay_stop()
 	# v9.1 (консилиум v9, критик-монетизация MAJOR): спека 4.7 — во время
@@ -147,7 +156,6 @@ func show_fullscreen(on_closed: Callable = Callable()) -> void:
 	if not get_tree().paused:
 		_paused_by_adv = true
 		get_tree().paused = true
-	var js = JavaScriptBridge.get_interface("window")
 	# ВАЖНО: Object.create() без аргумента бросает TypeError в JS-движке;
 	# JavaScriptBridge.create_object("Object") = new Object() = {} (документированный API)
 	var opts = JavaScriptBridge.create_object("Object")
@@ -167,10 +175,16 @@ func show_rewarded(on_reward: Callable, on_fail: Callable = Callable()) -> void:
 		elif on_fail.is_valid():
 			on_fail.call()
 		return
+	# v9.2: симметричный guard — throw на showRewardedVideo без него оставлял бы
+	# игрока с замьюченным звуком, остановленным GameplayAPI и без fail-колбэка.
+	var js = JavaScriptBridge.get_interface("window")
+	if js.ysdk.adv == null or js.ysdk.adv.showRewardedVideo == null:
+		_rv_settled = true
+		if on_fail.is_valid(): on_fail.call()
+		return
 	AudioBus.mute(true)
 	gameplay_stop()
 	_rv_settled = false
-	var js = JavaScriptBridge.get_interface("window")
 	var opts = JavaScriptBridge.create_object("Object")
 	opts.callbacks = JavaScriptBridge.create_object("Object")
 	opts.callbacks.onRewarded = _js_cb_reward

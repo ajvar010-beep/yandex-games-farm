@@ -17,6 +17,10 @@ var _js_cb_err: JavaScriptObject
 var _js_lb_err: JavaScriptObject
 var _rv_settled := false  # reward ИЛИ fail уже доставлен — не вызывать fail дважды (onError→onClose)
 var _paused_by_adv := false  # v9.1: мы поставили дерево на паузу ради fullscreen-рекламы
+var _in_menu := true  # v9.4: сейчас меню — gameplay_start() не должен срабатывать (late ad-колбэк)
+
+func set_in_menu(v: bool) -> void:
+	_in_menu = v
 # v8.1 (консилиум v8 #9): ВСЕ async-колбэки SDK должны ЖИТЬ до резолва промиса.
 # JavaScriptObject — RefCounted: inline-темпарарь освобождается в конце statement,
 # а .then/.catch/onClose/onError срабатывают на следующем тике → get_proxied_value(id)
@@ -118,6 +122,11 @@ func _cb(fn: Callable) -> JavaScriptObject:
 	return obj
 
 func gameplay_start() -> void:
+	# v9.4 (консилиум v9.2 minor): гейт от late-вызова. Если игрок вышел в меню
+	# во время fullscreen-рекламы, запаздывающий onClose (_on_adv_done) дёргал
+	# gameplay_start() уже В МЕНЮ → GameplayAPI оставался «started» (нарушение
+	# спеки: в меню геймплей должен быть остановлен). main.gd управляет флагом.
+	if _in_menu: return
 	if not _sdk_ready: return
 	var js = JavaScriptBridge.get_interface("window")
 	if js.ysdk.features != null and js.ysdk.features.GameplayAPI != null:

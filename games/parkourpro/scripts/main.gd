@@ -9,6 +9,7 @@ var _game: Node = null
 func _ready() -> void:
 	GameState.load_data()
 	menu.show()
+	Yandex.set_in_menu(true)  # v9.4: late ad-колбэк не должен стартовать геймплей в меню
 	Yandex.gameplay_stop()
 	# баннер показывается, когда SDK готов (асинхронно) — если мы всё ещё в меню
 	if Yandex.is_ready():
@@ -22,6 +23,7 @@ func _maybe_show_banner() -> void:
 
 func start_level(level: int) -> void:
 	menu.hide()
+	Yandex.set_in_menu(false)  # v9.4
 	Yandex.hide_banner()  # баннер мешает геймплею
 	if _game:
 		_game.queue_free()
@@ -32,6 +34,7 @@ func start_level(level: int) -> void:
 	Yandex.gameplay_start()
 
 func back_to_menu() -> void:
+	Yandex.set_in_menu(true)  # v9.4: гейтим late gameplay_start из ad-колбэка
 	if _game:
 		_game.queue_free()
 		_game = null

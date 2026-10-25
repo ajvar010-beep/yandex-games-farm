@@ -481,19 +481,28 @@ func _resolve_safe_pos() -> Vector3:
 # таким выносом, и одиночный луч в этой точке мазал мимо своего же пола →
 # щит/revive отбрасывал легальное стояние на _spawn (замер критиков: 342/342
 # over-edge false-negative на узких плитах, до 20% grounded-кадров на L19).
-# 5 лучей (центр + 4 смещения ±0.30 по XZ = радиус капсулы) повторяют опорное
-# пятно капсулы: over-edge-точка валидна, если плита есть хотя бы под частью
-# пятна. Исчезнувшая crumble (collision disabled) по-прежнему false — ни один
-# луч не находит пол (модератор подтвердил пробой: crumble-фикс сохраняется).
+# v9.4 (консилиум v9.3 minor): 9 лучей — плюс-паттерн v9.3 (центр + ±0.30 по
+# осям) НЕ видел ДИАГОНАЛЬНЫХ углов (центр за гранью по обеим осям сразу,
+# FN 96.9% на corner-стояниях) → добавлены 4 диагонали ±0.21 (радиус ≈0.30).
+# Глубина луча 2.0м → 0.5м: валиден только пол ПРЯМО под ногами. Это чинит
+# двухъярусный B2-кейс (исчезнувшая crumble над нижней плитой в 1.4м — луч
+# 2м находил низ и resolve возвращал точку в ВОЗДУХЕ; контракт «vanished
+# crumble → _spawn» нарушался). Исчезнувшая crumble (collision disabled)
+# по-прежнему false — ни один луч не находит пол.
 func _solid_floor_at(p: Vector3) -> bool:
 	var w := get_world_3d()
 	if w == null: return false
 	var space := w.direct_space_state
 	if space == null: return false
 	const R := 0.30
-	var offsets := [Vector3.ZERO, Vector3(R, 0, 0), Vector3(-R, 0, 0), Vector3(0, 0, R), Vector3(0, 0, -R)]
+	const D := 0.21  # диагональ: sqrt(2×0.21²) ≈ 0.297 ≈ радиус капсулы
+	var offsets := [
+		Vector3.ZERO,
+		Vector3(R, 0, 0), Vector3(-R, 0, 0), Vector3(0, 0, R), Vector3(0, 0, -R),
+		Vector3(D, 0, D), Vector3(-D, 0, D), Vector3(D, 0, -D), Vector3(-D, 0, -D),
+	]
 	for off in offsets:
-		var q := PhysicsRayQueryParameters3D.create(p + off + Vector3.UP * 0.3, p + off - Vector3.UP * 1.7)
+		var q := PhysicsRayQueryParameters3D.create(p + off + Vector3.UP * 0.3, p + off - Vector3.UP * 0.5)
 		q.exclude = [get_rid()]
 		q.collide_with_areas = false
 		q.collide_with_bodies = true

@@ -16,3 +16,4 @@ scratch_vid/
 games/*/_probe/
 games/*/tools/critic_probe*
 games/*/tools/zz_probe*
+games/*/tools/mod_v*

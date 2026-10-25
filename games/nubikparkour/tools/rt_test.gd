@@ -516,11 +516,73 @@ func _run() -> void:
 		"over-edge point KEPT, not bounced to _spawn (z=%.2f, want ~-10 not 0)" % resolved_edge.z)
 	# и _solid_floor_at на over-edge точке = true (5-ray), а в воздухе над лавой = false
 	_check(player.call("_solid_floor_at", Vector3(0, 0.5, -10.95)) == true,
-		"_solid_floor_at(over-edge) true via capsule 5-ray")
+		"_solid_floor_at(over-edge) true via capsule 9-ray")
 	_check(player.call("_solid_floor_at", Vector3(0, 0.5, 30)) == false,
 		"_solid_floor_at(empty space) false")
-	GameState.upgrades = {}
-	player.set("shields", 0)
+
+	# --- 23 (v9.4, minor консилиума v9.3): ДИАГОНАЛЬНЫЙ угол плиты ---
+	# 5-ray плюс-паттерн v9.3 не видел corner-стояния (центр за гранью по ОБОИМ
+	# осям, FN 96.9%). 9-ray с диагоналями ±0.21 должен находить пол под углом.
+	# ВАЖНО: level.gd сужает sx на difficulty (sx/diff) — god (1.3) плита 3→2.31,
+	# поэтому точку угла СЧИТАЕМ от реальной полуширины (та же формула maxf(1.2,sx/diff)),
+	# иначе хардкод-координата промахивается на god. Плита 3×3 в (0,0,-20).
+	lvl.call("load_level", {
+		"name": "corner", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": -20, "sx": 3, "sy": 1, "sz": 3, "mat": "stone"},
+		],
+		"coins": [], "checkpoints": [], "hazards": [],
+		"finish": [0, 1.6, -26], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	for i in 3:
+		await get_tree().physics_frame
+	var eff_half: float = maxf(1.2, 3.0 / Variant.difficulty) * 0.5  # sx сужается на difficulty
+	var z_half := 1.5  # sz НЕ сужается (level.gd трогает только sx) — всегда 3/2
+	# точка за углом по обеим осям на +0.12 — капсула (r=0.32) ещё опирается на угол
+	var corner_pt := Vector3(eff_half + 0.12, 0.5, -20.0 + z_half + 0.12)
+	_check(player.call("_solid_floor_at", corner_pt) == true,
+		"_solid_floor_at(diagonal corner +0.12 over, hx=%.2f) true via 9-ray" % eff_half)
+	var far_pt := Vector3(eff_half + 0.9, 0.5, -20.0 + z_half + 0.9)
+	_check(player.call("_solid_floor_at", far_pt) == false,
+		"_solid_floor_at(far off corner) false")
+
+	# --- 24 (v9.4, minor консилиума v9.3): двухъярусная исчезнувшая crumble ---
+	# Верх (crumble) исчез, НИЗ в 1.4м существует. Луч v9.3 глубиной 2м находил
+	# нижний ярус → resolve возвращал точку в ВОЗДУХЕ над низом (контракт
+	# «vanished crumble → _spawn» нарушен). Глубина 0.5м должна вернуть false.
+	lvl.call("load_level", {
+		"name": "twotier", "start": [0, 2, 0],
+		"platforms": [
+			{"x": 0, "y": 0, "z": 0, "sx": 6, "sy": 1, "sz": 6, "mat": "grass"},          # spawn
+			{"x": 0, "y": 0, "z": -30, "sx": 4, "sy": 1, "sz": 4, "mat": "wood", "crumble": 0.5},  # верх
+			{"x": 0, "y": -1.4, "z": -30, "sx": 4, "sy": 1, "sz": 4, "mat": "stone"},      # низ
+		],
+		"coins": [], "checkpoints": [], "hazards": [],
+		"finish": [0, 1.6, -36], "lava_y": -6.0, "lava_size": 220.0,
+	})
+	player.set("_dead", false)
+	# встаём на верх (crumble), фиксируем _last_safe
+	player.global_position = Vector3(0, 0.9, -30)
+	player.velocity = Vector3.ZERO
+	for i in 12:
+		await get_tree().physics_frame
+	var ls_top: Vector3 = player.get("_last_safe")
+	_check(absf(ls_top.z + 30.0) < 1.0, "_last_safe on top crumble tier (z=%.1f)" % ls_top.z)
+	# crumble исчезла (реальный путь level.gd: visible=false + disabled collision)
+	var crs2: Array = lvl.get("_crumbles")
+	if crs2.size() > 0:
+		var cb: PhysicsBody3D = crs2[0]["body"]
+		cb.visible = false
+		for ch in cb.get_children():
+			if ch is CollisionShape3D:
+				ch.disabled = true
+	await get_tree().physics_frame
+	# точка НАД исчезнувшим верхом: глубина 0.5м НЕ должна достать низ в 1.4м
+	_check(player.call("_solid_floor_at", Vector3(0, 0.5, -30)) == false,
+		"_solid_floor_at over vanished crumble: 0.5m depth does NOT find tier 1.4m below")
+	var resolved_tier: Vector3 = player.call("_resolve_safe_pos")
+	_check(absf(resolved_tier.z) < 1.0,
+		"vanished two-tier crumble -> _spawn, NOT mid-air point (z=%.1f)" % resolved_tier.z)
 	GameState.upgrades = {}
 	player.set("shields", 0)
 

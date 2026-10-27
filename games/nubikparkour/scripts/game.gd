@@ -562,6 +562,9 @@ var _joy_base: Control
 var _joy_knob: Control
 var _joy_active := false
 var _joy_id := -1
+# v10.1: свайп по правой половине = вращение камеры; тап без движения = прыжок
+var _cam_touch_id := -1
+var _cam_touch_moved := Vector2.ZERO
 var _joy_center := Vector2.ZERO
 
 func _build_touch_input() -> void:
@@ -636,19 +639,35 @@ func _input(event: InputEvent) -> void:
 				# global_rect читаем в момент тапа (не кэш) — всегда верен при ресайзе.
 				pass
 			else:
-				player.tap_jump()
+				# v10.1 (отзыв живого игрока): правая половина — НЕ мгновенный прыжок,
+				# а потенциальный свайп камеры: прыжок срабатывает на ОТПУСКАНИИ, если
+				# палец почти не сдвинулся (иначе свайп камеры дёргал бы прыжок).
+				_cam_touch_id = event.index
+				_cam_touch_moved = Vector2.ZERO
 		else:
 			if event.index == _joy_id:
 				_joy_active = false
 				_reset_joy()
-	elif event is InputEventScreenDrag and _joy_active and event.index == _joy_id:
-		var d: Vector2 = event.position - _joy_center
-		var maxr := 90.0
-		if d.length() > maxr:
-			d = d.normalized() * maxr
-		_joy_knob.position = Vector2(65, 65) + d
-		# подменяем ввод
-		_set_virtual_move(d / maxr)
+			elif event.index == _cam_touch_id:
+				# тап (палец почти не двигался) = прыжок; свайп уже прокрутил камеру
+				if _cam_touch_moved.length() < 24.0 and player:
+					player.tap_jump()
+				_cam_touch_id = -1
+	elif event is InputEventScreenDrag:
+		if _joy_active and event.index == _joy_id:
+			var d: Vector2 = event.position - _joy_center
+			var maxr := 90.0
+			if d.length() > maxr:
+				d = d.normalized() * maxr
+			_joy_knob.position = Vector2(65, 65) + d
+			# подменяем ввод
+			_set_virtual_move(d / maxr)
+		elif event.index == _cam_touch_id and cam_rig:
+			# v10.1: свайп по правой половине КРУТИТ КАМЕРУ пальцем (раньше вращение
+			# было только мышью с ПКМ — на тач-устройстве камера была неуправляема,
+			# а авто-доворот «жил своей жизнью»). rotate_cam глушит авто-доворот.
+			_cam_touch_moved += event.relative
+			cam_rig.rotate_cam(event.relative.x * 1.6, event.relative.y * 1.6)
 
 func _reset_joy() -> void:
 	_joy_knob.position = Vector2(65, 65)

@@ -340,17 +340,36 @@ func save_data() -> void:
 
 func load_data() -> void:
 	# облако грузит Yandex позже; тут локальный fallback
+	_skin_from_save = false
 	var f := FileAccess.open("user://save.json", FileAccess.READ)
 	if f:
 		var parsed = JSON.parse_string(f.get_as_text())
 		f.close()
 		if parsed is Dictionary:
 			_apply(parsed)
+	# v10.1 (отзыв живого игрока): «Про Паркур» показывал стивоподобного Нуба —
+	# current_skin по умолчанию "nub" ВО ВСЕХ трёх играх серии. Каждая игра должна
+	# носить СВОЙ вариант: при свежем/старом сейве БЕЗ явного выбора скина
+	# экипируем Variant.id (и разблокируем его). Явный выбор игрока (skin в сейве)
+	# НЕ перетираем — иначе магазинная экипировка слетала бы каждую загрузку.
+	_apply_variant_skin()
+
+var _skin_from_save := false
+
+func _apply_variant_skin() -> void:
+	var vid: String = str(Variant.id)
+	if not SKINS.has(vid): return
+	if vid not in unlocked_skins:
+		unlocked_skins.append(vid)
+	if not _skin_from_save:
+		current_skin = vid
 
 func _apply(d: Dictionary) -> void:
 	coins = int(d.get("coins", 0))
 	unlocked_skins = Array(d.get("unlocked", ["nub"]))
-	current_skin = str(d.get("skin", "nub"))
+	if d.has("skin"):
+		current_skin = str(d["skin"])
+		_skin_from_save = true
 	max_level = int(d.get("max_level", 1))
 	sound_on = bool(d.get("sound", true))
 	best_times = Dictionary(d.get("best", {}))

@@ -64,11 +64,24 @@ func _process(delta: float) -> void:
 func rotate_cam(dx: float, dy: float) -> void:
 	_yaw -= dx * 0.004
 	_pitch = clampf(_pitch - dy * 0.003, -0.35, 0.5)
+	# v10.1 (отзыв живого игрока): ручное вращение ГЛУШИТ авто-доворот на 2.5с.
+	# Раньше _process_auto каждый кадр возвращал yaw к маршруту → камера «жила
+	# своей жизнью» и поворот пальцем мгновенно отбирался обратно.
+	_manual_hold = MANUAL_HOLD
 
 # авто-камера: плавно доворачивает за игроком (чтобы на мобиле не надо было крутить)
 var _auto_follow := true
+# v10.1: окно «игрок сам крутит камеру» — авто-доворот не мешает
+const MANUAL_HOLD := 2.5
+var _manual_hold := 0.0
+
+func is_manual() -> bool:
+	return _manual_hold > 0.0
 
 func _process_auto(delta: float) -> void:
+	if _manual_hold > 0.0:
+		_manual_hold -= delta
+		return  # игрок только что крутил камеру сам — не доворачиваем
 	if not _auto_follow or not target:
 		return
 	# v8.1 (консилиум v8 #6): цель — точка МАРШРУТА впереди игрока (Level.route_ahead_point),

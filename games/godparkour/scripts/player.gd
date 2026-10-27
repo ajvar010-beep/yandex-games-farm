@@ -71,38 +71,62 @@ func apply_upgrades() -> void:
 func refill_shields() -> void:
 	shields = GameState.upgrade_level("shield")
 
+func _part_mat(c: Color, seed: int, style: String) -> StandardMaterial3D:
+	# материал части тела: цвет из палитры скина + та же шумовая/bevel-текстура
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.albedo_texture = _char_texture(c, seed, style)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	m.roughness = 0.7
+	return m
+
 func _build_visual() -> void:
 	_mesh = Node3D.new()
 	add_child(_mesh)
-	var col: Color = GameState.SKINS.get(GameState.current_skin, GameState.SKINS["nub"])["color"]
-	_body_mat = StandardMaterial3D.new()
-	_body_mat.albedo_color = col
-	_body_mat.albedo_texture = _char_texture(col, 1234, "body")
-	_body_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	_body_mat.roughness = 0.7
-	_head_mat = StandardMaterial3D.new()
-	_head_mat.albedo_color = col.lightened(0.35)
-	_head_mat.albedo_texture = _char_texture(col.lightened(0.35), 5678, "head")
-	_head_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	# тело
+	# v10: скин = ПАЛИТРА частей тела (кожа/волосы/футболка/штаны/ботинки) — как
+	# классический персонаж Minecraft (витрина make_thumb.cjs рисует того же Нуба).
+	var skin: Dictionary = GameState.SKINS.get(GameState.current_skin, GameState.SKINS["nub"])
+	var pal: Dictionary = skin.get("pal", {})
+	var c_skin: Color = pal.get("skin", Color(0.95, 0.8, 0.6))
+	var c_hair: Color = pal.get("hair", Color(0.25, 0.15, 0.1))
+	var c_shirt: Color = pal.get("shirt", skin.get("color", Color(0.3, 0.6, 0.9)))
+	var c_pants: Color = pal.get("pants", c_shirt.darkened(0.4))
+	var c_shoes: Color = pal.get("shoes", Color(0.2, 0.2, 0.22))
+	var c_eye: Color = pal.get("eye", Color(0.08, 0.08, 0.12))
+	var mat_skin := _part_mat(c_skin, 5678, "head")
+	var mat_hair := _part_mat(c_hair, 9012, "head")
+	var mat_shirt := _part_mat(c_shirt, 1234, "body")
+	var mat_pants := _part_mat(c_pants, 3456, "body")
+	var mat_shoes := _part_mat(c_shoes, 7890, "body")
+	_body_mat = mat_shirt
+	_head_mat = mat_skin
+	# торс (футболка)
 	var body := MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = Vector3(0.6, 0.7, 0.35)
 	body.mesh = bm
 	body.position.y = 0.85
-	body.material_override = _body_mat
+	body.material_override = mat_shirt
 	_mesh.add_child(body)
-	# голова
+	# голова (кожа)
 	var head := MeshInstance3D.new()
 	var hm := BoxMesh.new()
 	hm.size = Vector3(0.55, 0.5, 0.55)
 	head.mesh = hm
 	head.position.y = 1.45
-	head.material_override = _head_mat
+	head.material_override = mat_skin
 	_mesh.add_child(head)
+	# волосы (плита поверх головы, чуть шире — читается как причёска)
+	var hair := MeshInstance3D.new()
+	var hairm := BoxMesh.new()
+	hairm.size = Vector3(0.58, 0.16, 0.58)
+	hair.mesh = hairm
+	hair.position.y = 1.66
+	hair.material_override = mat_hair
+	_mesh.add_child(hair)
 	# глаза + брови + рот (лицо на +z, вперёд по движению)
 	var face_mat := StandardMaterial3D.new()
-	face_mat.albedo_color = Color(0.08, 0.08, 0.12)
+	face_mat.albedo_color = c_eye
 	for sx in [-1.0, 1.0]:
 		var eye := MeshInstance3D.new()
 		var em := BoxMesh.new()
@@ -111,13 +135,12 @@ func _build_visual() -> void:
 		eye.position = Vector3(sx * 0.13, 1.47, 0.29)
 		eye.material_override = face_mat
 		_mesh.add_child(eye)
-		# бровь над глазом — придаёт «направление взгляда»
 		var brow := MeshInstance3D.new()
 		var bm2 := BoxMesh.new()
 		bm2.size = Vector3(0.11, 0.025, 0.02)
 		brow.mesh = bm2
 		brow.position = Vector3(sx * 0.13, 1.55, 0.29)
-		brow.material_override = face_mat
+		brow.material_override = mat_hair
 		_mesh.add_child(brow)
 	# рот
 	var mouth := MeshInstance3D.new()
@@ -127,26 +150,40 @@ func _build_visual() -> void:
 	mouth.position = Vector3(0, 1.33, 0.29)
 	mouth.material_override = face_mat
 	_mesh.add_child(mouth)
-	# ноги
+	# ноги (штаны) + ботинки-дочерние (качаются вместе с ногой, debris их дублирует)
 	for sx in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
 		var lm := BoxMesh.new()
 		lm.size = Vector3(0.22, 0.5, 0.3)
 		leg.mesh = lm
 		leg.position = Vector3(sx * 0.16, 0.25, 0.0)
-		leg.material_override = _body_mat
+		leg.material_override = mat_pants
 		leg.name = "Leg" + ("L" if sx < 0 else "R")
 		_mesh.add_child(leg)
-	# руки (качаются при беге)
+		var shoe := MeshInstance3D.new()
+		var sm := BoxMesh.new()
+		sm.size = Vector3(0.23, 0.12, 0.33)
+		shoe.mesh = sm
+		shoe.position = Vector3(0, -0.2, 0.015)
+		shoe.material_override = mat_shoes
+		leg.add_child(shoe)
+	# руки (кожа) + рукав-дочерний (футболка) — качаются при беге
 	for sx in [-1.0, 1.0]:
 		var arm := MeshInstance3D.new()
 		var am := BoxMesh.new()
 		am.size = Vector3(0.18, 0.55, 0.25)
 		arm.mesh = am
 		arm.position = Vector3(sx * 0.42, 0.95, 0.0)
-		arm.material_override = _body_mat
+		arm.material_override = mat_skin
 		arm.name = "Arm" + ("L" if sx < 0 else "R")
 		_mesh.add_child(arm)
+		var sleeve := MeshInstance3D.new()
+		var slm := BoxMesh.new()
+		slm.size = Vector3(0.19, 0.28, 0.26)
+		sleeve.mesh = slm
+		sleeve.position = Vector3(0, 0.14, 0.0)
+		sleeve.material_override = mat_shirt
+		arm.add_child(sleeve)
 	# коллизия
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()

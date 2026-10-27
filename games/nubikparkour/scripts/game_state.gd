@@ -122,13 +122,35 @@ func set_lang(l: String) -> void:
 		lang = nl
 		lang_changed.emit()
 
+# v10: скин = ПАЛИТРА частей тела (кожа/волосы/футболка/штаны/ботинки) — как
+# классический персонаж Minecraft: витрина (make_thumb.cjs) и игра рисуют ОДНОГО
+# персонажа. "color" оставлен как основной тон (превью кнопок в меню).
+# Нуб = каноничный нубик: жёлтая кожа, тёмные волосы, бирюзовая футболка, синие штаны.
 const SKINS := {
-	"nub":  {"name": "Нуб",   "color": Color(0.35, 0.75, 0.35), "cost": 0,    "rv": false},
-	"pro":  {"name": "Про",   "color": Color(0.25, 0.45, 0.95), "cost": 80,   "rv": false},
-	"samurai": {"name": "Самурай", "color": Color(0.95, 0.35, 0.25), "cost": 150, "rv": false},
-	"god":  {"name": "Бог",   "color": Color(1.0, 0.85, 0.20), "cost": 0,    "rv": true},
-	"neon": {"name": "Неон",  "color": Color(0.9, 0.2, 0.9),   "cost": 250,  "rv": false},
-	"hacker": {"name": "Хакер", "color": Color(0.05, 0.18, 0.08), "cost": 666, "rv": false},
+	"nub":  {"name": "Нуб",   "color": Color(0.13, 0.71, 0.69), "cost": 0,    "rv": false,
+		"pal": {"skin": Color(1.00, 0.85, 0.45), "hair": Color(0.29, 0.18, 0.11),
+			"shirt": Color(0.13, 0.71, 0.69), "pants": Color(0.23, 0.27, 0.66),
+			"shoes": Color(0.33, 0.33, 0.36)}},
+	"pro":  {"name": "Про",   "color": Color(0.25, 0.45, 0.95), "cost": 80,   "rv": false,
+		"pal": {"skin": Color(0.94, 0.75, 0.60), "hair": Color(0.16, 0.14, 0.12),
+			"shirt": Color(0.25, 0.45, 0.95), "pants": Color(0.16, 0.18, 0.28),
+			"shoes": Color(0.10, 0.10, 0.12)}},
+	"samurai": {"name": "Самурай", "color": Color(0.95, 0.35, 0.25), "cost": 150, "rv": false,
+		"pal": {"skin": Color(0.93, 0.78, 0.62), "hair": Color(0.10, 0.08, 0.08),
+			"shirt": Color(0.85, 0.22, 0.15), "pants": Color(0.22, 0.20, 0.24),
+			"shoes": Color(0.12, 0.10, 0.10)}},
+	"god":  {"name": "Бог",   "color": Color(1.0, 0.85, 0.20), "cost": 0,    "rv": true,
+		"pal": {"skin": Color(0.98, 0.88, 0.72), "hair": Color(1.00, 0.96, 0.85),
+			"shirt": Color(1.00, 0.85, 0.20), "pants": Color(0.95, 0.92, 0.84),
+			"shoes": Color(0.85, 0.70, 0.35)}},
+	"neon": {"name": "Неон",  "color": Color(0.9, 0.2, 0.9),   "cost": 250,  "rv": false,
+		"pal": {"skin": Color(0.85, 0.72, 0.95), "hair": Color(0.95, 0.30, 0.95),
+			"shirt": Color(0.75, 0.15, 0.85), "pants": Color(0.25, 0.10, 0.40),
+			"shoes": Color(0.15, 0.08, 0.25)}},
+	"hacker": {"name": "Хакер", "color": Color(0.05, 0.18, 0.08), "cost": 666, "rv": false,
+		"pal": {"skin": Color(0.55, 0.62, 0.55), "hair": Color(0.05, 0.10, 0.06),
+			"shirt": Color(0.05, 0.18, 0.08), "pants": Color(0.04, 0.08, 0.05),
+			"shoes": Color(0.02, 0.05, 0.03), "eye": Color(0.2, 1.0, 0.4)}},
 }
 
 # v9: ПРОКАЧКА — постоянные апгрейды характеристик за ◈ (второй sink после скинов).

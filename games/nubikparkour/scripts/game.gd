@@ -568,13 +568,15 @@ var _cam_touch_moved := Vector2.ZERO
 var _joy_center := Vector2.ZERO
 
 func _build_touch_input() -> void:
-	# виртуальный джойстик слева.
-	# v8.1 (консилиум v8 minor): с учётом safe-area. Раньше position.y=-160 при
-	# размере 220 → низ бокса на +60px НИЖЕ края экрана (отрезан на мобилах с
-	# жестовой навигацией). Теперь: safe-area окна + полный размер бокса выше низа.
-	var joy_size := Vector2(220, 220)
+	# v10.2 (запрос пользователя): управление как в ROBLOX —
+	# (1) ДИНАМИЧЕСКИЙ стик: появляется ПОД ПАЛЬЦЕМ в любом месте левой половины
+	#     (Roblox Dynamic Thumbstick), а не прибит к углу;
+	# (2) отдельная круглая кнопка ПРЫЖКА справа внизу (в Roblox прыжок — кнопка,
+	#     не тап по экрану);
+	# (3) свайп правой половины — только камера.
+	var joy_size := Vector2(200, 200)
 	var safe_bottom := 16.0
-	var safe_left := 16.0
+	var safe_right := 16.0
 	# DisplayServer.get_display_safe_area() — Rect2i в экранных координатах
 	# (Window.get_safe_area() в Godot 4.7 НЕТ — rt_test поймал «Nonexistent function»).
 	# На десктопе возвращает весь прямоугольник окна → maxf оставляет дефолт 16.
@@ -582,95 +584,158 @@ func _build_touch_input() -> void:
 	var win_size: Vector2i = DisplayServer.window_get_size()
 	if sa.size.x > 0 and sa.size.y > 0:
 		safe_bottom = maxf(16.0, float(win_size.y - (sa.position.y + sa.size.y)))
-		safe_left = maxf(16.0, float(sa.position.x))
+		safe_right = maxf(16.0, float(win_size.x - (sa.position.x + sa.size.x)))
+	# динамический стик: скрыт до первого касания, позиционируется под пальцем
 	_joy_base = Control.new()
 	_joy_base.name = "JoyBase"
-	_joy_base.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	# низ бокса — точно на safe_bottom от нижнего края (не ниже)
-	_joy_base.position = Vector2(safe_left + 12.0, -(joy_size.y + safe_bottom))
 	_joy_base.custom_minimum_size = joy_size
+	_joy_base.size = joy_size
+	_joy_base.visible = false
+	_joy_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(_joy_base)
 	var bg := Panel.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.self_modulate = Color(1,1,1,0.12)
+	bg.self_modulate = Color(1, 1, 1, 0.14)
+	var bg_sb := StyleBoxFlat.new()
+	bg_sb.bg_color = Color(1, 1, 1, 0.14)
+	bg_sb.corner_radius_top_left = 100
+	bg_sb.corner_radius_top_right = 100
+	bg_sb.corner_radius_bottom_left = 100
+	bg_sb.corner_radius_bottom_right = 100
+	bg.add_theme_stylebox_override("panel", bg_sb)
 	_joy_base.add_child(bg)
 	_joy_knob = Control.new()
-	_joy_knob.custom_minimum_size = Vector2(90, 90)
-	_joy_knob.position = Vector2(65, 65)
+	_joy_knob.custom_minimum_size = Vector2(84, 84)
+	_joy_knob.size = Vector2(84, 84)
+	_joy_knob.position = (joy_size - Vector2(84, 84)) * 0.5
+	_joy_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_joy_base.add_child(_joy_knob)
 	var knob_p := Panel.new()
 	knob_p.set_anchors_preset(Control.PRESET_FULL_RECT)
-	knob_p.self_modulate = Color(1,1,1,0.35)
+	var knob_sb := StyleBoxFlat.new()
+	knob_sb.bg_color = Color(1, 1, 1, 0.4)
+	knob_sb.corner_radius_top_left = 42
+	knob_sb.corner_radius_top_right = 42
+	knob_sb.corner_radius_bottom_left = 42
+	knob_sb.corner_radius_bottom_right = 42
+	knob_p.add_theme_stylebox_override("panel", knob_sb)
 	_joy_knob.add_child(knob_p)
+	_joy_center_offset = joy_size * 0.5
 
-	# v9: кнопка РЫВКА справа (над зоной тапа-прыжка). Показываем только если
-	# апгрейд dash куплен — иначе мертвая кнопка путает. Тап по ней ловится в
-	# _input по _dash_btn_rect (в экранных координатах).
+	# круглая кнопка ПРЫЖКА (Roblox: jump — кнопка справа внизу)
+	_jump_btn = Button.new()
+	_jump_btn.name = "JumpBtn"
+	_jump_btn.text = "↑"
+	_jump_btn.add_theme_font_size_override("font_size", 40)
+	_jump_btn.custom_minimum_size = Vector2(104, 104)
+	_jump_btn.size = Vector2(104, 104)
+	_jump_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_jump_btn.position = Vector2(-safe_right - 104.0 - 12.0, -safe_bottom - 104.0 - 12.0)
+	var j_sb := StyleBoxFlat.new()
+	j_sb.bg_color = Color(1, 1, 1, 0.22)
+	j_sb.corner_radius_top_left = 52
+	j_sb.corner_radius_top_right = 52
+	j_sb.corner_radius_bottom_left = 52
+	j_sb.corner_radius_bottom_right = 52
+	_jump_btn.add_theme_stylebox_override("normal", j_sb)
+	var j_sb_pr := j_sb.duplicate() as StyleBoxFlat
+	j_sb_pr.bg_color = Color(1, 1, 1, 0.4)
+	_jump_btn.add_theme_stylebox_override("pressed", j_sb_pr)
+	_jump_btn.flat = true
+	_jump_btn.focus_mode = Control.FOCUS_NONE
+	_jump_btn.pressed.connect(func():
+		if player: player.tap_jump())
+	hud.add_child(_jump_btn)
+
+	# v9: кнопка РЫВКА — над кнопкой прыжка (Roblox-стопка кнопок справа).
+	# Показываем только если апгрейд dash куплен — иначе мёртвая кнопка путает.
 	if GameState.upgrade_level("dash") > 0:
 		_dash_btn = Button.new()
 		_dash_btn.name = "DashBtn"
 		_dash_btn.text = "»»"
 		_dash_btn.add_theme_font_size_override("font_size", 30)
-		_dash_btn.custom_minimum_size = Vector2(96, 96)
+		_dash_btn.custom_minimum_size = Vector2(92, 92)
+		_dash_btn.size = Vector2(92, 92)
 		_dash_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		_dash_btn.position = Vector2(-120.0 - safe_left, -(120.0 + safe_bottom + 96.0))
-		_dash_btn.modulate = Color(1, 1, 1, 0.55)
+		_dash_btn.position = Vector2(-safe_right - 100.0 - 12.0, -safe_bottom - 104.0 - 24.0 - 92.0)
+		var d_sb := StyleBoxFlat.new()
+		d_sb.bg_color = Color(1, 1, 1, 0.18)
+		d_sb.corner_radius_top_left = 46
+		d_sb.corner_radius_top_right = 46
+		d_sb.corner_radius_bottom_left = 46
+		d_sb.corner_radius_bottom_right = 46
+		_dash_btn.add_theme_stylebox_override("normal", d_sb)
+		_dash_btn.flat = true
+		_dash_btn.focus_mode = Control.FOCUS_NONE
+		_dash_btn.modulate = Color(1, 1, 1, 0.75)
 		_dash_btn.pressed.connect(func(): player.try_dash())
 		hud.add_child(_dash_btn)
 
 var _dash_btn: Button = null
+var _jump_btn: Button = null
+var _joy_center_offset := Vector2(100, 100)
 
 func _input(event: InputEvent) -> void:
-	# мобильный: левая половина — джойстик, правая — прыжок
+	# v10.2 (Roblox Dynamic Thumbstick): палец в ЛЮБОМ месте левой половины =
+	# стик появляется ПОД ПАЛЬЦЕМ; правая половина = только камера; прыжок —
+	# отдельная кнопка (тап по правой половине больше НЕ прыгает).
+	# event.position для ScreenTouch/Drag приходит УЖЕ в canvas-координатах
+	# (Godot конвертирует screen→canvas до _input, при stretch canvas_items),
+	# поэтому сравниваем напрямую с half и GUI-rect'ами — без доп. трансформ.
 	if event is InputEventScreenTouch:
+		var pos: Vector2 = event.position
 		var half := get_viewport().get_visible_rect().size.x * 0.5
 		if event.pressed:
-			if event.position.x < half:
+			if ui != null and ui.visible:
+				# панель открыта (смерть/победа/пауза) — тап идёт по её кнопкам,
+				# НЕ по игре (иначе фантомный прыжок сразу после revive).
+				return
+			if _touch_on_buttons(pos):
+				return  # кнопки сами ловят pressed (Button.pressed)
+			if pos.x < half:
+				# динамический стик: база — под пальцем
 				_joy_active = true
 				_joy_id = event.index
-				_joy_center = event.position
-			elif ui != null and ui.visible:
-				# v8.1 (#7): панель открыта (смерть/победа/пауза) — тап идёт по её
-				# кнопкам, НЕ по игре. Без этого тап «Ожить» (x=640=half) дёргал
-				# tap_jump() → фантомный прыжок с уступа сразу после revive.
-				pass
-			elif _dash_btn != null and _dash_btn.get_global_rect().has_point(event.position):
-				# v9: тап по кнопке рывка — НЕ прыжок. Сам рывок дёрнет Button.pressed.
-				# global_rect читаем в момент тапа (не кэш) — всегда верен при ресайзе.
-				pass
+				_joy_center = pos
+				_joy_base.visible = true
+				var vp := get_viewport().get_visible_rect().size
+				_joy_base.position = Vector2(
+					clampf(pos.x - _joy_center_offset.x, 0, vp.x - _joy_base.size.x),
+					clampf(pos.y - _joy_center_offset.y, 0, vp.y - _joy_base.size.y))
+				_joy_knob.position = _joy_center_offset - _joy_knob.size * 0.5
 			else:
-				# v10.1 (отзыв живого игрока): правая половина — НЕ мгновенный прыжок,
-				# а потенциальный свайп камеры: прыжок срабатывает на ОТПУСКАНИИ, если
-				# палец почти не сдвинулся (иначе свайп камеры дёргал бы прыжок).
 				_cam_touch_id = event.index
 				_cam_touch_moved = Vector2.ZERO
 		else:
 			if event.index == _joy_id:
 				_joy_active = false
+				_joy_base.visible = false
 				_reset_joy()
 			elif event.index == _cam_touch_id:
-				# тап (палец почти не двигался) = прыжок; свайп уже прокрутил камеру
-				if _cam_touch_moved.length() < 24.0 and player:
-					player.tap_jump()
 				_cam_touch_id = -1
 	elif event is InputEventScreenDrag:
 		if _joy_active and event.index == _joy_id:
 			var d: Vector2 = event.position - _joy_center
-			var maxr := 90.0
+			var maxr := 80.0
 			if d.length() > maxr:
 				d = d.normalized() * maxr
-			_joy_knob.position = Vector2(65, 65) + d
-			# подменяем ввод
+			_joy_knob.position = _joy_center_offset - _joy_knob.size * 0.5 + d
 			_set_virtual_move(d / maxr)
 		elif event.index == _cam_touch_id and cam_rig:
-			# v10.1: свайп по правой половине КРУТИТ КАМЕРУ пальцем (раньше вращение
-			# было только мышью с ПКМ — на тач-устройстве камера была неуправляема,
-			# а авто-доворот «жил своей жизнью»). rotate_cam глушит авто-доворот.
+			# свайп правой половины крутит камеру (rotate_cam глушит авто-доворот)
 			_cam_touch_moved += event.relative
 			cam_rig.rotate_cam(event.relative.x * 1.6, event.relative.y * 1.6)
 
+# нажатие пришлось на кнопку прыжка/рывка? (Button сам обработает — не дублировать)
+func _touch_on_buttons(pos: Vector2) -> bool:
+	if _jump_btn != null and _jump_btn.get_global_rect().has_point(pos):
+		return true
+	if _dash_btn != null and _dash_btn.get_global_rect().has_point(pos):
+		return true
+	return false
+
 func _reset_joy() -> void:
-	_joy_knob.position = Vector2(65, 65)
+	_joy_knob.position = _joy_center_offset - _joy_knob.size * 0.5
 	_set_virtual_move(Vector2.ZERO)
 
 var _vmove := Vector2.ZERO

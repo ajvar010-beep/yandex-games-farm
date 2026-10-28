@@ -586,6 +586,78 @@ func _run() -> void:
 	GameState.upgrades = {}
 	player.set("shields", 0)
 
+	# --- 25 (v10.2, запрос пользователя): Roblox-тач-управление ---
+	# динамический стик под пальцем; правая половина — ТОЛЬКО камера; тап
+	# справа НЕ прыгает; прыжок — кнопка. ВАЖНО про координаты: parse_input_event
+	# конвертирует window→canvas (headless окно 64×64 → scale 0.05), поэтому
+	# инжектим pos*scale; event.relative движок масштабирует САМ — не трогаем.
+	var vp25: Vector2 = get_viewport().get_visible_rect().size
+	var ws25: Vector2 = get_window().size
+	var sc25: Vector2 = ws25 / vp25
+	var half25 := vp25.x * 0.5
+	var mk_touch := func(pos: Vector2, idx: int, pr: bool) -> InputEventScreenTouch:
+		var ev := InputEventScreenTouch.new()
+		ev.position = pos * sc25
+		ev.index = idx
+		ev.pressed = pr
+		return ev
+	var mk_drag := func(pos: Vector2, idx: int, rel: Vector2) -> InputEventScreenDrag:
+		var ev := InputEventScreenDrag.new()
+		ev.position = pos * sc25
+		ev.index = idx
+		ev.relative = rel  # relative уже в canvas-пространстве
+		return ev
+	# 25a: палец в левой половине → стик виден под пальцем
+	var tp25 := Vector2(half25 * 0.55, vp25.y * 0.6)
+	Input.parse_input_event(mk_touch.call(tp25, 0, true))
+	# parse_input_event диспетчится в ФАЗЕ ВВОДА следующего кадра — ждём два,
+	# иначе _check читает состояние до обработки (DBG подтвердил: pos ставится)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var jb25: Control = game.get("_joy_base")
+	_check(jb25.visible and game.get("_joy_active")
+		and (jb25.position - (tp25 - Vector2(100, 100))).length() < 2.0,
+		"dynamic stick appears under finger (pos=%s)" % jb25.position)
+	# 25b: drag стика → _vmove пропорционален смещению
+	Input.parse_input_event(mk_drag.call(tp25 + Vector2(40, 20), 0, Vector2(40, 20)))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var vm25: Vector2 = game.get("_vmove")
+	_check((vm25 - Vector2(0.5, 0.25)).length() < 0.05, "stick drag -> vmove %s" % vm25)
+	# 25c: отпускание → стик скрыт, ввод обнулён
+	Input.parse_input_event(mk_touch.call(tp25 + Vector2(40, 20), 0, false))
+	await get_tree().process_frame
+	_check(not jb25.visible and game.get("_vmove") == Vector2.ZERO, "release hides stick")
+	# 25d: тап правой половины (без движения) → НЕ прыжок
+	player.set("_jump_buffer", 0.0)
+	var rp25 := Vector2(half25 + 200, vp25.y * 0.4)
+	Input.parse_input_event(mk_touch.call(rp25, 2, true))
+	await get_tree().process_frame
+	Input.parse_input_event(mk_touch.call(rp25, 2, false))
+	await get_tree().process_frame
+	_check(player.get("_jump_buffer") == 0.0, "right-half tap is NOT a jump")
+	# 25e: свайп правой половины → yaw камеры меняется
+	var cam25 = player.get("_cam")
+	cam25.set("_manual_hold", 0.0)
+	var yaw25a: float = cam25.get("_yaw")
+	Input.parse_input_event(mk_touch.call(rp25, 3, true))
+	for i in 4:
+		Input.parse_input_event(mk_drag.call(rp25 + Vector2(-30.0 * (i + 1), 0), 3, Vector2(-30, 0)))
+		await get_tree().process_frame
+	Input.parse_input_event(mk_touch.call(rp25 + Vector2(-120, 0), 3, false))
+	_check(absf(cam25.get("_yaw") - yaw25a) > 0.05 and cam25.is_manual(),
+		"right-half swipe rotates camera")
+	# 25f: кнопка прыжка вызывает tap_jump
+	player.set("_jump_buffer", 0.0)
+	var jbtn25: Button = game.get("_jump_btn")
+	_check(jbtn25 != null, "jump button exists")
+	if jbtn25:
+		jbtn25.emit_signal("pressed")
+		# ЧИТАЕМ СИНХРОННО (без await): pressed-лямбда → tap_jump() ставит буфер
+		# мгновенно; после await физика могла УЖЕ израсходовать его на реальный
+		# прыжок (игрок стоит на платформе) → недетерминированный FAIL (флак).
+		_check(player.get("_jump_buffer") > 0.0, "jump button triggers tap_jump")
+
 	# восстанавливаем GameState (тесты не должны портить прогресс)
 	GameState.upgrades = _sv_up
 	GameState.coins = _sv_coins

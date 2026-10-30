@@ -130,8 +130,11 @@ func load_level(def: Dictionary) -> void:
 		_spawn_hazard(Vector3(float(hd.get("x", 0)), float(hd.get("y", 0)), float(hd.get("z", 0))),
 			Vector3(float(hd.get("sx", 1)), float(hd.get("sy", 1.5)), float(hd.get("sz", 1))))
 	var cps: Array = def.get("checkpoints", [])
-	for c in cps:
-		_spawn_checkpoint(Vector3(c[0], c[1], c[2]))
+	# v11: «Бог Паркура» — без чекпоинтов (смерть = рестарт уровня с начала).
+	# Механика-различие варианта: Бог хардкорнее не только скоростью/шириной.
+	if Variant.has_checkpoints:
+		for c in cps:
+			_spawn_checkpoint(Vector3(c[0], c[1], c[2]))
 	var finish: Array = def.get("finish", [])
 	if finish.size() == 3:
 		_spawn_finish(Vector3(finish[0], finish[1], finish[2]))
@@ -263,32 +266,71 @@ func _apply_hacker_theme() -> void:
 	coin.emission = Color(0.2, 0.8, 1.0)
 
 func _apply_default_theme() -> void:
+	# v11: ТРИ визуальные темы по варианту — различия видно с первого кадра:
+	#   day    (Нубик) — яркое дневное небо, белая пена облаков, зелёная монета
+	#   sunset (Про)   — оранжево-фиолетовый закат, тёплый туман, золотая монета
+	#   night  (Бог)   — тёмно-синяя ночь, звёзды частиц, ледяная монета
 	var env := get_viewport().world_3d.environment
-	if env:
-		env.background_color = Color(0.53, 0.75, 0.92)
-		env.ambient_light_color = Color(0.7, 0.78, 0.9)
-		# v10.3 (отзыв «всё очень засвечено»): 0.45 → 0.30 — синхронно с camera_rig
-		# (эта функция правит ТОТ ЖЕ Environment после его _ready → побеждает её
-		# значение; обе точки ДОЛЖНЫ держаться одинаковыми, иначе дневные уровни
-		# остаются засвеченными — именно это и видел игрок на скриншотах v10.2).
-		env.ambient_light_energy = 0.25
-		# v8.1: дневная тема — glow ТОЛЬКО по HDR-порогу (лава/монеты), без bloom
-		# по всему кадру (иначе небо выбеливается, 51% near-white на lvl11 было).
-		# Сброс обязателен: hacker-тема ставит 0.85/0.15, env общий между уровнями.
-		# v10.3: glow 0.5 → 0.25 (синхронно с camera_rig).
-		env.glow_intensity = 0.25
-		env.glow_bloom = 0.0
-		env.glow_hdr_threshold = 1.0
-		env.fog_enabled = true
-		env.fog_light_color = Color(0.6, 0.78, 0.94)
-		env.fog_density = 0.012
 	var lava: StandardMaterial3D = _mats["lava"]
-	lava.albedo_color = Color(1.0, 0.35, 0.05)
-	lava.emission = Color(1.0, 0.4, 0.1)
-	lava.emission_energy_multiplier = 2.0
 	var coin: StandardMaterial3D = _mats["coin"]
-	coin.albedo_color = Color(0.2, 0.95, 0.6)
-	coin.emission = Color(0.2, 0.95, 0.6)
+	match Variant.theme_id:
+		"night":
+			if env:
+				env.background_color = Color(0.03, 0.05, 0.13)
+				env.ambient_light_color = Color(0.35, 0.42, 0.62)
+				env.ambient_light_energy = 0.34
+				# glow 0.25 — синхронно с camera_rig (иначе menu/level расходятся,
+				# урок v10.3). Ночная неон-эмиссия светится через hdr_threshold.
+				env.glow_intensity = 0.25
+				env.glow_bloom = 0.0
+				env.glow_hdr_threshold = 1.0
+				env.fog_enabled = true
+				env.fog_light_color = Color(0.06, 0.08, 0.18)
+				env.fog_density = 0.016
+			lava.albedo_color = Color(1.0, 0.3, 0.05)
+			lava.emission = Color(1.0, 0.35, 0.08)
+			lava.emission_energy_multiplier = 2.6  # лава ярче светится в ночи
+			coin.albedo_color = Color(0.55, 0.85, 1.0)
+			coin.emission = Color(0.55, 0.85, 1.0)
+		"sunset":
+			if env:
+				env.background_color = Color(0.93, 0.48, 0.28)
+				env.ambient_light_color = Color(0.95, 0.68, 0.5)
+				env.ambient_light_energy = 0.28
+				env.glow_intensity = 0.25
+				env.glow_bloom = 0.0
+				env.glow_hdr_threshold = 1.0
+				env.fog_enabled = true
+				env.fog_light_color = Color(0.85, 0.55, 0.42)
+				env.fog_density = 0.012
+			lava.albedo_color = Color(1.0, 0.35, 0.05)
+			lava.emission = Color(1.0, 0.4, 0.1)
+			lava.emission_energy_multiplier = 2.0
+			coin.albedo_color = Color(1.0, 0.85, 0.3)
+			coin.emission = Color(1.0, 0.85, 0.3)
+		_:  # "day" — Нубик: классический яркий день
+			if env:
+				env.background_color = Color(0.53, 0.75, 0.92)
+				env.ambient_light_color = Color(0.7, 0.78, 0.9)
+				# v10.3 (отзыв «всё очень засвечено»): 0.45 → 0.25 — синхронно с
+				# camera_rig (эта функция правит ТОТ ЖЕ Environment после его
+				# _ready → побеждает её значение; обе точки ДОЛЖНЫ держаться
+				# одинаковыми, иначе уровни остаются засвеченными).
+				env.ambient_light_energy = 0.25
+				# v8.1: glow ТОЛЬКО по HDR-порогу (лава/монеты), без bloom по
+				# всему кадру (иначе небо выбеливается). Сброс обязателен:
+				# hacker-тема ставит 0.85/0.15, env общий между уровнями.
+				env.glow_intensity = 0.25
+				env.glow_bloom = 0.0
+				env.glow_hdr_threshold = 1.0
+				env.fog_enabled = true
+				env.fog_light_color = Color(0.6, 0.78, 0.94)
+				env.fog_density = 0.012
+			lava.albedo_color = Color(1.0, 0.35, 0.05)
+			lava.emission = Color(1.0, 0.4, 0.1)
+			lava.emission_energy_multiplier = 2.0
+			coin.albedo_color = Color(0.2, 0.95, 0.6)
+			coin.emission = Color(0.2, 0.95, 0.6)
 
 func _spawn_platform(p: Dictionary) -> void:
 	var pos := Vector3(p.get("x", 0), p.get("y", 0), p.get("z", 0))
@@ -395,6 +437,7 @@ func _spawn_coin(pos: Vector3) -> void:
 
 func _spawn_checkpoint(pos: Vector3) -> void:
 	var area := Area3D.new()
+	area.add_to_group("checkpoint")  # v11: подсчёт чекпоинтов (Бог спавнит 0)
 	area.position = pos
 	# столб-флаг
 	var pole := MeshInstance3D.new()

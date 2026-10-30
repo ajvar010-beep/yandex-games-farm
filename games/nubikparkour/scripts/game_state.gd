@@ -87,9 +87,10 @@ const TR := {
 	# майнинг, файтинг). Сестринские игры ещё не опубликованы — кросс-промо на
 	# несуществующие товары в сторе = риск модерации. Нейтральная цель вместо имён.
 	"series_hdr": {"ru": "— ЦЕЛЬ —", "en": "— GOAL —"},
-	"series_nub": {"ru": "Пройди все 21 уровень, собери 63 звезды и открой все скины!", "en": "Beat all 21 levels, collect 63 stars and unlock every skin!"},
-	"series_pro": {"ru": "Пройди все 21 уровень, собери 63 звезды и открой все скины!", "en": "Beat all 21 levels, collect 63 stars and unlock every skin!"},
-	"series_god": {"ru": "Пройди все 21 уровень, собери 63 звезды и открой все скины!", "en": "Beat all 21 levels, collect 63 stars and unlock every skin!"},
+	# v11: цели различаются по варианту (у Про — 30 уровней с хакер-главой)
+	"series_nub": {"ru": "Тройной прыжок и 2 щита на уровень. Пройди все 21 уровень и собери 63 звезды!", "en": "Triple jump and 2 free shields per level. Beat all 21 levels and collect 63 stars!"},
+	"series_pro": {"ru": "Пройди 21 уровень и войди в МАТРИЦУ: 9 неоновых уровней для хакеров. 90 звёзд!", "en": "Beat 21 levels and enter THE MATRIX: 9 neon hacker levels. 90 stars!"},
+	"series_god": {"ru": "Без чекпоинтов, ×2 монеты. Только для избранных — 63 звезды!", "en": "No checkpoints, ×2 coins. Only for the chosen — 63 stars!"},
 	"daily_double_q": {"ru": "🎖 +%d ◈ получено!\nУдвоить награду за видео?", "en": "🎖 +%d ◈ claimed!\nDouble the reward for a video?"},
 	"no_thanks": {"ru": "Нет, спасибо", "en": "No, thanks"},
 	# v9: прокачка (второй sink монет ◈ — постоянные апгрейды характеристик)

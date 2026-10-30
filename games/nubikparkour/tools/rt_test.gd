@@ -31,6 +31,13 @@ func _check(cond: bool, label: String) -> void:
 func _run() -> void:
 	print("=== RT TEST v7.2 ===")
 
+	# v11: механика-тесты щита (12-24) предполагают shields = ТОЛЬКО из upgrades
+	# ({"shield":1} → 1). У Нубика free_shields=2 добавляет базу → ломает счётчики.
+	# Изолируем: обнуляем free_shields на время механика-тестов, восстанавливаем в
+	# тесте 29 (он валидирует РЕАЛЬНОЕ значение по варианту: nub=2, pro/god=0).
+	var _orig_free_shields: int = Variant.free_shields
+	Variant.free_shields = 0
+
 	# --- Тест 1+4: Game-сцена, смерть, revive ---
 	var main: Node = load("res://scenes/Main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
@@ -75,11 +82,12 @@ func _run() -> void:
 	_check(safe_after.distance_to(safe_before) < 0.01, "lava does NOT update _last_safe (y=%.2f)" % safe_after.y)
 
 	# --- Тест 4: kill() замораживает, труп не собирает монеты ---
+	# v11: _on_coin начисляет Variant.coin_mult (×2 у Бога) — ожидание по множителю.
 	game.set("_running", true)
 	var coins0: int = game.get("coins_collected")
 	game.call("_on_coin")  # вызов напрямую — guard по _running пропустит (running=true)
 	var coins1: int = game.get("coins_collected")
-	_check(coins1 == coins0 + 1, "coin counted while running")
+	_check(coins1 == coins0 + Variant.coin_mult, "coin counted while running (+%d)" % Variant.coin_mult)
 	game.set("_running", false)
 	game.call("_on_coin")
 	var coins2: int = game.get("coins_collected")
@@ -227,15 +235,16 @@ func _run() -> void:
 	var _sv_up: Dictionary = GameState.upgrades.duplicate()
 
 	# 12a. apply_upgrades: пустые апгрейды = базовые значения v8.2
+	# v11: базовый _max_jumps = Variant.max_jumps (2 у Про/Бога, 3 у Нубика).
 	GameState.upgrades = {}
 	player.call("apply_upgrades")
-	_check(absf(player.speed - 7.0) < 0.001 and absf(player.jump_force - 9.5) < 0.001 and player.get("_max_jumps") == 2,
+	_check(absf(player.speed - 7.0) < 0.001 and absf(player.jump_force - 9.5) < 0.001 and player.get("_max_jumps") == Variant.max_jumps,
 		"apply_upgrades({}) = base v8.2 values (spd=%.2f jmp=%.2f mj=%d)" % [player.speed, player.jump_force, player.get("_max_jumps")])
-	# 12b. прокачанный: speed+25%, jump+15%, тройной прыжок
+	# 12b. прокачанный: speed+25%, jump+15%, +1 прыжок сверх базового варианта
 	GameState.upgrades = {"speed": 5, "jump": 5, "extra_jump": 1}
 	player.call("apply_upgrades")
-	_check(absf(player.speed - 8.75) < 0.001 and absf(player.jump_force - 10.925) < 0.001 and player.get("_max_jumps") == 3,
-		"apply_upgrades(maxed) = 8.75/10.925/3 (spd=%.2f jmp=%.3f mj=%d)" % [player.speed, player.jump_force, player.get("_max_jumps")])
+	_check(absf(player.speed - 8.75) < 0.001 and absf(player.jump_force - 10.925) < 0.001 and player.get("_max_jumps") == Variant.max_jumps + 1,
+		"apply_upgrades(maxed) = 8.75/10.925/mj%d (spd=%.2f jmp=%.3f mj=%d)" % [Variant.max_jumps + 1, player.speed, player.jump_force, player.get("_max_jumps")])
 
 	# 13. buy_upgrade: списание + отказ при нехватке
 	GameState.upgrades = {}
@@ -704,11 +713,15 @@ func _run() -> void:
 		await get_tree().process_frame
 	_check(cam26.get("_yaw") == y2, "manual hold blocks auto-follow (yaw frozen %.2f)" % y2)
 	cam26.set("_manual_hold", 0.0)
-	# --- Тест 28 (v10.3): свет приглушён — «всё очень засвечено» ---
-	# Целевые значения: ambient 0.25, exposure 0.78, glow 0.25, sun 0.65.
+	# --- Тест 28 (v10.3+v11): свет приглушён И тема варианта применена ---
+	# v11: темы day(Нубик)/sunset(Про)/night(Бог) — значения ambient/неба по теме.
+	# Экспозиция/glow общие: 0.78/0.25. Sun: 0.65 day/sunset, 0.45 night.
+	# явная типизация: := от Dictionary-индекса не выводит тип → Parse Error (урок v7.2)
+	var want_amb: float = {"day": 0.25, "sunset": 0.28, "night": 0.34}[Variant.theme_id]
+	var want_sun: float = 0.45 if Variant.theme_id == "night" else 0.65
 	var env28: Environment = get_viewport().world_3d.environment
-	_check(env28 != null and absf(env28.ambient_light_energy - 0.25) < 0.001,
-		"ambient energy 0.25 (got %.2f)" % (env28.ambient_light_energy if env28 else -1.0))
+	_check(env28 != null and absf(env28.ambient_light_energy - want_amb) < 0.001,
+		"ambient %s=%.2f (got %.2f)" % [Variant.theme_id, want_amb, env28.ambient_light_energy if env28 else -1.0])
 	_check(env28 != null and absf(env28.tonemap_exposure - 0.78) < 0.001,
 		"tonemap exposure 0.78 (got %.2f)" % (env28.tonemap_exposure if env28 else -1.0))
 	_check(env28 != null and absf(env28.glow_intensity - 0.25) < 0.001,
@@ -717,8 +730,15 @@ func _run() -> void:
 	for ch in game.get_children():
 		if ch is DirectionalLight3D:
 			sun28 = ch
-	_check(sun28 != null and absf(sun28.light_energy - 0.65) < 0.001,
-		"sun energy 0.65 (got %.2f)" % (sun28.light_energy if sun28 else -1.0))
+	_check(sun28 != null and absf(sun28.light_energy - want_sun) < 0.001,
+		"sun energy %.2f (got %.2f)" % [want_sun, sun28.light_energy if sun28 else -1.0])
+	# небо темы: sunset оранжевое (r>g), night тёмное (r<0.1), day голубое (b>r)
+	if env28:
+		var bg: Color = env28.background_color
+		match Variant.theme_id:
+			"sunset": _check(bg.r > bg.g and bg.g > bg.b, "sunset sky warm (%s)" % bg)
+			"night": _check(bg.r < 0.1 and bg.b < 0.25, "night sky dark (%s)" % bg)
+			_: _check(bg.b > bg.r, "day sky blue (%s)" % bg)
 	# hacker-тема уровня 21 НЕ задета: ambient/glow остаются «матричными»
 	game.call("load_level", 21)
 	await get_tree().process_frame
@@ -727,6 +747,55 @@ func _run() -> void:
 	_check(env28h != null and absf(env28h.ambient_light_energy - 0.4) < 0.001
 		and absf(env28h.glow_intensity - 0.9) < 0.001,
 		"hacker theme untouched (amb=%.2f glow=%.2f)" % [env28h.ambient_light_energy, env28h.glow_intensity])
+
+	# --- Тест 29 (v11): РАЗЛИЧИЯ вариантов — механики/контент по id ---
+	# Нубик: 21 ур., 3 прыжка, 2 щита, чекпоинты, ×1 монеты, день.
+	# Про:   30 ур. (+хакер-глава), 2 прыжка, 0 щитов, чекпоинты, ×1, закат.
+	# Бог:   21 ур., 2 прыжка, 0 щитов, БЕЗ чекпоинтов, ×2 монеты, ночь.
+	var want_levels: int = {"nub": 21, "pro": 30, "god": 21}[Variant.id]
+	var want_jumps: int = {"nub": 3, "pro": 2, "god": 2}[Variant.id]
+	var want_shields: int = {"nub": 2, "pro": 0, "god": 0}[Variant.id]
+	var want_coins: int = {"nub": 1, "pro": 1, "god": 2}[Variant.id]
+	var want_cps := Variant.id != "god"
+	_check(Variant.levels_total == want_levels, "variant %s levels_total=%d (want %d)" % [Variant.id, Variant.levels_total, want_levels])
+	_check(Variant.max_jumps == want_jumps, "variant max_jumps=%d (want %d)" % [Variant.max_jumps, want_jumps])
+	_check(Variant.coin_mult == want_coins, "variant coin_mult=%d (want %d)" % [Variant.coin_mult, want_coins])
+	_check(Variant.has_checkpoints == want_cps, "variant has_checkpoints=%s (want %s)" % [Variant.has_checkpoints, want_cps])
+	# игрок: прыжки и щиты отражают вариант (apply_upgrades + refill_shields на respawn)
+	GameState.upgrades = {}  # без апгрейдов — чистый базовый вариант
+	# v11: восстанавливаем РЕАЛЬНЫЙ free_shields (механика-тесты выше обнуляли его)
+	Variant.free_shields = _orig_free_shields
+	player.call("apply_upgrades")
+	player.call("refill_shields")
+	_check(player.get("_max_jumps") == want_jumps, "player._max_jumps=%d (want %d)" % [player.get("_max_jumps"), want_jumps])
+	_check(player.get("shields") == want_shields, "player.shields=%d (want %d)" % [player.get("shields"), want_shields])
+	# Про: хакер-глава существует (levels 22-30 на диске, theme hacker)
+	if Variant.id == "pro":
+		var f29 := FileAccess.open("res://levels/30.json", FileAccess.READ)
+		_check(f29 != null, "pro hacker chapter level 30 exists")
+		if f29:
+			var d29: Dictionary = JSON.parse_string(f29.get_as_text())
+			f29.close()
+			_check(str(d29.get("theme", "")) == "hacker", "level 30 theme=hacker (got '%s')" % d29.get("theme", "?"))
+	# Нуб/Бог: глава НЕ должна быть доступна (levels_total=21)
+	if Variant.id != "pro":
+		_check(Variant.levels_total == 21, "%s must NOT expose hacker chapter (levels_total=%d)" % [Variant.id, Variant.levels_total])
+	# чекпоинты: у Бога level НЕ спавнит checkpoint-узлы даже если они в JSON
+	# (v11: чекпоинты в группе "checkpoint" — Area3D финиша/монет в ней нет)
+	game.call("load_level", 3)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var lvl29: Node = game.get_node_or_null("Level")
+	var n_cps := lvl29.get_tree().get_nodes_in_group("checkpoint").size() if lvl29 else -1
+	# у Бога чекпоинтов нет (спавн пропущен), у Нуба/Про — есть
+	_check((n_cps == 0) == (not want_cps), "checkpoints spawned=%d, want_cps=%s" % [n_cps, want_cps])
+	# монета: _on_coin начисляет coin_mult
+	game.set("_running", true)
+	var c29a: int = game.get("coins_collected")
+	game.call("_on_coin")
+	_check(game.get("coins_collected") - c29a == want_coins,
+		"coin awards %d (want coin_mult=%d)" % [game.get("coins_collected") - c29a, want_coins])
+	game.set("_running", false)
 
 	# восстанавливаем GameState (тесты не должны портить прогресс)
 	GameState.upgrades = _sv_up

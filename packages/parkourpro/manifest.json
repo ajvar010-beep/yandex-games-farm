@@ -1,7 +1,7 @@
 {
   "id": "parkourpro",
   "engine": "godot-4.7.2-web",
-  "version": "1.4.4",
+  "version": "1.5.0",
   "orientation": "landscape",
   "touch": true,
   "monetization": [
@@ -10,5 +10,5 @@
     "interstitial",
     "iap"
   ],
-  "levels": 21
+  "levels": 30
 }

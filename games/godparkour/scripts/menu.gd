@@ -7,7 +7,9 @@ var _coins_label: Label
 var _stars_label: Label
 var _title: Label
 
-const LEVELS_TOTAL := 21
+# v11: число уровней — из варианта (21 у Нуба/Бога, 30 у Про с хакер-главой).
+# Было константой 21; теперь читаем Variant, чтобы глава 22-30 появилась в меню.
+const HACKER_FROM := 21       # первый неон-уровень (стиль кнопки матрицы)
 const RV_COINS := 30          # «📺 +30 ◈» — повторяемый RV-триггер
 const RV_COINS_COOLDOWN_MS := 180_000  # 3 минуты
 
@@ -77,7 +79,7 @@ func _build() -> void:
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(sp)
 	_stars_label = Label.new()
-	_stars_label.text = GameState.L("stars_total") % [GameState.total_stars(), LEVELS_TOTAL * 3]
+	_stars_label.text = GameState.L("stars_total") % [GameState.total_stars(), Variant.levels_total * 3]
 	_stars_label.add_theme_font_size_override("font_size", 26)
 	_stars_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	head.add_child(_stars_label)
@@ -171,17 +173,17 @@ func _build_levels(parent: Control) -> void:
 	grid.add_theme_constant_override("v_separation", 10)
 	parent.add_child(grid)
 
-	for i in range(1, LEVELS_TOTAL + 1):
+	for i in range(1, Variant.levels_total + 1):
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(170, 92)
 		var unlocked := i <= GameState.max_level
 		var st := GameState.stars_of(i)
 		var best := GameState.best_time(i)
-		if i == 21:
-			# ХАКЕР — неоновая кнопка
-			b.text = GameState.L("hacker") if unlocked else "🔒"
+		if i >= HACKER_FROM:
+			# ХАКЕР-глава (21 у всех, 21-30 у Про) — неоновые кнопки матрицы
+			b.text = (GameState.L("hacker") if i == HACKER_FROM else "H%d" % i) if unlocked else "🔒"
 			b.modulate = Color(0.1, 1.0, 0.3) if unlocked else Color(0.45, 0.45, 0.5)
-			b.add_theme_font_size_override("font_size", 24)
+			b.add_theme_font_size_override("font_size", 24 if i == HACKER_FROM else 20)
 		else:
 			b.text = "%d" % i
 			b.add_theme_font_size_override("font_size", 32)

@@ -16,7 +16,7 @@ func _ready() -> void:
 	cam.current = true
 	add_child(cam)
 	cam.position = Vector3(0, 0, distance)
-	# свет
+	# свет — v11: цвет/сила по теме варианта (день/закат/ночь = «луна»)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48, -30, 0)
 	# v8.1 (консилиум v8 #12): тени ОБЯЗАТЕЛЬНЫ — без них кубы не читаются объёмно.
@@ -24,31 +24,42 @@ func _ready() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = 48.0
-	sun.light_energy = 0.65  # v10.3: 1.15 засвечивал дневные уровни (см. ниже)
+	# v10.3: 1.15 засвечивал дневные уровни → 0.65 (экспозиция 0.78 ниже)
+	sun.light_energy = 0.65
+	match Variant.theme_id:
+		"sunset":
+			sun.light_color = Color(1.0, 0.78, 0.55)  # тёплое закатное солнце
+			sun.rotation_degrees = Vector3(-22, -40, 0)  # ниже к горизонту → длинные тени
+		"night":
+			sun.light_color = Color(0.62, 0.7, 1.0)   # холодная «луна»
+			sun.light_energy = 0.45
 	get_parent().call_deferred("add_child", sun)
 	# Environment назначаем НАПРЯМУЮ в world_3d (без WorldEnvironment-узла):
 	# call_deferred(add_child) гонит гонку — level.load_level() может выполниться
 	# ДО входа узла в дерево, и тема уровня (hacker-небо) молча не применится.
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.53, 0.75, 0.92)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.7, 0.78, 0.9)
-	# v8.1 (консилиум v8 #12): ambient 0.9→0.45 — контраст ключевым светом вместо
-	# «плоской засветки»; FILMIC-тонмап + glow: эмиссия неона/лавы/монет даёт ореол,
-	# а не клипится в белёсую кашу (46% near-white на lvl21 было).
-	# ВАЖНО: glow_bloom=0 — равномерный bloom выбеливал ДНЕВНОЕ небо (lvl11: 51%
-	# near-white, mean 236). Свечение идёт ТОЛЬКО через glow_hdr_threshold: яркие
-	# эмиссивные поверхности (неон/лава/монеты) светятся, небо/трава — нет.
-	# v10.3 (отзыв живого игрока «всё очень засвечено»): замер скриншотов v10.2 —
-	# дневные уровни mean 230-233/255, 17-25% пикселей ярче 235 (L21 ночной для
-	# сравнения 94). Снижаем экспозицию: свет 1.15→0.95 (выше), ambient 0.45→0.35,
-	# glow 0.5→0.35 (неон lvl21/монеты продолжат светиться через hdr_threshold),
-	# tonemap_exposure 1.0→0.92. FILMIC остаётся (клипы в белое меньше).
-	# v10.3 итог: свет 1.15→0.65, ambient 0.45→0.25, glow 0.5→0.25, exposure
-	# 1.0→0.78. FILMIC почти не давит белую платформу — снижение экспозиции
-	# эффективнее снижения света. Целевой mean скриншотов ~200-210 (было 233).
-	e.ambient_light_energy = 0.25
+	# v11: базовое небо/ambient по теме варианта — задаётся ЗДЕСЬ (до load_level),
+	# поэтому МЕНЮ тоже тематическое (закат/ночь видны сразу). level._apply_*theme
+	# переприсваивает те же цвета на каждый уровень; обе точки держим синхронно.
+	match Variant.theme_id:
+		"sunset":
+			e.background_color = Color(0.93, 0.48, 0.28)
+			e.ambient_light_color = Color(0.95, 0.68, 0.5)
+			e.ambient_light_energy = 0.28
+		"night":
+			e.background_color = Color(0.03, 0.05, 0.13)
+			e.ambient_light_color = Color(0.35, 0.42, 0.62)
+			e.ambient_light_energy = 0.34
+		_:  # "day" — Нубик
+			e.background_color = Color(0.53, 0.75, 0.92)
+			e.ambient_light_color = Color(0.7, 0.78, 0.9)
+			e.ambient_light_energy = 0.25
+	# v8.1 (консилиум v8 #12): FILMIC-тонмап + glow только по HDR-порогу: эмиссия
+	# неона/лавы/монет даёт ореол, небо/трава — нет (glow_bloom=0, иначе выбеливание).
+	# v10.3 (отзыв «всё очень засвечено»): light 1.15→0.65, glow 0.5→0.25, exposure
+	# 1.0→0.78. FILMIC почти не давит белую платформу — экспозиция эффективнее света.
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.tonemap_exposure = 0.78
 	e.glow_enabled = true
@@ -139,7 +150,11 @@ func _spawn_clouds() -> void:
 		bm.size = Vector3(s, s * 0.45, s * 0.7)
 		c.mesh = bm
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(1, 1, 1, 0.75)
+		# v11: облака тонированы под тему (розовый закат / синяя ночь / белые днём)
+		match Variant.theme_id:
+			"sunset": m.albedo_color = Color(1.0, 0.72, 0.62, 0.7)
+			"night":  m.albedo_color = Color(0.4, 0.45, 0.7, 0.55)
+			_:        m.albedo_color = Color(1, 1, 1, 0.75)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		c.material_override = m
 		c.position = Vector3(randf_range(-30, 30), randf_range(8, 18), randf_range(-40, 10))

@@ -66,10 +66,14 @@ func _ready() -> void:
 func apply_upgrades() -> void:
 	speed = BASE_SPEED * (1.0 + 0.05 * GameState.upgrade_level("speed"))
 	jump_force = BASE_JUMP * (1.0 + 0.03 * GameState.upgrade_level("jump"))
-	_max_jumps = 2 + (1 if GameState.upgrade_level("extra_jump") > 0 else 0)
+	# v11: базовое число прыжков — из варианта (Нубик = 3, Про/Бог = 2);
+	# апгрейд extra_jump даёт +1 СВЕРХ базового, как и раньше.
+	_max_jumps = Variant.max_jumps + (1 if GameState.upgrade_level("extra_jump") > 0 else 0)
 
 func refill_shields() -> void:
-	shields = GameState.upgrade_level("shield")
+	# v11: Нубик стартует с 2 бесплатными щитами на каждый уровень (дружелюбность
+	# для новичков); Про/Бог — только купленные апгрейдом shield.
+	shields = Variant.free_shields + GameState.upgrade_level("shield")
 
 func _part_mat(c: Color, seed: int, style: String) -> StandardMaterial3D:
 	# материал части тела: цвет из палитры скина + та же шумовая/bevel-текстура

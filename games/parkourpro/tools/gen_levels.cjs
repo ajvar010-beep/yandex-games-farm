@@ -296,6 +296,15 @@ function genLevel(n) {
     'mixed', 'gauntlet',          // 16-17
     'movers', 'mixed',            // 18-19
     'mixed',                      // 20 финал
+    // v11: ХАКЕР-ГЛАВА 22-30 (только «Про Паркур») — жёсткая ротация архетипов.
+    // Сложность растёт сама: steps/wBase/gapBase/moverP — функции n (к 22-30 все
+    // параметры на максимумах: wBase 1.6, gapBase 2.6, moverP ~0.3).
+    null,                         // 21 — генерируется отдельно (genHackerLevel)
+    'serpentine', 'gauntlet',      // 22-23
+    'crumble', 'movers',           // 24-25
+    'shaft', 'ice',                // 26-27
+    'mixed', 'gauntlet',           // 28-29
+    'mixed',                       // 30 финал главы
   ];
   const arch = ARCHS[Math.min(n, ARCHS.length - 1)];
 
@@ -485,4 +494,24 @@ for (let n = 1; n <= 20; n++) {
   console.log('Hacker level (21) generated');
 })();
 
-console.log('Generated 21 levels into', OUT);
+// v11: ХАКЕР-ГЛАВА 22-30 (ТОЛЬКО «Про Паркур» — у Нуба/Бога 21 уровень).
+// Геометрия — ПЕРЕИСПОЛЬЗУЕТ genLevel(n): та же проверенная машина (9 архетипов,
+// шпильки U-поворотов, fixOverhangs/fixMovers, smoke-контракт gap/dy/overhang/
+// mover для ХУДШЕГО god-варианта). Сложность растёт сама по n (steps 10+1.2n,
+// wBase → 1.6, gapBase → 2.6, moverP → ~0.3 — все на максимумах к 22-30).
+// Неоновая матрица — ПЕРЕКРАСКА: grass/wood/sand/ice → neon/dark/stone,
+// gold-финиш остаётся (читается как «выход из матрицы»), theme:'hacker'
+// включает зелёное небо-данные/кибер-монеты в level.gd.
+// Первая попытка (ручной серпантин-генератор) дала 4 непроходимых уровня из 9 —
+// генератор с 20 итерациями баланса лучше не переписывать, а реюзить.
+const MAT_HACK = { grass: 'neon', wood: 'dark', sand: 'stone', ice: 'dark', stone: 'stone', crumble: 'crumble' };
+for (let n = 22; n <= 30; n++) {
+  const def = genLevel(n);
+  def.name = 'МАТРИЦА ' + (n - 21);
+  def.theme = 'hacker';
+  for (const p of def.platforms) p.mat = MAT_HACK[p.mat] || 'neon';
+  fs.writeFileSync(path.join(OUT, String(n).padStart(2, '0') + '.json'), JSON.stringify(def, null, 0));
+  console.log(`Hacker chapter level ${n} generated (${def.archetype}, ${def.platforms.length} plats)`);
+}
+
+console.log('Generated levels into', OUT);

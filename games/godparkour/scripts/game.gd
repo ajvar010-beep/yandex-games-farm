@@ -181,8 +181,10 @@ func _process(delta: float) -> void:
 
 func _on_coin() -> void:
 	if not _running: return  # труп не фармит монеты
-	coins_collected += 1
-	GameState.add_coins(1)
+	# v11: «Бог Паркура» даёт ×2 монеты (coin_mult) — риск (хардкор) = награда.
+	var m: int = Variant.coin_mult
+	coins_collected += m
+	GameState.add_coins(m)
 	_update_coins()
 
 func _update_coins() -> void:
@@ -527,10 +529,11 @@ func _on_next() -> void:
 	AudioBus.click()
 	_hide_panel()
 	_maybe_interstitial()
-	# v9.1 (консилиум v8.2, критик-код minor): после финала (21 ХАКЕР) load_level(22)
-	# молча играл 01.json с номером «Уровень 22» в HUD. Явный цикл на 1 (NG+:
+	# v9.1 (консилиум v8.2, критик-код minor): после финала load_level(N+1)
+	# молча играл 01.json с номером «Уровень N+1» в HUD. Явный цикл на 1 (NG+:
 	# фарм монет/звёзд на пройденных уровнях — стандарт жанра).
-	load_level(1 if level_num >= 21 else level_num + 1)
+	# v11: финал = Variant.levels_total (21 у Нуба/Бога, 30 у Про с хакер-главой).
+	load_level(1 if level_num >= Variant.levels_total else level_num + 1)
 
 func _maybe_interstitial() -> void:
 	if GameState.no_ads: return

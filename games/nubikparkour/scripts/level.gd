@@ -267,13 +267,16 @@ func _apply_default_theme() -> void:
 	if env:
 		env.background_color = Color(0.53, 0.75, 0.92)
 		env.ambient_light_color = Color(0.7, 0.78, 0.9)
-		# v8.1 (#12): 0.9 → 0.45 — контраст ключевым светом, glow/tonemap из camera_rig
-		# сохраняются (эта функция правит ТОТ ЖЕ Environment, не пересоздаёт).
-		env.ambient_light_energy = 0.45
+		# v10.3 (отзыв «всё очень засвечено»): 0.45 → 0.30 — синхронно с camera_rig
+		# (эта функция правит ТОТ ЖЕ Environment после его _ready → побеждает её
+		# значение; обе точки ДОЛЖНЫ держаться одинаковыми, иначе дневные уровни
+		# остаются засвеченными — именно это и видел игрок на скриншотах v10.2).
+		env.ambient_light_energy = 0.25
 		# v8.1: дневная тема — glow ТОЛЬКО по HDR-порогу (лава/монеты), без bloom
 		# по всему кадру (иначе небо выбеливается, 51% near-white на lvl11 было).
 		# Сброс обязателен: hacker-тема ставит 0.85/0.15, env общий между уровнями.
-		env.glow_intensity = 0.5
+		# v10.3: glow 0.5 → 0.25 (синхронно с camera_rig).
+		env.glow_intensity = 0.25
 		env.glow_bloom = 0.0
 		env.glow_hdr_threshold = 1.0
 		env.fog_enabled = true

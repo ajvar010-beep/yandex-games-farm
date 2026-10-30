@@ -658,6 +658,76 @@ func _run() -> void:
 		# прыжок (игрок стоит на платформе) → недетерминированный FAIL (флак).
 		_check(player.get("_jump_buffer") > 0.0, "jump button triggers tap_jump")
 
+	# --- Тест 26 (v10.3): вертикаль камеры — свайп ВВЕРХ = камера ВЫШЕ = взгляд
+	# ВНИЗ на уровень (Roblox-стандарт от 3-го лица): rotate_cam: pitch -= dy,
+	# drag вверх (dy<0) → pitch РАСТЁТ → камера выше → смотрит вниз. Жалоба
+	# игрока «инвертировано» чинится в _process_auto (тест 27), знак НЕ трогаем.
+	# Переход на уровень 1 = _apply_default_theme → нейтральный env (не hacker).
+	game.call("load_level", 1)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	# щит, чтобы случайное падение не убило игрока посреди теста
+	GameState.upgrades["shield"] = 1
+	player.global_position = Vector3(0, 4, 0)
+	player.velocity = Vector3.ZERO
+	var cam26 = player.get("_cam")
+	cam26.set("_manual_hold", 0.0)
+	var p0: float = cam26.get("_pitch")
+	cam26.rotate_cam(0.0, -40.0)  # drag вверх (relative.y < 0)
+	_check(cam26.get("_pitch") > p0 + 0.05,
+		"drag up raises pitch (camera up, look down): %.2f -> %.2f" % [p0, cam26.get("_pitch")])
+	cam26.rotate_cam(0.0, 90.0)  # drag вниз
+	_check(cam26.get("_pitch") < p0 - 0.05,
+		"drag down lowers pitch (camera down, look up): %.2f" % cam26.get("_pitch"))
+	# клампы v10.3: [-0.9, +1.3] рад — «поворот под любыми углами»
+	cam26.set("_pitch", 0.0)
+	cam26.rotate_cam(0.0, 5000.0)
+	_check(cam26.get("_pitch") == -0.9, "pitch clamps at -0.9 (got %.3f)" % cam26.get("_pitch"))
+	cam26.set("_pitch", 0.0)
+	cam26.rotate_cam(0.0, -5000.0)
+	_check(cam26.get("_pitch") == 1.3, "pitch clamps at +1.3 (got %.3f)" % cam26.get("_pitch"))
+	cam26.set("_pitch", 0.0)
+	# --- Тест 27 (v10.3): авто-доворот быстрее (6.0) — окно инверсии короче ---
+	cam26.set("_manual_hold", 0.0)
+	cam26.set("_auto_follow", true)
+	cam26.set("_yaw", 1.5)
+	var y0: float = cam26.get("_yaw")
+	for i in 10:
+		await get_tree().process_frame
+	var y1: float = cam26.get("_yaw")
+	# за 10 кадров (~0.167с) старый 3.0 давал 1.5*exp(-0.5)=0.91, новый 6.0 → 0.55
+	_check(absf(y1) < absf(y0) * 0.75 and y1 > 0.0,
+		"auto-follow re-centers fast (yaw %.2f -> %.2f)" % [y0, y1])
+	cam26.set("_manual_hold", 2.0)
+	var y2: float = cam26.get("_yaw")
+	for i in 10:
+		await get_tree().process_frame
+	_check(cam26.get("_yaw") == y2, "manual hold blocks auto-follow (yaw frozen %.2f)" % y2)
+	cam26.set("_manual_hold", 0.0)
+	# --- Тест 28 (v10.3): свет приглушён — «всё очень засвечено» ---
+	# Целевые значения: ambient 0.25, exposure 0.78, glow 0.25, sun 0.65.
+	var env28: Environment = get_viewport().world_3d.environment
+	_check(env28 != null and absf(env28.ambient_light_energy - 0.25) < 0.001,
+		"ambient energy 0.25 (got %.2f)" % (env28.ambient_light_energy if env28 else -1.0))
+	_check(env28 != null and absf(env28.tonemap_exposure - 0.78) < 0.001,
+		"tonemap exposure 0.78 (got %.2f)" % (env28.tonemap_exposure if env28 else -1.0))
+	_check(env28 != null and absf(env28.glow_intensity - 0.25) < 0.001,
+		"glow intensity 0.25 (got %.2f)" % (env28.glow_intensity if env28 else -1.0))
+	var sun28: DirectionalLight3D = null
+	for ch in game.get_children():
+		if ch is DirectionalLight3D:
+			sun28 = ch
+	_check(sun28 != null and absf(sun28.light_energy - 0.65) < 0.001,
+		"sun energy 0.65 (got %.2f)" % (sun28.light_energy if sun28 else -1.0))
+	# hacker-тема уровня 21 НЕ задета: ambient/glow остаются «матричными»
+	game.call("load_level", 21)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var env28h: Environment = get_viewport().world_3d.environment
+	_check(env28h != null and absf(env28h.ambient_light_energy - 0.4) < 0.001
+		and absf(env28h.glow_intensity - 0.9) < 0.001,
+		"hacker theme untouched (amb=%.2f glow=%.2f)" % [env28h.ambient_light_energy, env28h.glow_intensity])
+
 	# восстанавливаем GameState (тесты не должны портить прогресс)
 	GameState.upgrades = _sv_up
 	GameState.coins = _sv_coins

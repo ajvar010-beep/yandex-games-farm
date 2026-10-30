@@ -24,7 +24,7 @@ func _ready() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = 48.0
-	sun.light_energy = 1.15
+	sun.light_energy = 0.65  # v10.3: 1.15 засвечивал дневные уровни (см. ниже)
 	get_parent().call_deferred("add_child", sun)
 	# Environment назначаем НАПРЯМУЮ в world_3d (без WorldEnvironment-узла):
 	# call_deferred(add_child) гонит гонку — level.load_level() может выполниться
@@ -40,10 +40,19 @@ func _ready() -> void:
 	# ВАЖНО: glow_bloom=0 — равномерный bloom выбеливал ДНЕВНОЕ небо (lvl11: 51%
 	# near-white, mean 236). Свечение идёт ТОЛЬКО через glow_hdr_threshold: яркие
 	# эмиссивные поверхности (неон/лава/монеты) светятся, небо/трава — нет.
-	e.ambient_light_energy = 0.45
+	# v10.3 (отзыв живого игрока «всё очень засвечено»): замер скриншотов v10.2 —
+	# дневные уровни mean 230-233/255, 17-25% пикселей ярче 235 (L21 ночной для
+	# сравнения 94). Снижаем экспозицию: свет 1.15→0.95 (выше), ambient 0.45→0.35,
+	# glow 0.5→0.35 (неон lvl21/монеты продолжат светиться через hdr_threshold),
+	# tonemap_exposure 1.0→0.92. FILMIC остаётся (клипы в белое меньше).
+	# v10.3 итог: свет 1.15→0.65, ambient 0.45→0.25, glow 0.5→0.25, exposure
+	# 1.0→0.78. FILMIC почти не давит белую платформу — снижение экспозиции
+	# эффективнее снижения света. Целевой mean скриншотов ~200-210 (было 233).
+	e.ambient_light_energy = 0.25
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.tonemap_exposure = 0.78
 	e.glow_enabled = true
-	e.glow_intensity = 0.5
+	e.glow_intensity = 0.25
 	e.glow_bloom = 0.0
 	e.glow_strength = 0.9
 	e.glow_hdr_threshold = 1.0
@@ -63,7 +72,14 @@ func _process(delta: float) -> void:
 # вращение камеры мышью (ПК) / свайп с зажатием (моб)
 func rotate_cam(dx: float, dy: float) -> void:
 	_yaw -= dx * 0.004
-	_pitch = clampf(_pitch - dy * 0.003, -0.35, 0.5)
+	# v10.3 (отзыв живого игрока «инвертировано»): знак НЕ меняем — свайп ВВЕРХ
+	# (dy<0) → pitch растёт → камера ВЫШЕ → взгляд ВНИЗ на уровень: Roblox-стандарт
+	# от 3-го лица. Жалоба была про авто-доворот (см. _process_auto) и узкий кламп.
+	# v10.3 («нет возможности поворачивать под определёнными углами»): clamp
+	# расширен [-0.35..0.5] → [-0.9..1.3] рад (−52°..+74°): можно смотреть почти
+	# сверху и почти с уровня земли. До деградации look_at (horiz=cos(1.3)*6.5
+	# =1.7м > 0) запас есть.
+	_pitch = clampf(_pitch - dy * 0.003, -0.9, 1.3)
 	# v10.1 (отзыв живого игрока): ручное вращение ГЛУШИТ авто-доворот на 2.5с.
 	# Раньше _process_auto каждый кадр возвращал yaw к маршруту → камера «жила
 	# своей жизнью» и поворот пальцем мгновенно отбирался обратно.
@@ -103,8 +119,12 @@ func _process_auto(delta: float) -> void:
 		mv = Vector2(vel.x, vel.z)
 	if mv.length() > 1.0:
 		var want_yaw := atan2(-mv.x, -mv.y)
-		# lerp_angle сглаживает разворот — мгновенных рывков нет ни на одном кадре
-		_yaw = lerp_angle(_yaw, want_yaw, 3.0 * delta)
+		# lerp_angle сглаживает разворот — мгновенных рывков нет ни на одном кадре.
+		# v10.3 («инвертировано в некоторых местах»): 3.0→6.0 — на U-поворотах
+		# маршрута (47 шт) камера доворачивала ~1с, и «стик вверх» всё это время
+		# вёл ОТ камеры = навстречу старому направлению (бег в камеру). Теперь
+		# разворот ~0.5с — окно инверсии вдвое короче.
+		_yaw = lerp_angle(_yaw, want_yaw, 6.0 * delta)
 
 var _clouds: Array[MeshInstance3D] = []
 

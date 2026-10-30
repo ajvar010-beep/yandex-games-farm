@@ -658,10 +658,10 @@ func _run() -> void:
 		# прыжок (игрок стоит на платформе) → недетерминированный FAIL (флак).
 		_check(player.get("_jump_buffer") > 0.0, "jump button triggers tap_jump")
 
-	# --- Тест 26 (v10.3): вертикаль камеры — свайп ВВЕРХ = камера ВЫШЕ = взгляд
-	# ВНИЗ на уровень (Roblox-стандарт от 3-го лица): rotate_cam: pitch -= dy,
-	# drag вверх (dy<0) → pitch РАСТЁТ → камера выше → смотрит вниз. Жалоба
-	# игрока «инвертировано» чинится в _process_auto (тест 27), знак НЕ трогаем.
+	# --- Тест 26 (v10.4): вертикаль камеры — Roblox-touch. rotate_cam: pitch += dy.
+	# drag ВВЕРХ (dy<0) → pitch ПАДАЕТ → камера НИЖЕ цели → взгляд ВВЕРХ (небо).
+	# drag ВНИЗ (dy>0) → pitch РАСТЁТ → камера ВЫШЕ → взгляд ВНИЗ (вид сверху).
+	# Игрок v10.3 подтвердил: прежний знак (свайп вверх = взгляд вниз) = «инверсия».
 	# Переход на уровень 1 = _apply_default_theme → нейтральный env (не hacker).
 	game.call("load_level", 1)
 	await get_tree().process_frame
@@ -674,18 +674,18 @@ func _run() -> void:
 	cam26.set("_manual_hold", 0.0)
 	var p0: float = cam26.get("_pitch")
 	cam26.rotate_cam(0.0, -40.0)  # drag вверх (relative.y < 0)
-	_check(cam26.get("_pitch") > p0 + 0.05,
-		"drag up raises pitch (camera up, look down): %.2f -> %.2f" % [p0, cam26.get("_pitch")])
-	cam26.rotate_cam(0.0, 90.0)  # drag вниз
 	_check(cam26.get("_pitch") < p0 - 0.05,
-		"drag down lowers pitch (camera down, look up): %.2f" % cam26.get("_pitch"))
-	# клампы v10.3: [-0.9, +1.3] рад — «поворот под любыми углами»
+		"drag up lowers pitch (camera down, look up): %.2f -> %.2f" % [p0, cam26.get("_pitch")])
+	cam26.rotate_cam(0.0, 90.0)  # drag вниз
+	_check(cam26.get("_pitch") > p0 + 0.05,
+		"drag down raises pitch (camera up, look down): %.2f" % cam26.get("_pitch"))
+	# клампы [-0.9, +1.3] рад — «поворот под любыми углами»
 	cam26.set("_pitch", 0.0)
-	cam26.rotate_cam(0.0, 5000.0)
-	_check(cam26.get("_pitch") == -0.9, "pitch clamps at -0.9 (got %.3f)" % cam26.get("_pitch"))
+	cam26.rotate_cam(0.0, -5000.0)  # drag вверх до упора → взгляд вверх
+	_check(cam26.get("_pitch") == -0.9, "drag up clamps at -0.9 (got %.3f)" % cam26.get("_pitch"))
 	cam26.set("_pitch", 0.0)
-	cam26.rotate_cam(0.0, -5000.0)
-	_check(cam26.get("_pitch") == 1.3, "pitch clamps at +1.3 (got %.3f)" % cam26.get("_pitch"))
+	cam26.rotate_cam(0.0, 5000.0)  # drag вниз до упора → вид сверху
+	_check(cam26.get("_pitch") == 1.3, "drag down clamps at +1.3 (got %.3f)" % cam26.get("_pitch"))
 	cam26.set("_pitch", 0.0)
 	# --- Тест 27 (v10.3): авто-доворот быстрее (6.0) — окно инверсии короче ---
 	cam26.set("_manual_hold", 0.0)

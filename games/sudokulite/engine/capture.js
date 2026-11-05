@@ -37,19 +37,24 @@ window.Engine = window.Engine || {};
   function parseQuery() {
     var raw = {};
     try { new URLSearchParams(location.search).forEach(function (v, k) { raw[k] = v; }); } catch (e) {}
-    var p = {}, known = 0;
+    var p = {}, known = 0, strong = 0;
     for (var k in raw) {
-      if (Object.prototype.hasOwnProperty.call(KNOWN, k)) { p[k] = raw[k]; known++; }
+      if (Object.prototype.hasOwnProperty.call(KNOWN, k)) {
+        p[k] = raw[k]; known++;
+        // ?lang=/?mute= могут прийти из расшаренной ссылки и НЕ должны включать
+        // capture-режим (иначе у живого игрока пропадут баннер и туториал).
+        if (k !== 'lang' && k !== 'mute') strong++;
+      }
       // чужие ключи (utm_*, payload, fbclid и т.п.) сюда не попадают вообще
     }
-    return { params: p, known: known };
+    return { params: p, known: known, strong: strong };
   }
 
   C.init = function (game) {
     C._game = game;
     var parsed = parseQuery();
     var P = C.params = parsed.params;
-    C.active = parsed.known > 0; // ТОЛЬКО наши capture-параметры, никаких «любой query»
+    C.active = parsed.strong > 0; // lang/mute — не повод глушить баннер и туториал
 
     if (P.seed != null) C.seed = isNaN(+P.seed) ? String(P.seed) : (+P.seed);
     C.scene = (P.scene === 'play' || P.scene === 'menu') ? P.scene : null; // иное — игнор

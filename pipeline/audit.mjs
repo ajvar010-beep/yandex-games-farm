@@ -94,7 +94,7 @@ function auditI18n(game, issues) {
   try {
     const src = fs.readFileSync(path.join(game.dir, 'game', 'i18n.js'), 'utf8');
     const keys = (loc) => {
-      const m = src.match(new RegExp(loc + ':\\s*\\{([\\s\\S]*?)\\n    \\}'));
+      const m = src.match(new RegExp(loc + ':\\s*\\{([\\s\\S]*?)\\n\\s*\\}'));
       if (!m) return null;
       return (m[1].match(/^\s*([a-z_0-9]+):/gmi) || []).map(s => s.trim().replace(/:$/, ''));
     };

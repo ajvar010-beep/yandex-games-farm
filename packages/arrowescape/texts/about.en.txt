@@ -1,0 +1,5 @@
+Arrow Escape is a calm yet addictive arrow puzzle. The board is filled with arrow tiles; tap an arrow with a clear path to the edge and it flies out. Arrows behind it follow in a chain, and every link scores more.
+
+Thirty levels with growing boards, walls and bombs. Clear the field within the move limit; the fewer moves you use, the more stars you earn. A hint shows the best move, a bomb clears a 3×3 area, and +5 moves saves a tough level.
+
+English and Russian, saved progress, a daily challenge and a depth leaderboard.

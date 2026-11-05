@@ -201,13 +201,18 @@ function mkdirDir(p) { mkdirSync(p, { recursive: true }); }
 
 // ---------- 5. чеклист ручной загрузки (§7) ----------
 function writeChecklist(texts, zipPath) {
-  const zipSize = zipPath && existsSync(zipPath) ? (statSync(zipPath).size / 1048576).toFixed(1) + ' МБ' : '?';
+  const zBytes = zipPath && existsSync(zipPath) ? statSync(zipPath).size : 0;
+  const zipSize = zBytes ? (zBytes >= 1048576 ? (zBytes / 1048576).toFixed(1) + ' МБ' : Math.round(zBytes / 1024) + ' КБ') : '?';
+  let man = {};
+  try { man = JSON.parse(readFileSync(join(pkgDir, 'manifest.json'), 'utf8')); } catch (e) {}
+  const iap = (man.iap || []).map(x => '`' + x + '`').join(', ') || '—';
+  const lb = (man.leaderboards || []).map(x => '`' + x + '`').join(', ') || '—';
   const md = `# Чеклист загрузки «${texts?.ru?.title || name}» в Яндекс Игры
 
 Готово к копипасту в консоль: https://yandex.com/games/developer
 
 ## Общее (вкладка «Общее»)
-- [ ] Версия: 0.0.0.1
+- [ ] Версия: 0.0.0.1 (в игре ${man.version || '1.0.0'})
 - [ ] Платформы: Десктопные + Мобильные
 - [ ] Ориентация: как в игре (проверить!)
 - [ ] Языки: Русский (основной), Английский
@@ -235,6 +240,12 @@ function writeChecklist(texts, zipPath) {
 - [ ] Скриншоты мобильные (если заявлены): screenshot_portrait_*_{ru,en}.png (9:16)
 - [ ] Видео горизонтальное (ОБЯЗАТЕЛЬНО): gameplay_landscape.ru.mp4 (+ .en)
 - [ ] qa_*.png — служебные, в консоль НЕ загружать
+
+## Консоль: товары и лидерборды (вкладка «Монетизация»/«Лидерборды»)
+- [ ] IAP-товары создать: ${iap}
+- [ ] Если IAP нет — оставить пустым (магазин работает на rewarded + баннере)
+- [ ] Лидерборды создать: ${lb} (убывающий счёт, целое число)
+- [ ] Проверить, что id в коде совпадают с консолью (иначе submitScore молчит)
 
 ## Архив
 - [ ] game.zip (${zipSize}) — index.html в корне, <100 МБ

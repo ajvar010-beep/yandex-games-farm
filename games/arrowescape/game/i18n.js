@@ -1,0 +1,140 @@
+/* game/i18n.js — словари RU/EN. Ни одной строки в логике: только ключи. */
+window.GAME = window.GAME || {};
+window.GAME.i18n = {
+  ru: {
+    title: 'Побег Стрелок',
+    subtitle: 'Освободи поле за минимум ходов',
+    play: 'Играть',
+    play_continue: 'Продолжить',
+    daily: 'Ежедневный вызов',
+    daily_short: 'Дейли',
+    shop: 'Магазин',
+    leaders: 'Лидеры',
+    levels: 'Уровни',
+    levels_title: 'Выбор уровня',
+    stars_total: 'Звёзды: {n}/{m}',
+    login: 'Войти',
+    login_done: 'Вошли',
+    lang: 'EN',
+    sound_on: 'Звук вкл',
+    sound_off: 'Звук выкл',
+
+    hud_level: 'Уровень {n}',
+    hud_daily: 'Дейли',
+    hud_taps: 'Ходы: {n}',
+    hud_best: 'Рекорд: {n}',
+
+    tutorial: 'Тапни стрелку, если путь до края свободен — она улетит. Стрелки позади улетят цепочкой!',
+
+    boost_hint: 'Подсказка',
+    boost_bomb: 'Бомба',
+    boost_taps: '+5 ходов',
+    bomb_hint: 'Выбери клетку — взрыв 3×3',
+    hint_show: 'Стрелка подсвечена!',
+    no_coins: 'Не хватает монет',
+
+    shop_title: 'Магазин',
+    shop_close: 'Закрыть',
+    shop_rv: 'Реклама: +{n} монет',
+    shop_coins: 'Монеты: {n}',
+    shop_hint_about: 'Подсказка — лучший ход.',
+    shop_bomb_about: 'Бомба — взрыв 3×3.',
+    shop_taps_about: 'Ещё 5 ходов.',
+
+    pause_resume: 'Продолжить',
+    pause_restart: 'Заново',
+    pause_menu: 'В меню',
+
+    win_title: 'Уровень пройден!',
+    win_score: 'Очки: {n}',
+    win_coins: 'Награда: +{n}',
+    win_next: 'Дальше',
+    win_replay: 'Ещё раз',
+    win_menu: 'В меню',
+    win_moves: 'Ходы: {n} (лучший: {o})',
+    daily_win: 'Ежедневный вызов пройден!',
+    campaign_done: 'Кампания пройдена!',
+    ad_fail: 'Реклама не показалась',
+    shop_noads: 'Без рекламы',
+    shop_noads_owned: 'Реклама отключена',
+
+    over_title: 'Ходы кончились',
+    over_text: 'Стрелки ещё остались. Добавь ходы или начни заново.',
+    over_revive: 'Реклама: +5 ходов',
+    over_restart: 'Заново',
+    over_menu: 'В меню',
+
+
+    lb_title: 'Таблица лидеров',
+    lb_empty: 'Пока пусто — стань первым!',
+    lb_close: 'Закрыть'
+  },
+  en: {
+    title: 'Arrow Escape',
+    subtitle: 'Free the field in as few moves as possible',
+    play: 'Play',
+    play_continue: 'Continue',
+    daily: 'Daily challenge',
+    daily_short: 'Daily',
+    shop: 'Shop',
+    leaders: 'Leaders',
+    levels: 'Levels',
+    levels_title: 'Select level',
+    stars_total: 'Stars: {n}/{m}',
+    login: 'Sign in',
+    login_done: 'Signed in',
+    lang: 'RU',
+    sound_on: 'Sound on',
+    sound_off: 'Sound off',
+
+    hud_level: 'Level {n}',
+    hud_daily: 'Daily',
+    hud_taps: 'Moves: {n}',
+    hud_best: 'Best: {n}',
+
+    tutorial: 'Tap an arrow with a clear path to the edge — it flies out. Arrows behind it follow in a chain!',
+
+    boost_hint: 'Hint',
+    boost_bomb: 'Bomb',
+    boost_taps: '+5 moves',
+    bomb_hint: 'Pick a cell — 3×3 blast',
+    hint_show: 'Arrow highlighted!',
+    no_coins: 'Not enough coins',
+
+    shop_title: 'Shop',
+    shop_close: 'Close',
+    shop_rv: 'Watch ad: +{n} coins',
+    shop_coins: 'Coins: {n}',
+    shop_hint_about: 'Hint — best move.',
+    shop_bomb_about: 'Bomb — 3×3 blast.',
+    shop_taps_about: 'Five more moves.',
+
+    pause_resume: 'Resume',
+    pause_restart: 'Restart',
+    pause_menu: 'Menu',
+
+    win_title: 'Level clear!',
+    win_score: 'Score: {n}',
+    win_coins: 'Reward: +{n}',
+    win_next: 'Next',
+    win_replay: 'Replay',
+    win_menu: 'Menu',
+    win_moves: 'Moves: {n} (best: {o})',
+    daily_win: 'Daily challenge cleared!',
+    campaign_done: 'Campaign complete!',
+    ad_fail: 'The ad did not load',
+    shop_noads: 'No ads',
+    shop_noads_owned: 'Ads disabled',
+
+    over_title: 'Out of moves',
+    over_text: 'Arrows remain. Add moves or start over.',
+    over_revive: 'Watch ad: +5 moves',
+    over_restart: 'Restart',
+    over_menu: 'Menu',
+
+
+    lb_title: 'Leaderboard',
+    lb_empty: 'Empty for now — be the first!',
+    lb_close: 'Close'
+  }
+};

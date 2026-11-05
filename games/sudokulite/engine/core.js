@@ -133,12 +133,13 @@ window.Engine = window.Engine || {};
       return;
     }
 
+    var didUpdate = false;
     if (E.capture && E.capture.record > 0) {
       // record-режим: игровое время привязано к wall-clock, не к частоте RAF.
       this._acc += dt;
       var n = 0, maxSteps = 60; // защита от спирали после сворачивания вкладки
       while (this._acc >= this.fixedDt && n < maxSteps) {
-        if (!this.isPaused()) this.update(this.fixedDt);
+        if (!this.isPaused()) { this.update(this.fixedDt); didUpdate = true; }
         this._acc -= this.fixedDt; n++;
       }
       if (n === maxSteps) this._acc = 0;
@@ -146,14 +147,17 @@ window.Engine = window.Engine || {};
       this._acc += dt * this.timeScale;
       var steps2 = 0;
       while (this._acc >= this.fixedDt && steps2 < 5) {
-        if (!this.isPaused()) this.update(this.fixedDt);
+        if (!this.isPaused()) { this.update(this.fixedDt); didUpdate = true; }
         this._acc -= this.fixedDt; steps2++;
       }
       if (steps2 === 5) this._acc = 0;
     }
 
     this.render();
-    if (E.input) E.input.postUpdate();
+    // Edge-флаги ввода гасим ТОЛЬКО если был хотя бы один fixed-step (или игра на паузе):
+    // при 120–144 Гц кадр может не содержать шага, и безусловный postUpdate() съедал
+    // pointerdown/нажатия раньше, чем update() успевал их увидеть.
+    if (E.input && (didUpdate || this.isPaused())) E.input.postUpdate();
     this._fpsCount++; this._fpsTime += dt;
     if (this._fpsTime >= 1) {
       this.fps = Math.round(this._fpsCount / this._fpsTime);

@@ -80,6 +80,7 @@ window.Engine = window.Engine || {};
     click:   function () { tone({ f0: 660, f1: 880, dur: 0.07, type: 'square', vol: 0.10 }); },
     shoot:   function () { tone({ f0: 880, f1: 220, dur: 0.09, type: 'sawtooth', vol: 0.06 }); },
     hit:     function () { noise({ dur: 0.08, vol: 0.12, lp: 3000 }); },
+    tick:    function () { tone({ f0: 520, f1: 380, dur: 0.05, type: 'triangle', vol: 0.06 }); },
     explode: function () { noise({ dur: 0.30, vol: 0.26, lp: 1200 }); tone({ f0: 160, f1: 40, dur: 0.30, vol: 0.18 }); },
     coin:    function () { tone({ f0: 990, dur: 0.06, type: 'square', vol: 0.08 }); tone({ f0: 1320, dur: 0.10, type: 'square', vol: 0.08, delay: 0.06 }); },
     pulse:   function () { tone({ f0: 220, f1: 990, dur: 0.25, type: 'sine', vol: 0.20 }); noise({ dur: 0.2, vol: 0.10, hp: 800 }); },

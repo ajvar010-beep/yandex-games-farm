@@ -1,3 +1,8 @@
+---
+name: verification-loop
+description: Verification loop: verify before done — run tests, checks, and confirm before marking complete.
+---
+
 # Verification Loop Skill
 
 A comprehensive verification system for Claude Code sessions.

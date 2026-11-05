@@ -1,0 +1,10 @@
+{
+  "id": "hackerparkour",
+  "engine": "godot-4.7.2-web",
+  "version": "1.0.0",
+  "orientation": "landscape",
+  "touch": true,
+  "monetization": ["rewarded_video", "banner", "interstitial", "iap"],
+  "levels": 9,
+  "series": "parkour"
+}

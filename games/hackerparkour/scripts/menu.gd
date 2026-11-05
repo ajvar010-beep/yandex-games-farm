@@ -1,0 +1,543 @@
+extends Control
+## Menu — главное меню: сетка уровней со звёздами, скины, магазин, лидерборд.
+## Шапка и футер закреплены, середина — один общий скролл (не уезжает за экран).
+
+var _main: Node
+var _coins_label: Label
+var _stars_label: Label
+var _title: Label
+
+# «Хакер Паркур»: кампания = 9 неоновых уровней матрицы, вся игра в теме hacker.
+const RV_COINS := 30          # «📺 +30 ◈» — повторяемый RV-триггер
+const RV_COINS_COOLDOWN_MS := 180_000  # 3 минуты
+
+var _rv_btn: Button = null  # v8.1 (#5): кэш кнопки RV-монет для живого отсчёта
+
+func _ready() -> void:
+	_main = get_tree().root.get_node_or_null("Main")
+	if _main == null:
+		_main = get_parent().get_parent().get_parent()  # fallback
+	if not GameState.lang_changed.is_connected(_on_lang_changed):
+		GameState.lang_changed.connect(_on_lang_changed)
+	_build()
+
+func _on_lang_changed() -> void:
+	_build()
+
+func refresh() -> void:
+	_build()
+
+# v9.1 (консилиум v9, критик-монетизация minor): лёгкий тост снизу — фидбек
+# «награда не получена» для menu-RV (раньше тихий no-op при закрытии видео
+# раньше порога onRewarded → падает доверие к RV и повторный opt-in).
+# Авто-скрытие через 2.5с; _clear() на refresh его тоже убьёт — это нормально.
+func _toast(text: String) -> void:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", 18)
+	l.add_theme_color_override("font_color", Color(1, 0.85, 0.4))
+	l.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	l.offset_top = -70
+	l.offset_bottom = -30
+	l.process_mode = Node.PROCESS_MODE_ALWAYS  # реклама может оставить дерево на паузе
+	add_child(l)
+	get_tree().create_timer(2.5).timeout.connect(func():
+		if is_instance_valid(l): l.queue_free())
+
+func _clear() -> void:
+	for c in get_children():
+		c.queue_free()
+
+func _build() -> void:
+	_clear()
+	var bg := ColorRect.new()
+	bg.color = Color(0.08, 0.10, 0.16)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vb.offset_left = 24
+	vb.offset_right = -24
+	vb.offset_top = 10
+	vb.offset_bottom = -10
+	vb.add_theme_constant_override("separation", 8)
+	add_child(vb)
+
+	# ---------- шапка (закреплена) ----------
+	var head := HBoxContainer.new()
+	vb.add_child(head)
+	_title = Label.new()
+	_title.text = Variant.title
+	_title.add_theme_font_size_override("font_size", 38)
+	_title.add_theme_color_override("font_color", Variant.skin_color.lightened(0.5))
+	head.add_child(_title)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(sp)
+	_stars_label = Label.new()
+	_stars_label.text = GameState.L("stars_total") % [GameState.total_stars(), Variant.levels_total * 3]
+	_stars_label.add_theme_font_size_override("font_size", 26)
+	_stars_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	head.add_child(_stars_label)
+	var sp2 := Control.new()
+	sp2.custom_minimum_size = Vector2(20, 0)
+	head.add_child(sp2)
+	_coins_label = Label.new()
+	_coins_label.add_theme_font_size_override("font_size", 28)
+	_coins_label.add_theme_color_override("font_color", Color(0.4, 1, 0.7))
+	head.add_child(_coins_label)
+
+	var sub := Label.new()
+	sub.text = Variant.subtitle
+	sub.add_theme_font_size_override("font_size", 15)
+	sub.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
+	vb.add_child(sub)
+
+	# ---------- середина: один общий скролл ----------
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vb.add_child(scroll)
+
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 8)
+	scroll.add_child(content)
+
+	_build_levels(content)
+	_build_skins(content)
+	_build_upgrades(content)
+	_build_shop(content)
+	_build_leaderboard(content)
+	_build_series_promo(content)
+
+	# ---------- футер (закреплён, всегда виден) ----------
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 10)
+	vb.add_child(foot)
+
+	var snd := Button.new()
+	snd.text = GameState.L("sound_on") if GameState.sound_on else GameState.L("sound_off")
+	snd.add_theme_font_size_override("font_size", 18)
+	snd.pressed.connect(func():
+		GameState.sound_on = not GameState.sound_on
+		GameState.save_data()
+		refresh())
+	foot.add_child(snd)
+
+	# RV-монеты (повторяемый триггер, кулдаун 3 мин).
+	# v8.1 (консилиум v8 minor): во время кулдауна кнопка disabled + живой отсчёт —
+	# раньше тап был тихим no-op без фидбэка («сломалось? не засчитали?»).
+	var rvb := Button.new()
+	rvb.name = "RvCoinsBtn"
+	rvb.text = GameState.L("rv_coins") % RV_COINS
+	rvb.add_theme_font_size_override("font_size", 18)
+	rvb.modulate = Color(0.5, 0.9, 1.0)
+	rvb.pressed.connect(_on_rv_coins)
+	foot.add_child(rvb)
+	_rv_btn = rvb
+	_update_rv_cooldown(rvb)
+
+	var fsp := Control.new()
+	fsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	foot.add_child(fsp)
+
+	var daily := Button.new()
+	if GameState.can_claim_daily():
+		daily.text = GameState.L("daily")
+		daily.modulate = Color(1, 0.9, 0.3)
+	else:
+		daily.text = GameState.L("daily_next") % GameState.daily_streak
+		daily.modulate = Color(0.7, 0.7, 0.75)
+	daily.add_theme_font_size_override("font_size", 18)
+	daily.pressed.connect(_on_daily)
+	foot.add_child(daily)
+
+	_update_coins()
+
+# ---------- уровни со звёздами и рекордами ----------
+func _build_levels(parent: Control) -> void:
+	var lv_title := Label.new()
+	lv_title.text = GameState.L("levels_hdr")
+	lv_title.add_theme_font_size_override("font_size", 20)
+	lv_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	parent.add_child(lv_title)
+
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	parent.add_child(grid)
+
+	for i in range(1, Variant.levels_total + 1):
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(170, 92)
+		var unlocked := i <= GameState.max_level
+		var st := GameState.stars_of(i)
+		var best := GameState.best_time(i)
+		# «Хакер Паркур»: ВСЯ игра — неоновая матрица, кнопки в стиле терминала
+		b.text = "H%d" % i if unlocked else "🔒"
+		b.modulate = Color(0.1, 1.0, 0.3) if unlocked else Color(0.45, 0.45, 0.5)
+		b.add_theme_font_size_override("font_size", 22)
+		if unlocked:
+			var info := "\n" + _mini_stars(st)
+			if best > 0:
+				info += "  %.1f" % (best / 1000.0)
+			var info_lbl := Label.new()
+			info_lbl.text = info
+			info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			info_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+			info_lbl.offset_top = -30
+			info_lbl.add_theme_font_size_override("font_size", 14)
+			info_lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
+			info_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_child(info_lbl)
+		b.disabled = not unlocked
+		var lv := i
+		b.pressed.connect(func():
+			AudioBus.click()
+			_main.start_level(lv))
+		grid.add_child(b)
+
+func _mini_stars(n: int) -> String:
+	match n:
+		3: return "★★★"
+		2: return "★★☆"
+		1: return "★☆☆"
+	return "☆☆☆"
+
+# ---------- скины ----------
+func _build_skins(parent: Control) -> void:
+	var sh_title := Label.new()
+	sh_title.text = GameState.L("skins_hdr")
+	sh_title.add_theme_font_size_override("font_size", 20)
+	sh_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	parent.add_child(sh_title)
+
+	var skin_grid := GridContainer.new()
+	skin_grid.columns = 6
+	skin_grid.add_theme_constant_override("h_separation", 10)
+	skin_grid.add_theme_constant_override("v_separation", 10)
+	parent.add_child(skin_grid)
+
+	for id in GameState.SKINS:
+		var s: Dictionary = GameState.SKINS[id]
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(140, 100)
+		var unlocked := GameState.is_unlocked(id)
+		var txt: String = GameState.L("skin_" + id)
+		if not unlocked:
+			if s.get("rv", false):
+				txt += "\n📺"
+			else:
+				txt += "\n◈%d" % s["cost"]
+		elif GameState.current_skin == id:
+			txt += "\n✓"
+		b.text = txt
+		b.add_theme_font_size_override("font_size", 16)
+		b.self_modulate = s["color"]
+		if not unlocked:
+			b.modulate = Color(0.75, 0.75, 0.8)
+		var sid: String = id
+		b.pressed.connect(func(): _on_skin(sid))
+		skin_grid.add_child(b)
+
+	# прогресс до следующего скина (видимая цель)
+	var next := _next_skin_goal()
+	if not next.is_empty():
+		var prog := Label.new()
+		prog.text = GameState.L("skin_progress") % [GameState.coins, int(next["cost"]), GameState.L("skin_" + str(next["id"]))]
+		prog.add_theme_font_size_override("font_size", 15)
+		prog.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+		parent.add_child(prog)
+
+func _next_skin_goal() -> Dictionary:
+	# ближайшая ДОСТИЖИМАЯ цель: самый дешёвый скин дороже текущих монет
+	var best: Dictionary = {}
+	for id in GameState.SKINS:
+		if GameState.is_unlocked(id): continue
+		var s: Dictionary = GameState.SKINS[id]
+		if s.get("rv", false): continue
+		var cost := int(s["cost"])
+		if cost <= GameState.coins: continue  # уже по карману — не цель
+		if best.is_empty() or cost < int(best["cost"]):
+			best = {"id": id, "cost": cost}
+	return best
+
+# ---------- v9: ПРОКАЧКА (постоянные апгрейды за ◈) ----------
+func _build_upgrades(parent: Control) -> void:
+	var up_title := Label.new()
+	up_title.text = GameState.L("upgrades_hdr")
+	up_title.add_theme_font_size_override("font_size", 20)
+	up_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	parent.add_child(up_title)
+
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	parent.add_child(grid)
+
+	for id in GameState.UPGRADE_ORDER:
+		var lv := GameState.upgrade_level(id)
+		var mx: int = GameState.UPGRADES[id]["max"]
+		var cost := GameState.upgrade_cost(id)
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(180, 108)
+		var txt := "%s\n%s\n" % [GameState.L("up_" + id), GameState.L("up_level_n") % [lv, mx]]
+		if lv >= mx:
+			txt += GameState.L("up_max")
+			b.modulate = Color(0.6, 0.8, 0.65)
+		else:
+			txt += "%s\n◈%d" % [GameState.L("up_desc_" + id), cost]
+			if GameState.coins < cost:
+				b.modulate = Color(0.75, 0.75, 0.8)
+		b.text = txt
+		b.add_theme_font_size_override("font_size", 14)
+		b.tooltip_text = GameState.L("up_desc_" + id)
+		var uid: String = id
+		b.pressed.connect(func(): _on_upgrade(uid))
+		grid.add_child(b)
+
+func _on_upgrade(id: String) -> void:
+	AudioBus.click()
+	if GameState.buy_upgrade(id):
+		AudioBus.buy()
+		# dash куплен впервые — показать кнопку рывка при следующем входе в уровень
+		refresh()
+	else:
+		# не хватает монет / макс — подсветить счётчик монет (паттерн _on_skin)
+		_coins_label.add_theme_color_override("font_color", Color(1, 0.4, 0.4))
+		await get_tree().create_timer(0.4).timeout
+		if is_instance_valid(_coins_label):
+			_coins_label.add_theme_color_override("font_color", Color(0.4, 1, 0.7))
+
+# ---------- магазин IAP ----------
+func _build_shop(parent: Control) -> void:
+	var shop_title := Label.new()
+	shop_title.text = GameState.L("shop_hdr")
+	shop_title.add_theme_font_size_override("font_size", 20)
+	shop_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	parent.add_child(shop_title)
+
+	var shop := HBoxContainer.new()
+	shop.add_theme_constant_override("separation", 10)
+	parent.add_child(shop)
+	_add_iap_btn(shop, GameState.L("shop_coins1"), "coins_500", 500)
+	_add_iap_btn(shop, GameState.L("shop_coins2"), "coins_1500", 1500)
+	if not GameState.no_ads:
+		_add_iap_btn(shop, GameState.L("shop_noads"), "no_ads", 0)
+	else:
+		var owned := Label.new()
+		owned.text = GameState.L("noads_owned")
+		owned.add_theme_font_size_override("font_size", 18)
+		owned.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
+		shop.add_child(owned)
+
+# ---------- лидерборд (был write-only) ----------
+func _build_leaderboard(parent: Control) -> void:
+	var lb_title := Label.new()
+	lb_title.text = GameState.L("lb_hdr")
+	lb_title.add_theme_font_size_override("font_size", 20)
+	lb_title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	parent.add_child(lb_title)
+
+	var lb_label := Label.new()
+	lb_label.text = GameState.L("lb_loading")
+	lb_label.add_theme_font_size_override("font_size", 15)
+	lb_label.add_theme_color_override("font_color", Color(0.75, 0.8, 0.9))
+	parent.add_child(lb_label)
+
+	Yandex.get_leaderboard("parkour_time", func(res):
+		if not is_instance_valid(lb_label): return
+		# null-safe: у свежего ЛБ entries может отсутствовать; quantity нет в API
+		if res == null or res.entries == null:
+			lb_label.text = GameState.L("lb_unavailable")
+			return
+		var entries = res.entries
+		var n: int = mini(int(entries.size()), 8)
+		if n == 0:
+			lb_label.text = GameState.L("lb_unavailable")
+			return
+		var lines: PackedStringArray = []
+		for i in range(n):
+			var e = entries[i]
+			var pname := "?"
+			if e.player != null:
+				pname = str(e.player.publicName)
+			lines.append("%d. %s — %s" % [i + 1, pname, _fmt_score(int(e.score))])
+		if res.userRank != null and int(res.userRank) > 0:
+			var uname := "?"
+			var uscore := 0
+			if res.userEntry != null:
+				if res.userEntry.player != null:
+					uname = str(res.userEntry.player.publicName)
+				uscore = int(res.userEntry.score)
+			lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(uscore)])
+		lb_label.text = "\n".join(lines))
+
+func _fmt_score(v: int) -> String:
+	# v9.1: score = par-эффективность ×1000 (1000 = ровно в par, >1000 = быстрее).
+	# Старая семантика (1e6−мс → секунды) пала вместе с кемпингом lv1 в лидерборде.
+	return "%d%s" % [v, GameState.L("pts")]
+
+# ---------- кросс-промо серии ----------
+func _build_series_promo(parent: Control) -> void:
+	var t := Label.new()
+	t.text = GameState.L("series_hdr")
+	t.add_theme_font_size_override("font_size", 20)
+	t.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	parent.add_child(t)
+	var hint := Label.new()
+	match Variant.id:
+		"nub": hint.text = GameState.L("series_nub")
+		"pro": hint.text = GameState.L("series_pro")
+		"god": hint.text = GameState.L("series_god")
+	hint.add_theme_font_size_override("font_size", 15)
+	hint.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85))
+	parent.add_child(hint)
+
+# ---------- обработчики ----------
+func _on_rv_coins() -> void:
+	# v8.1 (minor): кулдаун в GameState (Menu пересоздаётся на каждый вход — иначе терялся)
+	var now := Time.get_ticks_msec()
+	if now - GameState.last_rv_coins_ms < RV_COINS_COOLDOWN_MS and GameState.last_rv_coins_ms != 0:
+		AudioBus.click()
+		return
+	AudioBus.click()
+	Yandex.show_rewarded(func():
+		GameState.last_rv_coins_ms = Time.get_ticks_msec()
+		GameState.add_coins(RV_COINS)
+		AudioBus.buy()
+		refresh(),  # пересборка: монеты, прогресс скина, новая кнопка RV с кэшем _rv_btn
+		func(): _toast(GameState.L("rv_no_reward")))  # v9.1: on_fail-фидбек (кулдаун НЕ ставим — ретрай возможен)
+
+# живой отсчёт кулдауна RV-монет: disabled + «⏳ MM:SS» пока ждём, потом активна
+func _update_rv_cooldown(btn: Button) -> void:
+	if not is_instance_valid(btn): return
+	var now := Time.get_ticks_msec()
+	var remain := 0
+	if GameState.last_rv_coins_ms != 0:
+		remain = RV_COINS_COOLDOWN_MS - (now - GameState.last_rv_coins_ms)
+	if remain > 0:
+		var s := int(ceil(remain / 1000.0))
+		btn.disabled = true
+		btn.text = "⏳ %d:%02d" % [floori(s / 60.0), s % 60]
+		btn.modulate = Color(0.6, 0.6, 0.65)
+	else:
+		btn.disabled = false
+		btn.text = GameState.L("rv_coins") % RV_COINS
+		btn.modulate = Color(0.5, 0.9, 1.0)
+
+func _process(_delta: float) -> void:
+	# живой отсчёт кулдауна RV-монет (кэш кнопки из _build)
+	if _rv_btn and is_instance_valid(_rv_btn):
+		_update_rv_cooldown(_rv_btn)
+
+func _on_daily() -> void:
+	if GameState.can_claim_daily():
+		var got := GameState.claim_daily()
+		AudioBus.buy()
+		_coins_label.text = "◈ %d (+%d)" % [GameState.coins, got]
+		# удвоение ежедневки за RV — ещё один денежный триггер
+		_offer_daily_double(got)
+
+func _offer_daily_double(got: int) -> void:
+	var box := PanelContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.custom_minimum_size = Vector2(420, 200)
+	add_child(box)
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 12)
+	box.add_child(vb)
+	var lbl := Label.new()
+	lbl.text = GameState.L("daily_double_q") % got
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 22)
+	vb.add_child(lbl)
+	var yes := Button.new()
+	yes.text = GameState.L("double")
+	yes.add_theme_font_size_override("font_size", 20)
+	vb.add_child(yes)
+	var no := Button.new()
+	no.text = GameState.L("no_thanks")
+	no.add_theme_font_size_override("font_size", 18)
+	vb.add_child(no)
+	yes.pressed.connect(func():
+		AudioBus.click()
+		box.queue_free()
+		Yandex.show_rewarded(func():
+			GameState.add_coins(got)
+			AudioBus.buy()
+			refresh(),
+			func(): _toast(GameState.L("rv_no_reward"))))  # v9.1: on_fail-фидбек
+	no.pressed.connect(func():
+		AudioBus.click()
+		box.queue_free()
+		refresh())
+
+func _add_iap_btn(parent: Control, label: String, product_id: String, coins: int) -> void:
+	var b := Button.new()
+	b.text = label
+	b.custom_minimum_size = Vector2(190, 90)
+	b.add_theme_font_size_override("font_size", 18)
+	b.pressed.connect(_make_iap_handler(product_id, coins))
+	parent.add_child(b)
+
+func _make_iap_handler(product_id: String, coins: int) -> Callable:
+	return func():
+		AudioBus.click()
+		Yandex.purchase(product_id, _iap_ok.bind(coins), _iap_fail)
+
+func _iap_ok(coins: int) -> void:
+	if coins > 0:
+		GameState.add_coins(coins)
+	else:
+		GameState.no_ads = true
+		# v8.1 (консилиум v8 #4): скрыть УЖЕ ВИДЯЩИЙ баннер немедленно —
+		# show_banner() его больше не покажет (guard no_ads), но висящий
+		# остался бы до входа в уровень → «заплатил 199₽, реклама осталась»
+		Yandex.hide_banner()
+	GameState.save_data()
+	AudioBus.buy()
+	refresh()
+
+func _iap_fail() -> void:
+	AudioBus.click()
+
+func _update_coins() -> void:
+	_coins_label.text = "◈ %d" % GameState.coins
+
+func _on_skin(id: String) -> void:
+	AudioBus.click()
+	if GameState.is_unlocked(id):
+		GameState.set_skin(id)
+		refresh()
+		return
+	var s: Dictionary = GameState.SKINS[id]
+	if s.get("rv", false):
+		# RV-разблок
+		Yandex.show_rewarded(func():
+			GameState.unlock_skin(id)
+			GameState.set_skin(id)
+			AudioBus.buy()
+			refresh(),
+			func(): _toast(GameState.L("rv_no_reward")))  # v9.1: on_fail-фидбек
+	else:
+		if GameState.coins >= s["cost"]:
+			GameState.add_coins(-s["cost"])
+			GameState.unlock_skin(id)
+			GameState.set_skin(id)
+			AudioBus.buy()
+			refresh()
+		else:
+			# не хватает монет — подсветить
+			_coins_label.add_theme_color_override("font_color", Color(1, 0.4, 0.4))
+			await get_tree().create_timer(0.4).timeout
+			if is_instance_valid(_coins_label):
+				_coins_label.add_theme_color_override("font_color", Color(0.4, 1, 0.7))

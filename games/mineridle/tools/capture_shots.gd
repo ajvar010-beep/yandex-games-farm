@@ -64,5 +64,25 @@ func _run() -> void:
 	_game._spawn_rock()
 	await get_tree().process_frame
 	await _save("07_golden")
+	# EN-версии (магазин, старт, рабочие)
+	GameState.set_lang("en")
+	GameState.coins = 40
+	GameState.owned = {}
+	GameState.max_level = 1
+	_game.load_level(1)
+	await get_tree().create_timer(0.4).timeout
+	await _save("01_start_en")
+	_game._on_shop()
+	await get_tree().process_frame
+	await _save("03_shop_en")
+	_game._shop_panel.visible = false
+	GameState.coins = 5000
+	GameState.max_level = 10
+	GameState.owned = {"pick_wood": 3, "pick_stone": 2, "helm_bronze": 2, "mach_drill": 1}
+	_game._rebuild_workers()
+	_game._update_hud()
+	await get_tree().create_timer(0.5).timeout
+	await _save("04_workers_en")
+	GameState.set_lang("ru")
 	print("done")
 	get_tree().quit(0)

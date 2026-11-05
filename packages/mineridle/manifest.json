@@ -1,0 +1,16 @@
+{
+  "id": "mineridle",
+  "version": "1.0.0",
+  "title": {"ru": "Шахтёр Кликер", "en": "Miner Clicker"},
+  "engine": "godot-4.7.2-web",
+  "orientation": "landscape",
+  "languages": ["ru", "en"],
+  "age": "6+",
+  "categories": ["casual", "clicker"],
+  "monetization": ["rewarded_video", "interstitial", "iap", "banner"],
+  "iap": ["coins_5000", "coins_20000", "no_ads"],
+  "leaderboards": ["depth"],
+  "cloud_saves": true,
+  "build": "games/mineridle/export/web",
+  "zip": "game.zip"
+}

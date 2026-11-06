@@ -1,0 +1,22 @@
+{
+  "variant": 51,
+  "landscape": [
+    { "name": "convoy_early", "q": "scene=play&wave=2&t=17&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "convoy_mid", "q": "scene=play&wave=5&t=19&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "weapons_late", "q": "scene=play&wave=9&t=19&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "boss_final", "q": "scene=play&wave=12&mode=boss&t=16&freeze=1", "expect": { "scene": "play", "mode": "running" } }
+  ],
+  "portrait": [
+    { "name": "convoy_early", "q": "scene=play&wave=2&t=17&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "convoy_mid", "q": "scene=play&wave=5&t=19&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "weapons_late", "q": "scene=play&wave=9&t=19&freeze=1", "expect": { "scene": "play", "mode": "running" } }
+  ],
+  "qa": [
+    { "name": "menu", "q": "scene=menu&freeze=1", "expect": { "scene": "menu" } },
+    { "name": "shop", "q": "scene=play&wave=5&mode=shop&freeze=1", "expect": { "scene": "play", "mode": "shop" } },
+    { "name": "perks", "q": "scene=play&wave=5&mode=perk&freeze=1", "expect": { "scene": "play", "mode": "shop" } },
+    { "name": "win", "q": "scene=play&wave=4&mode=win&freeze=1", "expect": { "scene": "play", "mode": "win" } },
+    { "name": "gameover", "q": "scene=play&wave=6&mode=over&freeze=1", "expect": { "scene": "play", "mode": "over" } }
+  ],
+  "video": { "q": "autoplay=1&record=26&wave=6&seed=31", "seconds": 26 }
+}

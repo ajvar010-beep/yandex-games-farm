@@ -247,7 +247,7 @@ window.GAME = window.GAME || {};
             if (behind && behind.t === 'arrow' && behind.special !== 'bomb' && behind.dir === cand) { d = cand; break; }
           }
         }
-        grid[r2][c] = { t: 'arrow', dir: d, color: rng.int(0, spec.colors - 1), special: 0, frozen: 0 };
+        grid[r2][c] = { t: 'arrow', dir: d, color: rng.int(0, spec.colors - 1), special: 0, frozen: 0, variant: rng.int(1, 5) };
         placed++;
       }
 
@@ -306,7 +306,7 @@ window.GAME = window.GAME || {};
       };
     }
     // страховка (практически недостижима): маленькое поле из одной стрелки
-    var g = [[{ t: 'arrow', dir: 0, color: 0, special: 0, frozen: 0 }]];
+    var g = [[{ t: 'arrow', dir: 0, color: 0, special: 0, frozen: 0, variant: 1 }]];
     return { level: level, cols: 1, rows: 1, grid: g, optimal: 1, tapLimit: 3, arrows: 1, crates: 0, frozen: 0 };
   }
 

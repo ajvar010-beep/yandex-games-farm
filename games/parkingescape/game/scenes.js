@@ -644,7 +644,7 @@ window.GAME = window.GAME || {};
           var dir = e.cell.special === 'bomb' ? 0 : e.cell.dir;
           self.ghosts.push({
             x: px, y: py, size: self.cell * 0.92, color: e.cell.color, dir: dir,
-            special: e.cell.special, t: -e.step * 0.05, life: 0.5
+            special: e.cell.special, variant: e.cell.variant, t: -e.step * 0.05, life: 0.5
           });
           var gain = 10 * (e.step + 1);
           self.score += gain;
@@ -691,7 +691,7 @@ window.GAME = window.GAME || {};
         (function (e) {
           var px = self.cellX(e.c), py = self.cellY(e.r);
           if (e.kind === 'crate') { E.fx.burst(px, py, '#c98a4b', 8, 140, self.visRng); return; }
-          self.ghosts.push({ x: px, y: py, size: self.cell * 0.92, color: e.cell.color, dir: 0, special: 'bomb', t: 0, life: 0.45 });
+          self.ghosts.push({ x: px, y: py, size: self.cell * 0.92, color: e.cell.color, dir: 0, special: 'bomb', variant: e.cell.variant, t: 0, life: 0.45 });
           self.score += 15;
           E.fx.burst(px, py, '#ffd166', 6, 170, self.visRng);
         })(removed[i]);
@@ -921,7 +921,7 @@ window.GAME = window.GAME || {};
             E.ui.roundRect(ctx, x - this.cell * 0.47, y - this.cell * 0.47, this.cell * 0.94, this.cell * 0.94, this.cell * 0.18);
             ctx.stroke(); ctx.restore();
           }
-          G.art.drawTile(ctx, cell.color, x, y, this.cell * 0.92, cell.dir, cell.special, 1, 1);
+          G.art.drawTile(ctx, cell.color, x, y, this.cell * 0.92, cell.dir, cell.special, 1, 1, cell.variant);
           if (cell.frozen > 0) G.art.drawIce(ctx, x, y, this.cell, game.time);
         }
       }
@@ -934,7 +934,7 @@ window.GAME = window.GAME || {};
         if (k > 1) continue;
         var dist = gh.t * this.cell * (5 + k * 8);
         var dx = G.logic.DIRS[gh.dir || 0][0] * dist, dy = G.logic.DIRS[gh.dir || 0][1] * dist;
-        G.art.drawTile(ctx, gh.color, gh.x + dx, gh.y + dy, gh.size * (1 + k * 0.25), gh.dir, gh.special, 1 - k, 1);
+        G.art.drawTile(ctx, gh.color, gh.x + dx, gh.y + dy, gh.size * (1 + k * 0.25), gh.dir, gh.special, 1 - k, 1, gh.variant);
       }
 
       // всплывающие очки

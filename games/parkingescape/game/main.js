@@ -20,6 +20,7 @@
       document.title = E.i18n.t('title');
       E.audio.setMuted(E.storage.get('muted', false) || cap.mute);
       G.art.init();
+      if (G.art.preload) G.art.preload();
 
       game.addScene('menu', G.scenes.menu);
       game.addScene('play', G.scenes.play);

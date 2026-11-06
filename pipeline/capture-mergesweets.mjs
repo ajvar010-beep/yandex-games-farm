@@ -28,7 +28,7 @@ const QA_SHOTS = [
 ];
 const GAMEPLAY_PORTRAIT = GAMEPLAY_SHOTS.slice(0, 3);
 
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--mute-audio', '--hide-scrollbars'] });
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--mute-audio', '--hide-scrollbars', '--allow-file-access-from-files'] });
 
 function watchConsole(page) {
   page.errors = [];

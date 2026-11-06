@@ -15,7 +15,7 @@ window.GAME = window.GAME || {};
       accent: '#ffd43b', good: '#51cf66', bad: '#ff6b81', danger: '#ff5d73',
       coin: '#ffd43b', wall: '#6b7480', wallEdge: '#9aa6b2',
       /* цвета машин: красный, синий, жёлтый, зелёный, фиолетовый, розовый, белый */
-      tileColors: ['#e03131', '#1c7ed6', '#f59f00', '#37b24d', '#7048e8', '#f06595', '#e9ecef'],
+      tileColors: ['#e03131', '#1c7ed6', '#f59f00', '#37b24d', '#343a40'],
       tileEdge: '#15181c'
     },
     board: { maxWFrac: 0.94, maxHFrac: 0.60, gap: 0.07, radius: 0.12 },
@@ -44,7 +44,7 @@ window.GAME = window.GAME || {};
         rows: lv >= 10 ? (7 + ((lv >> 1) % 2)) : Math.min(8, 5 + Math.floor((lv - 1) / 3)),
         fill: Math.min(0.88, 0.70 + (lv % 3) * 0.03 + lv * 0.002),
         walls: lv >= 3 ? Math.min(6, Math.floor((lv - 1) / 4)) : 0,
-        colors: lv < 5 ? 3 : lv < 10 ? 4 : lv < 18 ? 5 : 6,
+        colors: lv < 5 ? 3 : lv < 10 ? 4 : 5,
         bombs: lv >= 8 ? Math.min(3, 1 + Math.floor((lv - 8) / 5)) : 0,
         crates: lv >= 5 ? Math.min(6, 1 + Math.floor((lv - 5) / 3)) : 0,
         frozen: lv >= 10 ? Math.min(5, 1 + Math.floor((lv - 10) / 3)) : 0,

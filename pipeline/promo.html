@@ -214,13 +214,24 @@
   // не вешает страницу: рисуем из FALLBACK, а gate capture.mjs уронит съёмку.
   loadScript(root + '/game/config.js')
     .then(function () { return loadScript(root + '/game/i18n.js'); })
-    .then(function () { return loadScript(root + '/game/art.js').catch(function () {}); })
+    .then(function () {
+      // спрайты игры лежат в её папке, а промо-страница живёт в pipeline/
+      window.GAME = window.GAME || {};
+      window.GAME.assetBase = root.replace(/\/?$/, '/');
+      return loadScript(root + '/game/art.js').catch(function () {});
+    })
     .catch(function () {})
     .then(function () {
-      try { render(); }
-      catch (e) {
-        window.__promo = { ready: true, error: String(e), iconPng: 'data:', coverPng: 'data:' };
+      function go() {
+        try { render(); }
+        catch (e) {
+          window.__promo = { ready: true, error: String(e), iconPng: 'data:', coverPng: 'data:' };
+        }
       }
+      // если игра грузит PNG-спрайты (наш parkingescape) — дождаться их
+      if (window.GAME && window.GAME.art && typeof window.GAME.art.preload === 'function') {
+        window.GAME.art.preload().then(go).catch(go);
+      } else go();
     });
 })();
 </script>

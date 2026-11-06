@@ -26,156 +26,18 @@ window.GAME = window.GAME || {};
     ctx.closePath();
   }
 
-  /* ---------- машины: чистый top-down, как в аркадных parking-играх ---------- */
-  var STYLES = [
-    { id: 'sport',  L: 166, halfW: 47, cabF: 44, cabR: 104, spoiler: 1 },
-    { id: 'sedan',  L: 168, halfW: 45, cabF: 42, cabR: 110 },
-    { id: 'taxi',   L: 168, halfW: 45, cabF: 42, cabR: 110, taxi: 1 },
-    { id: 'suv',    L: 172, halfW: 47, cabF: 38, cabR: 120, rails: 1 },
-    { id: 'hatch',  L: 156, halfW: 44, cabF: 42, cabR: 112, hatch: 1 },
-    { id: 'van',    L: 174, halfW: 46, cabF: 30, cabR: 132, van: 1 },
-    { id: 'pickup', L: 172, halfW: 46, cabF: 38, cabR: 96, pickup: 1 }
-  ];
+  /* ---------- машины: официальный Kenney Racing Pack (CC0) ----------
+     5 цветов × 5 кузовов, PNG лежат локально в assets/cars/.
+     Спрайты смотрят носом вверх; drawTile поворачивает по dir. */
+  var CAR_COLORS = ['red', 'blue', 'yellow', 'green', 'black'];
+  var CAR_VARIANTS = 5;
 
-  function glassBand(ctx, pts, c1, c2) {
-    var g = ctx.createLinearGradient(0, pts[0][1], 0, pts[2][1]);
-    g.addColorStop(0, c1); g.addColorStop(1, c2);
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.closePath();
-    ctx.fillStyle = g; ctx.fill();
-    ctx.strokeStyle = 'rgba(220,242,255,0.55)'; ctx.lineWidth = 1.2; ctx.stroke();
-  }
-
-  function makeCar(color, st) {
-    var cv = document.createElement('canvas'); cv.width = cv.height = SIZE;
-    var x = cv.getContext('2d');
-    var cx = SIZE / 2, y0 = (SIZE - st.L) / 2, y1 = y0 + st.L, halfW = st.halfW;
-    var H = st.L;
-
-    // тень
-    x.fillStyle = 'rgba(0,0,0,0.30)';
-    rr(x, cx - halfW - 2, y0 + 8, halfW * 2 + 4, H, 18); x.fill();
-
-    // колёса — выглядывают по бокам
-    x.fillStyle = '#0c0e12';
-    rr(x, cx - halfW - 7, y0 + 34, 13, 27, 5); x.fill();
-    rr(x, cx + halfW - 6, y0 + 34, 13, 27, 5); x.fill();
-    rr(x, cx - halfW - 7, y1 - 61, 13, 27, 5); x.fill();
-    rr(x, cx + halfW - 6, y1 - 61, 13, 27, 5); x.fill();
-    x.fillStyle = 'rgba(160,170,180,0.8)';
-    rr(x, cx - halfW - 3, y0 + 43, 5, 9, 2); x.fill();
-    rr(x, cx + halfW + 2, y0 + 43, 5, 9, 2); x.fill();
-
-    // кузов
-    var bg = x.createLinearGradient(cx - halfW, y0, cx + halfW, y1);
-    bg.addColorStop(0, tint(color, 0.28));
-    bg.addColorStop(0.5, color);
-    bg.addColorStop(1, shade(color, 0.26));
-    rr(x, cx - halfW, y0, halfW * 2, H, 14);
-    x.fillStyle = bg; x.fill();
-    x.strokeStyle = 'rgba(9,11,15,0.72)'; x.lineWidth = 3; x.stroke();
-
-    // мягкая боковая тень
-    x.save(); rr(x, cx - halfW, y0, halfW * 2, H, 14); x.clip();
-    var side = x.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
-    side.addColorStop(0, 'rgba(255,255,255,0.20)');
-    side.addColorStop(0.12, 'rgba(255,255,255,0)');
-    side.addColorStop(0.86, 'rgba(0,0,0,0.05)');
-    side.addColorStop(1, 'rgba(0,0,0,0.24)');
-    x.fillStyle = side; x.fillRect(cx - halfW, y0, halfW * 2, H);
-    x.restore();
-
-    // капот и багажник
-    x.strokeStyle = 'rgba(0,0,0,0.20)'; x.lineWidth = 1.4;
-    x.beginPath(); x.moveTo(cx - halfW * 0.62, y0 + 35); x.lineTo(cx + halfW * 0.62, y0 + 35); x.stroke();
-    x.beginPath(); x.moveTo(cx - halfW * 0.62, y1 - 30); x.lineTo(cx + halfW * 0.62, y1 - 30); x.stroke();
-
-    // колёсные арки
-    x.strokeStyle = 'rgba(0,0,0,0.30)'; x.lineWidth = 2;
-    x.beginPath(); x.arc(cx - halfW + 1, y0 + 48, 16, -1.1, 1.1); x.stroke();
-    x.beginPath(); x.arc(cx + halfW - 1, y0 + 48, 16, Math.PI - 1.1, Math.PI + 1.1); x.stroke();
-    x.beginPath(); x.arc(cx - halfW + 1, y1 - 48, 16, -1.1, 1.1); x.stroke();
-    x.beginPath(); x.arc(cx + halfW - 1, y1 - 48, 16, Math.PI - 1.1, Math.PI + 1.1); x.stroke();
-
-    var cabF = y0 + st.cabF, cabR = y0 + st.cabR;
-    var wF = halfW * 0.67, wR = halfW * 0.57;
-
-    // лобовое — широкая полоса
-    glassBand(x, [[cx - wF, cabF], [cx + wF, cabF], [cx + wR, cabF + 23], [cx - wR, cabF + 23]],
-      'rgba(224,244,255,0.96)', 'rgba(70,118,158,0.98)');
-    // крыша
-    var roof = x.createLinearGradient(0, cabF + 23, 0, cabR - 22);
-    roof.addColorStop(0, tint(color, 0.08)); roof.addColorStop(0.5, shade(color, 0.06)); roof.addColorStop(1, shade(color, 0.20));
-    rr(x, cx - halfW * 0.72, cabF + 23, halfW * 1.44, Math.max(12, cabR - cabF - 45), 6);
-    x.fillStyle = roof; x.fill();
-    x.strokeStyle = 'rgba(0,0,0,0.18)'; x.lineWidth = 1.2; x.stroke();
-
-    // заднее стекло
-    glassBand(x, [[cx - wR, cabR - 22], [cx + wR, cabR - 22], [cx + wF, cabR], [cx - wF, cabR]],
-      'rgba(60,104,144,0.98)', 'rgba(214,242,255,0.76)');
-
-    // боковые стёкла
-    x.fillStyle = 'rgba(58,102,142,0.88)';
-    rr(x, cx - halfW + 5, cabF + 27, 5, Math.max(10, cabR - cabF - 50), 2); x.fill();
-    rr(x, cx + halfW - 10, cabF + 27, 5, Math.max(10, cabR - cabF - 50), 2); x.fill();
-
-    // зеркала
-    x.fillStyle = shade(color, 0.32);
-    rr(x, cx - halfW - 7, cabF + 2, 8, 6, 3); x.fill();
-    rr(x, cx + halfW - 1, cabF + 2, 8, 6, 3); x.fill();
-
-    // решётка и фары
-    x.fillStyle = '#1b2026';
-    rr(x, cx - 15, y0 + 4, 30, 7, 3); x.fill();
-    x.fillStyle = '#fffbe6';
-    rr(x, cx - halfW * 0.70, y0 + 6, 15, 6, 3); x.fill();
-    rr(x, cx + halfW * 0.70 - 15, y0 + 6, 15, 6, 3); x.fill();
-    // задние фонари
-    x.fillStyle = '#ff4d4f';
-    rr(x, cx - halfW * 0.70, y1 - 12, 14, 5, 2); x.fill();
-    rr(x, cx + halfW * 0.70 - 14, y1 - 12, 14, 5, 2); x.fill();
-    // номер
-    x.fillStyle = '#f1f3f5';
-    rr(x, cx - 10, y1 - 5, 20, 6, 2); x.fill();
-
-    // стили
-    if (st.taxi) {
-      x.fillStyle = '#1b2026';
-      rr(x, cx - 14, cabF + 32, 28, 9, 4); x.fill();
-      x.fillStyle = '#ffd43b';
-      rr(x, cx - 10, cabF + 34, 20, 5, 2); x.fill();
-      for (var ci = 0; ci < 3; ci++) {
-        x.fillStyle = ci % 2 ? '#f8f9fa' : '#1b2026';
-        x.fillRect(cx - halfW + 4, cabF + 46 + ci * 8, 6, 6);
-        x.fillRect(cx + halfW - 10, cabF + 46 + ci * 8, 6, 6);
-      }
-    }
-    if (st.spoiler) {
-      x.fillStyle = shade(color, 0.42);
-      rr(x, cx - halfW * 0.82, y1 - 2, halfW * 1.64, 6, 3); x.fill();
-    }
-    if (st.rails) {
-      x.strokeStyle = 'rgba(26,32,40,0.85)'; x.lineWidth = 3; x.lineCap = 'round';
-      x.beginPath(); x.moveTo(cx - halfW * 0.58, cabF + 24); x.lineTo(cx - halfW * 0.58, cabR - 22); x.stroke();
-      x.beginPath(); x.moveTo(cx + halfW * 0.58, cabF + 24); x.lineTo(cx + halfW * 0.58, cabR - 22); x.stroke();
-    }
-    if (st.van) {
-      x.strokeStyle = 'rgba(0,0,0,0.26)'; x.lineWidth = 1.4;
-      x.beginPath(); x.moveTo(cx + halfW * 0.30, cabF + 24); x.lineTo(cx + halfW * 0.30, cabR - 22); x.stroke();
-    }
-    if (st.pickup) {
-      x.fillStyle = 'rgba(18,22,28,0.84)';
-      rr(x, cx - halfW * 0.70, cabR + 4, halfW * 1.40, y1 - cabR - 14, 4); x.fill();
-      x.strokeStyle = 'rgba(0,0,0,0.4)'; x.lineWidth = 1.2;
-      for (var bi = 1; bi < 4; bi++) {
-        var by = cabR + 8 + bi * ((y1 - cabR - 22) / 4);
-        x.beginPath(); x.moveTo(cx - halfW * 0.66, by); x.lineTo(cx + halfW * 0.66, by); x.stroke();
-      }
-    }
-
-    return cv;
+  function carFallback(ctx, color, size) {
+    ctx.fillStyle = color;
+    rr(ctx, -size * 0.24, -size * 0.46, size * 0.48, size * 0.92, size * 0.10); ctx.fill();
+    ctx.fillStyle = 'rgba(160,205,235,0.9)';
+    rr(ctx, -size * 0.17, -size * 0.22, size * 0.34, size * 0.16, size * 0.03); ctx.fill();
+    rr(ctx, -size * 0.17, size * 0.06, size * 0.34, size * 0.12, size * 0.03); ctx.fill();
   }
 
   /* эвакуатор: жёлтый тягач с мигалками и крюком */
@@ -265,25 +127,64 @@ window.GAME = window.GAME || {};
   }
 
   ART.init = function () {
-    if (ART.tiles) return;
-    var cols = G.config.palette.tileColors;
-    ART.tiles = [];
-    for (var i = 0; i < cols.length; i++) ART.tiles.push(makeCar(cols[i], STYLES[i % STYLES.length]));
+    if (ART.cars) return;
+    ART.cars = []; ART.tiles = [];
+    for (var c = 0; c < CAR_COLORS.length; c++) {
+      var row = [];
+      for (var v = 1; v <= CAR_VARIANTS; v++) {
+        var im = new Image();
+        im.src = (G.assetBase || '') + 'assets/cars/car_' + CAR_COLORS[c] + '_' + v + '.png';
+        row.push(im);
+      }
+      ART.cars.push(row);
+      ART.tiles.push(row[0]);
+    }
     ART.bomb = makeTow();
     ART.wall = makeWall();
     ART.crate = makeBlock();
   };
 
+  /* дождаться загрузки всех PNG (для промо и первого кадра) */
+  ART.preload = function () {
+    ART.init();
+    var waits = [];
+    for (var c = 0; c < ART.cars.length; c++) {
+      for (var v = 0; v < ART.cars[c].length; v++) {
+        (function (im) {
+          waits.push(new Promise(function (res) {
+            if (im.complete && im.naturalWidth) { res(); return; }
+            im.onload = res; im.onerror = res;
+          }));
+        })(ART.cars[c][v]);
+      }
+    }
+    return Promise.all(waits);
+  };
+
   /* alpha/scale — для анимаций; машина по умолчанию носом вверх, dir поворачивает */
-  ART.drawTile = function (ctx, colorIdx, x, y, size, dir, special, alpha, scale) {
-    if (!ART.tiles) ART.init();
-    var img = (special === 'bomb') ? ART.bomb : ART.tiles[colorIdx % ART.tiles.length];
+  ART.drawTile = function (ctx, colorIdx, x, y, size, dir, special, alpha, scale, variant) {
+    if (!ART.cars) ART.init();
+    var img = null;
+    if (special === 'bomb') img = ART.bomb;
+    else {
+      var row = ART.cars[colorIdx % ART.cars.length];
+      img = row[((variant || 1) - 1) % row.length];
+      if (!img || !img.complete || !img.naturalWidth) img = null;
+    }
     ctx.save();
     ctx.globalAlpha = alpha == null ? 1 : alpha;
     ctx.translate(x, y);
     if (scale && scale !== 1) ctx.scale(scale, scale);
     if (special !== 'bomb') ctx.rotate(dir * Math.PI / 2);
-    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    if (special === 'bomb') {
+      ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    } else if (img) {
+      var hh = size * 0.94;
+      var ww = hh * img.naturalWidth / img.naturalHeight;
+      ctx.drawImage(img, -ww / 2, -hh / 2, ww, hh);
+    } else {
+      carFallback(ctx, G.config.palette.tileColors[colorIdx % 5], size);
+    }
     ctx.restore();
   };
 
@@ -369,10 +270,10 @@ window.GAME = window.GAME || {};
 
     if (kind === 'icon') {
       var s = h * 0.54;
-      ART.drawTile(ctx, 0, w * 0.5, h * 0.54, s, 0, 0, 1, 1);
-      ART.drawTile(ctx, 1, w * 0.20, h * 0.24, s * 0.34, 1, 0, 0.95, 1);
-      ART.drawTile(ctx, 2, w * 0.80, h * 0.26, s * 0.30, 3, 0, 0.95, 1);
-      ART.drawTile(ctx, 3, w * 0.78, h * 0.82, s * 0.26, 2, 0, 0.9, 1);
+      ART.drawTile(ctx, 0, w * 0.5, h * 0.54, s, 0, 0, 1, 1, 1);
+      ART.drawTile(ctx, 1, w * 0.20, h * 0.24, s * 0.34, 1, 0, 0.95, 1, 2);
+      ART.drawTile(ctx, 2, w * 0.80, h * 0.26, s * 0.30, 3, 0, 0.95, 1, 3);
+      ART.drawTile(ctx, 3, w * 0.78, h * 0.82, s * 0.26, 2, 0, 0.9, 1, 4);
     } else {
       if (title) {
         var size = Math.round(h * 0.18), tx = w / 2, ty = h * 0.26, maxTW = w * 0.88;
@@ -386,12 +287,13 @@ window.GAME = window.GAME || {};
         ctx.fillStyle = tg; ctx.fillText(title, tx, ty);
       }
       var dirs = [0, 1, 2, 3, 1, 0, 2];
-      var colors = [0, 1, 2, 3, 4, 5, 6];
+      var colors = [0, 1, 2, 3, 4, 0, 1];
+      var variants = [1, 2, 3, 4, 5, 2, 4];
       for (var k = 0; k < 7; k++) {
         var sx = w * (0.10 + k * 0.133);
         var sy = h * 0.76 + (k % 2) * h * 0.045;
         var ss = h * (k === 3 ? 0.27 : 0.22);
-        ART.drawTile(ctx, colors[k], sx, sy, ss, dirs[k], 0, 1, 1);
+        ART.drawTile(ctx, colors[k], sx, sy, ss, dirs[k], 0, 1, 1, variants[k]);
       }
     }
   };

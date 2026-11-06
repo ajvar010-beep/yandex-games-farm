@@ -10,7 +10,7 @@ const [gameDir, outDir, variant] = process.argv.slice(2);
 const langs = ['ru', 'en'];
 const promoUrl = 'file:///' + path.resolve(__dirname, 'promo.html').replace(/\\/g, '/');
 const rootRel = path.relative(__dirname, path.resolve(gameDir)).replace(/\\/g, '/');
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--mute-audio'] });
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--mute-audio', '--allow-file-access-from-files'] });
 async function promoShot(query, file) {
   const ctx = await browser.createBrowserContext();
   const page = await ctx.newPage();

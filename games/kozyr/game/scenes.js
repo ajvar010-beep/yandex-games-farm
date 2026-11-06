@@ -682,13 +682,27 @@ window.GAME = window.GAME || {};
       var slots = this.handSlots(Lt, st.hands[0].length);
       var hint = hasPerk('hint') ? L.hintCards(st) : [];
       var shake = this.shakeT > 0 ? Math.sin(this.shakeT * 46) * 7 * (this.shakeT / 0.28) : 0;
+      // что вообще можно сыграть прямо сейчас: нелегальное гасим, легальное подсвечиваем
+      var canAct = st.turn === 0 && st.phase !== 'over';
+      var playable = [];
+      if (canAct && st.phase === 'attack') playable = L.legalAttackFor(st);
+      else if (canAct && st.phase === 'defend') {
+        var piP = L.pendingIndex(st);
+        if (piP >= 0) {
+          var atkP = st.table[piP].a;
+          for (var hp = 0; hp < st.hands[0].length; hp++) if (L.beats(st.hands[0][hp], atkP, st.trump)) playable.push(st.hands[0][hp]);
+        }
+      }
       for (var q = 0; q < slots.length; q++) {
         var s = slots[q], card = st.hands[0][q];
         var isHint = false;
         for (var h = 0; h < hint.length; h++) if (L.same(hint[h], card)) isHint = true;
+        var okTap = false;
+        for (var op = 0; op < playable.length; op++) if (L.same(playable[op], card)) okTap = true;
         var dk = easeOut(Math.min(1, this.dealT * 1.35 - q * 0.06));
         var dy = (1 - dk) * (Lt.cardH * 0.9);
-        G.art.card(ctx, s.x + shake, s.y + dy, s.w, s.h, card, { hi: isHint, lift: isHint ? 6 : 0 });
+        var partial = playable.length > 0 && playable.length < st.hands[0].length;
+        G.art.card(ctx, s.x + shake, s.y + dy, s.w, s.h, card, { hi: isHint, lift: isHint ? 6 : (canAct && okTap && partial ? 3 : 0), dim: canAct && !okTap });
       }
 
       if (this.denyT > 0) {

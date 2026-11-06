@@ -5,6 +5,9 @@ window.GAME = window.GAME || {};
   var E = window.Engine, C = G.config, L = G.logic, P = C.palette;
   var S = {};
   function T(k, v) { return E.i18n.t(k, v); }
+  function easeOut(t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return 1 - Math.pow(1 - t, 3); }
+  function easeInOut(t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function lerp(a, b, k) { return a + (b - a) * k; }
 
   /* ---------- состояние игрока ---------- */
   function coins() { return E.storage.get('coins', 0) | 0; }
@@ -158,8 +161,10 @@ window.GAME = window.GAME || {};
       var M = this._menuLayout(v);
       var cy = M.cy, cw = M.cw, ch = M.ch;
       if (!M.compact) {
+        var bob = Math.sin(this.t * 1.8) * 4;
         ctx.save();
         ctx.globalAlpha = t;
+        ctx.translate(0, bob);
         // эмблема: веер из двух карт за заголовком
         G.art.card(ctx, W / 2 - cw * 1.05, cy - ch * 0.52, cw, ch, { s: 'h', r: 13 }, {});
         G.art.card(ctx, W / 2 + cw * 0.05, cy - ch * 0.52, cw, ch, { s: 's', r: 14 }, { trump: true });
@@ -180,7 +185,9 @@ window.GAME = window.GAME || {};
       E.ui.text(ctx, T('rival_n', { n: ri + 1, total: C.rivals.length }), px + pw - 14, py + ph / 2, 13, P.gold, 'right', 600);
 
       coinsBadge(ctx, 18, 18);
+      ctx.save(); ctx.globalAlpha = Math.min(1, this.t * 2.2);
       E.ui.drawButtons(ctx, this.buttons);
+      ctx.restore();
       var banM = (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0);
       E.ui.text(ctx, T('best_n', { n: E.storage.get('best', 0) | 0, total: C.rivals.length }), W / 2, H - 46 - banM, Math.max(12, Math.min(W * 0.032, 13)), 'rgba(247,241,227,0.5)', 'center', 600);
       E.ui.text(ctx, T('tavern'), W / 2, H - 24 - banM, Math.min(W * 0.036, 14), 'rgba(247,241,227,0.35)', 'center', 500);
@@ -294,6 +301,7 @@ window.GAME = window.GAME || {};
       this.aiTimer = 0; this.denyT = 0; this.hintT = 0; this.peekT = 0;
       this.result = null; this.buttons = []; this.toast = null; this.t = 0;
       this.autoRestart = 0; this.ghosts = []; this.resT = 0;
+      this.dealT = 0; this.birth = []; this.aiAnim = this.st.hands[1].length; this.scrimT = 0; this.shakeT = 0;
       this.matches = E.storage.get('matches', 0) | 0;
       E.audio.music('play');
       E.sdk.hideBanner();
@@ -343,6 +351,13 @@ window.GAME = window.GAME || {};
         this.ghosts[gi].t += dt;
         if (this.ghosts[gi].t >= this.ghosts[gi].dur) this.ghosts.splice(gi, 1);
       }
+      this.dealT = Math.min(1, this.dealT + dt / 0.5);
+      if (this.result) this.scrimT = Math.min(1, this.scrimT + dt / 0.32);
+      if (this.shakeT > 0) this.shakeT -= dt;
+      var stA = this.st;
+      this.aiAnim = lerp(this.aiAnim, stA.hands[1].length, Math.min(1, dt * 9));
+      while (this.birth.length < stA.table.length) this.birth.push(this.t);
+      if (this.birth.length > stA.table.length) this.birth.length = stA.table.length;
       if (this.denyT > 0) this.denyT -= dt;
       if (this.hintT > 0) this.hintT -= dt;
       if (this.peekT > 0) { this.peekT -= dt; if (this.peekT <= 0 && this.toast) this.toast = null; }
@@ -377,7 +392,7 @@ window.GAME = window.GAME || {};
         card: card, x0: fromX, y0: fromY,
         x1: Lt.W / 2 + (this.ghosts.length % 3 - 1) * Lt.cardW * 0.6,
         y1: (Lt.tableTop + Lt.tableBottom) / 2 - Lt.cardH / 2,
-        w: Lt.cardW, h: Lt.cardH, t: 0, dur: 0.18
+        w: Lt.cardW, h: Lt.cardH, t: 0, dur: 0.24
       });
     },
     _tapCard: function (game, mx, my) {
@@ -401,7 +416,7 @@ window.GAME = window.GAME || {};
             if (st.phase === 'over') this._finish(0);
             return;
           }
-          this.denyT = 0.28; E.audio.sfx('deny');
+          this.denyT = 0.28; this.shakeT = 0.28; E.audio.sfx('deny');
           return;
         }
       }
@@ -589,12 +604,13 @@ window.GAME = window.GAME || {};
       E.ui.text(ctx, T('cards_left', { n: st.hands[1].length }), Lt.pad + av * 2 + 10, ay + 12, Math.min(v.w * 0.032, 13), 'rgba(247,241,227,0.6)', 'left', 500);
 
       // рука соперника — рубашки веером
-      var aiN = st.hands[1].length;
+      var aiN = Math.max(0, Math.round(this.aiAnim));
       if (aiN) {
         var bw = Math.round(Lt.cardW * 0.62), bh = Math.round(Lt.cardH * 0.62);
         var step = Math.min(bw * 0.52, (v.w * 0.5) / Math.max(1, aiN));
         var x0 = v.w - Lt.pad - bw - step * (aiN - 1);
-        for (var i = 0; i < aiN; i++) G.art.card(ctx, x0 + i * step, Lt.pad + 4, bw, bh, null, { face: false });
+        var frac = this.aiAnim - Math.floor(this.aiAnim);
+        for (var i = 0; i < aiN; i++) G.art.card(ctx, x0 + i * step, Lt.pad + 4 - (i === aiN - 1 ? frac * 10 : 0), bw, bh, null, { face: false });
         if (this.peekT > 0) {
           for (var j = 0; j < aiN; j++) {
             G.art.card(ctx, x0 + j * step, Lt.pad + 4, bw, bh, st.hands[1][j], {});
@@ -626,7 +642,10 @@ window.GAME = window.GAME || {};
       var ty = (Lt.tableTop + Lt.tableBottom) / 2 - pairH / 2;
       for (var k = 0; k < n; k++) {
         var px = tx0 + k * step2;
-        G.art.card(ctx, px, ty, Lt.cardW, Lt.cardH, st.table[k].a, {});
+        var bAge = this.birth[k] != null ? this.t - this.birth[k] : 0.3;
+        var bk = easeOut(Math.min(1, bAge / 0.17));
+        var sc = 0.86 + 0.14 * bk, dw = Lt.cardW * (1 - sc), dh = Lt.cardH * (1 - sc);
+        G.art.card(ctx, px + dw / 2, ty + dh / 2, Lt.cardW * sc, Lt.cardH * sc, st.table[k].a, {});
         if (st.table[k].d) G.art.card(ctx, px, ty + Lt.cardH * 0.62, Lt.cardW, Lt.cardH, st.table[k].d, {});
         else {
           ctx.save();
@@ -642,11 +661,14 @@ window.GAME = window.GAME || {};
       // рука игрока
       var slots = this.handSlots(Lt, st.hands[0].length);
       var hint = hasPerk('hint') ? L.hintCards(st) : [];
+      var shake = this.shakeT > 0 ? Math.sin(this.shakeT * 46) * 7 * (this.shakeT / 0.28) : 0;
       for (var q = 0; q < slots.length; q++) {
         var s = slots[q], card = st.hands[0][q];
         var isHint = false;
         for (var h = 0; h < hint.length; h++) if (L.same(hint[h], card)) isHint = true;
-        G.art.card(ctx, s.x, s.y, s.w, s.h, card, { hi: isHint, lift: isHint ? 6 : 0 });
+        var dk = easeOut(Math.min(1, this.dealT * 1.35 - q * 0.06));
+        var dy = (1 - dk) * (Lt.cardH * 0.9);
+        G.art.card(ctx, s.x + shake, s.y + dy, s.w, s.h, card, { hi: isHint, lift: isHint ? 6 : 0 });
       }
 
       if (this.denyT > 0) {
@@ -663,7 +685,7 @@ window.GAME = window.GAME || {};
       if (st.phase !== 'over') E.ui.text(ctx, cap, Lt.W / 2, Lt.tableTop - 6, Math.min(v.w * 0.038, 15), 'rgba(247,241,227,0.75)', 'center', 600);
 
       for (var gj = 0; gj < this.ghosts.length; gj++) {
-        var gh = this.ghosts[gj], k = Math.min(1, gh.t / gh.dur), e = k * k * (3 - 2 * k);
+        var gh = this.ghosts[gj], k = Math.min(1, gh.t / gh.dur), e = easeOut(k);
         var gx = gh.x0 + (gh.x1 - gh.x0) * e, gy = gh.y0 + (gh.y1 - gh.y0) * e - Math.sin(e * Math.PI) * 26;
         ctx.globalAlpha = 1 - k * 0.2;
         G.art.card(ctx, gx, gy, gh.w, gh.h, gh.card, {});
@@ -687,7 +709,8 @@ window.GAME = window.GAME || {};
     },
     _drawResult: function (ctx, v, Lt) {
       var r = this.result;
-      ctx.fillStyle = 'rgba(6,14,11,0.72)';
+      var sa = 0.72 * easeInOut(this.scrimT);
+      ctx.fillStyle = 'rgba(6,14,11,' + sa.toFixed(3) + ')';
       ctx.fillRect(0, 0, v.w, v.h);
       var RL = this._resLay(Lt), cy = RL.cy;
       E.ui.text(ctx, r.win ? T('win_title') : T('lose_title'), v.w / 2, cy, Math.min(v.w * 0.11, 52), r.win ? P.gold : '#e07070', 'center', 800);

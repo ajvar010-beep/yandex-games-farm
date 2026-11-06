@@ -10,11 +10,13 @@ window.Engine = window.Engine || {};
 (function (E) {
   'use strict';
   var S = { data: {}, player: null, ns: 'game', _saveTimer: 0, authorized: false };
+  // защита от повреждённого/чужого JSON: null, массив, строка не должны кирпичить загрузку
+  function norm(d) { return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {}; }
 
   function readLocal(ns) {
     try {
       var raw = localStorage.getItem(ns + ':save');
-      return raw ? JSON.parse(raw) : {};
+      return raw ? norm(JSON.parse(raw)) : {};
     } catch (e) { return {}; }
   }
   function writeLocal(ns, data) {
@@ -39,9 +41,11 @@ window.Engine = window.Engine || {};
      чтобы локальный пустой слот не затирал облачный прогресс (и наоборот). */
   S.mergeCloud = function (raw) {
     var cloud, ct;
+    S.data = norm(S.data);
     if (raw && raw.save && typeof raw.save === 'object') { cloud = raw.save; ct = raw.savedAt || cloud.savedAt || 0; }
     else { cloud = (raw && typeof raw === 'object') ? raw : {}; ct = cloud.savedAt || 0; }
     var lt = S.data.savedAt || 0;
+    cloud = norm(cloud);
     S.data = (ct > lt) ? Object.assign({}, S.data, cloud) : Object.assign({}, cloud, S.data);
     writeLocal(S.ns, S.data);
     return S.data;

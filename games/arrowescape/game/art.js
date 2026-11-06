@@ -130,6 +130,34 @@ window.GAME = window.GAME || {};
     return cv;
   }
 
+  function makeCrate() {
+    var cv = document.createElement('canvas'); cv.width = cv.height = SIZE;
+    var x = cv.getContext('2d');
+    var m = 12, s = SIZE - m * 2, rad = s * 0.10;
+    x.fillStyle = 'rgba(0,0,0,0.24)';
+    rr(x, m, m + 8, s, s, rad); x.fill();
+    var g = x.createLinearGradient(0, m, 0, m + s);
+    g.addColorStop(0, '#c98a4b'); g.addColorStop(0.5, '#a86a33'); g.addColorStop(1, '#76451f');
+    x.fillStyle = g; rr(x, m, m, s, s, rad); x.fill();
+    x.strokeStyle = '#4a2a12'; x.lineWidth = 6; rr(x, m, m, s, s, rad); x.stroke();
+    // доски
+    x.strokeStyle = 'rgba(74,42,18,0.55)'; x.lineWidth = 4;
+    for (var i = 1; i <= 3; i++) {
+      x.beginPath(); x.moveTo(m + 4, m + s * i / 4); x.lineTo(m + s - 4, m + s * i / 4); x.stroke();
+    }
+    // металлические углы
+    x.fillStyle = '#d9c7a6';
+    var csz = s * 0.16;
+    [[m, m], [m + s - csz, m], [m, m + s - csz], [m + s - csz, m + s - csz]].forEach(function (p) {
+      x.fillRect(p[0], p[1], csz, csz);
+    });
+    // крест-распорка
+    x.strokeStyle = 'rgba(255,231,190,0.35)'; x.lineWidth = 7;
+    x.beginPath(); x.moveTo(m + 10, m + 10); x.lineTo(m + s - 10, m + s - 10); x.stroke();
+    x.beginPath(); x.moveTo(m + s - 10, m + 10); x.lineTo(m + 10, m + s - 10); x.stroke();
+    return cv;
+  }
+
   ART.init = function () {
     if (ART.tiles) return;
     var cols = G.config.palette.tileColors;
@@ -137,6 +165,7 @@ window.GAME = window.GAME || {};
     for (var i = 0; i < cols.length; i++) ART.tiles.push(makeTile(cols[i]));
     ART.bomb = makeBomb();
     ART.wall = makeWall();
+    ART.crate = makeCrate();
   };
 
   /* alpha/scale — для анимаций; shadow — лёгкая тень под плиткой */
@@ -155,6 +184,42 @@ window.GAME = window.GAME || {};
   ART.drawWall = function (ctx, x, y, size) {
     if (!ART.tiles) ART.init();
     ctx.drawImage(ART.wall, x - size / 2, y - size / 2, size, size);
+  };
+
+  ART.drawCrate = function (ctx, x, y, size, alpha) {
+    if (!ART.tiles) ART.init();
+    ctx.save();
+    ctx.globalAlpha = alpha == null ? 1 : alpha;
+    ctx.drawImage(ART.crate, x - size / 2, y - size / 2, size, size);
+    ctx.restore();
+  };
+
+  /* лёд поверх стрелки: полупрозрачная корка, блики и трещины */
+  ART.drawIce = function (ctx, x, y, size, t) {
+    var s = size * 0.92, r = s * 0.2;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    var g = ctx.createLinearGradient(x - s / 2, y - s / 2, x + s / 2, y + s / 2);
+    g.addColorStop(0, 'rgba(200,240,255,0.55)');
+    g.addColorStop(0.5, 'rgba(120,200,255,0.28)');
+    g.addColorStop(1, 'rgba(235,252,255,0.50)');
+    rr(ctx, x - s / 2, y - s / 2, s, s, r);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(235,252,255,0.85)'; ctx.lineWidth = Math.max(2, size * 0.025);
+    ctx.stroke();
+    // трещины
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = Math.max(1.5, size * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.28, y - s * 0.34);
+    ctx.lineTo(x + s * 0.02, y - s * 0.02);
+    ctx.lineTo(x - s * 0.16, y + s * 0.30);
+    ctx.moveTo(x + s * 0.02, y - s * 0.02);
+    ctx.lineTo(x + s * 0.32, y - s * 0.18);
+    ctx.stroke();
+    // блик
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.35 + 0.2 * Math.sin((t || 0) * 3)) + ')';
+    ctx.beginPath(); ctx.ellipse(x - s * 0.2, y - s * 0.26, s * 0.16, s * 0.06, -0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   };
 
   ART.drawGlow = function (ctx, x, y, r, color, alpha) {

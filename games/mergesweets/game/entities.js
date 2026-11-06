@@ -21,10 +21,11 @@ window.GAME = window.GAME || {};
   function step(scene, dt) {
     var P = G.config.physics, balls = scene.balls, cup = scene.cup;
     var i, j, a, b;
+    var gravity = (scene.spec && scene.spec.gravity) ? scene.spec.gravity : P.gravity;
     // гравитация + интеграция
     for (i = 0; i < balls.length; i++) {
       a = balls[i];
-      a.vy += P.gravity * dt;
+      a.vy += gravity * dt;
       a.vx -= a.vx * P.airDrag * dt;
       a.vy -= a.vy * P.airDrag * 0.4 * dt;
       a.x += a.vx * dt; a.y += a.vy * dt;
@@ -44,6 +45,35 @@ window.GAME = window.GAME || {};
         a.vx *= P.friction;
         a.av = a.vx / Math.max(1, a.r);
       }
+    }
+    // штыри-препятствия: статичные круги, от которых шары отскакивают
+    var pegs = scene.pegs || [];
+    if (pegs.length) {
+      for (i = 0; i < balls.length; i++) {
+        a = balls[i];
+        for (j = 0; j < pegs.length; j++) {
+          var pg = pegs[j];
+          var pdx = a.x - pg.x, pdy = a.y - pg.y;
+          var pdist = Math.hypot(pdx, pdy), pmin = a.r + pg.r;
+          if (pdist >= pmin || pdist === 0) continue;
+          var pnx = pdx / pdist, pny = pdy / pdist;
+          a.x += pnx * (pmin - pdist);
+          a.y += pny * (pmin - pdist);
+          var pvn = a.vx * pnx + a.vy * pny;
+          if (pvn < 0) {
+            a.vx -= 1.45 * pvn * pnx;
+            a.vy -= 1.45 * pvn * pny;
+            pg.flash = 0.18;
+          }
+        }
+      }
+    }
+    // финальный зажим в стенах: штыри и взаимные толчки могут вынести шар за стакан
+    for (i = 0; i < balls.length; i++) {
+      a = balls[i];
+      if (a.x - a.r < cup.left) { a.x = cup.left + a.r; if (a.vx < 0) a.vx = -a.vx * P.rest; }
+      if (a.x + a.r > cup.right) { a.x = cup.right - a.r; if (a.vx > 0) a.vx = -a.vx * P.rest; }
+      if (a.y + a.r > cup.bottom) { a.y = cup.bottom - a.r; if (a.vy > 0) a.vy = -a.vy * P.rest; }
     }
     // круг-круг (2 прохода для стабильности) + сбор мерджей
     var merges = [];
@@ -75,6 +105,13 @@ window.GAME = window.GAME || {};
           }
         }
       }
+    }
+    // и ещё раз после разрешения пар: взаимные толчки не должны выносить шары за стенки
+    for (i = 0; i < balls.length; i++) {
+      a = balls[i];
+      if (a.x - a.r < cup.left) { a.x = cup.left + a.r; if (a.vx < 0) a.vx = -a.vx * P.rest; }
+      if (a.x + a.r > cup.right) { a.x = cup.right - a.r; if (a.vx > 0) a.vx = -a.vx * P.rest; }
+      if (a.y + a.r > cup.bottom) { a.y = cup.bottom - a.r; if (a.vy > 0) a.vy = -a.vy * P.rest; }
     }
     return merges;
   }

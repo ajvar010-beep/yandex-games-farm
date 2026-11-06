@@ -54,12 +54,17 @@ node pipeline/capture-<slug>.mjs ../games/<slug> ../packages/<slug>/media ru,en
 Отдельный агент/модель, свежий контекст, только `RUBRIC.md` + игра. Своя оценка не считается.
 ≥85 — PUBLISH; ниже — правится **только слабейший блок**, затем пересчёт.
 
-### 7. Упаковка
+### 7. Упаковка и строгий гейт
 ```bash
 node pipeline/pack.mjs ../games/<slug>          # собирает packages/<slug>/game.zip
-node pipeline/pack.mjs ../games/<slug> --check  # валидация
-node pipeline/audit.mjs ../games/<slug>         # 0 issues — зелёный свет
+node pipeline/audit.mjs ../games/<slug>         # базовый аудит
+node pipeline/testbed.mjs ../games/<slug>       # 8 вьюпортов × DPR 1/2/3: вёрстка, границы, консоль
+node pipeline/release-check.mjs ../games/<slug> # строгий гейт: zip==исходники, свежесть медиа,
+                                                # RGB, пустые/RU==EN скрины, id manifest↔код,
+                                                # мёртвые i18n-ключи, кирпич паузы/Back
 ```
+`release-check` ловит то, что audit не видит: старый zip, медиа старше кода, мёртвые ключи,
+IAP-id без manifest и паузу, из которой нет выхода.
 ZIP: `index.html` в корне, ASCII-имена, ≤100 МБ. Дальше — ручная отправка в Консоль.
 
 ## Частые причины отказа (закрыты автоматикой)

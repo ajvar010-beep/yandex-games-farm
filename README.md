@@ -33,8 +33,11 @@ hexwave · mergemon · skyblocks · starfall · bubblebay · sweettower · ginge
 
 | игра | жанр | статус |
 |---|---|---|
-| **mergesweets** «Слияние Суфле» | merge-физика | пакет + медиа + RUBRIC-ревью, исправления внесены |
-| **arrowescape** «Побег Стрелок» | стрелки-пазл | новая игра по тренду («Головоломка со стрелками» 90), пакет готовится |
+| **mergesweets** «Слияние Суфле» v2 | merge-физика | штыри, переменный стакан, комбо, очередь; пакет+медиа, строгий гейт 0 |
+| **arrowescape** «Побег Стрелок» v2 | стрелки-пазл | ящики, лёд, темы, сундук, детерминированные уровни; пакет+медиа, гейт 0 |
+
+Релизный гейт: `audit.mjs` (0/22) + `testbed.mjs` (48/48) + `release-check.mjs`
+(zip==исходники, свежие RGB-медиа, manifest↔код, мёртвые ключи, реальные клики, пауза/Back).
 
 Отдельно (Godot, партия-3): parkourpro · mineridle · hackerparkour.
 
@@ -47,7 +50,9 @@ hexwave · mergemon · skyblocks · starfall · bubblebay · sweettower · ginge
 4. Сборка на движке + медиа + тексты RU/EN; `node pipeline/pack.mjs ../games/<slug>`.
 5. **Независимая оценка по `RUBRIC.md`** (свежий контекст, другая модель): ≥85/100 —
    в отправку; ниже — правится только слабейший блок.
-6. `node pipeline/audit.mjs ../games/<slug>` → 0 issues, затем ZIP из `packages/<slug>/`.
+6. `node pipeline/audit.mjs ../games/<slug>` → 0 issues; `testbed.mjs` → 48/48;
+   `release-check.mjs` → 0 (zip==исходники, свежие медиа, нет мёртвых ключей/кирпичей);
+   затем ZIP из `packages/<slug>/`.
 
 Порог 8.0 консилиума (партия-2) заменён релизным порогом RUBRIC ≥85: он учитывает
 монетизацию и модерацию, а не только «весело ли».

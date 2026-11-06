@@ -96,7 +96,14 @@ function auditI18n(game, issues) {
     const keys = (loc) => {
       const m = src.match(new RegExp(loc + ':\\s*\\{([\\s\\S]*?)\\n\\s*\\}'));
       if (!m) return null;
-      return (m[1].match(/^\s*([a-z_0-9]+):/gmi) || []).map(s => s.trim().replace(/:$/, ''));
+      var txt = m[1], clean = '', q = 0;
+      for (var ci = 0; ci < txt.length; ci++) {
+        var ch = txt.charAt(ci);
+        if (q) { if (txt.charCodeAt(ci) === 92) { ci++; continue; } if (ch === q) q = 0; continue; }
+        if (ch === "'" || ch === '"') { q = ch; continue; }
+        clean += ch;
+      }
+      return (clean.match(/([A-Za-z_][A-Za-z0-9_]*)\s*:/g) || []).map(s => s.replace(/\s*:$/, '')).filter(k => k !== 'ru' && k !== 'en');
     };
     const ru = keys('ru'), en = keys('en');
     if (!ru || !en) { fail(issues, 'i18n', 'не распарсены локали'); return; }

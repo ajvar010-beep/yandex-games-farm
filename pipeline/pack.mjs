@@ -14,6 +14,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
+import crypto from 'node:crypto';
 import { join, resolve, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -82,9 +83,15 @@ function jpegSize(file) {
   return null;
 }
 function imgSize(f) { return f.endsWith('.png') ? pngSize(f) : jpegSize(f); }
-function ffprobeDuration(f) {
-  const r = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' });
-  return r.status === 0 ? parseFloat(r.stdout.trim()) : null;
+function ffprobeVideo(f) {
+  const r = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,pix_fmt,r_frame_rate', '-show_entries', 'format=duration', '-of', 'json', f], { encoding: 'utf8' });
+  if (r.status !== 0) return null;
+  try {
+    const j = JSON.parse(r.stdout);
+    const st = (j.streams || [])[0] || {};
+    const dur = parseFloat((j.format || {}).duration || '0');
+    return { w: st.width, h: st.height, codec: st.codec_name, pix: st.pix_fmt, dur: dur };
+  } catch (e) { return null; }
 }
 function checkMedia() {
   if (!existsSync(mediaDir)) { e('нет packages/' + name + '/media/'); return; }
@@ -95,15 +102,21 @@ function checkMedia() {
   else {
     const s = imgSize(join(mediaDir, icon));
     if (!s || s.w !== 512 || s.h !== 512) e(`media: icon должен быть ровно 512×512, есть ${s ? s.w + '×' + s.h : '?'}`);
+    if (icon.endsWith('.png')) {
+      const b = readFileSync(join(mediaDir, icon));
+      if (b.length > 25 && b[25] !== 2) e(`media: icon.png colorType ${b[25]} (нужен RGB=2)`);
+    }
     if (statSync(join(mediaDir, icon)).size > 1048576) e('media: icon >1 МБ');
   }
   // обложка: одна на язык (cover.ru.png + cover.en.png) либо общая cover.png
-  const covers = files.filter(f => /^cover(\.(ru|en))?\.(png|jpe?g)$/i.test(f));
-  if (!covers.length) e('media: нет cover.png / cover.ru.png+cover.en.png (800×470)');
-  for (const cover of covers) {
-    const s = imgSize(join(mediaDir, cover));
-    if (!s || s.w !== 800 || s.h !== 470) e(`media: ${cover} должен быть ровно 800×470, есть ${s ? s.w + '×' + s.h : '?'}`);
-    if (statSync(join(mediaDir, cover)).size > 2097152) e(`media: ${cover} >2 МБ`);
+  for (const lang of ['ru', 'en']) {
+    const cover = join(mediaDir, `cover.${lang}.png`);
+    if (!existsSync(cover)) { e(`media: нет cover.${lang}.png (800×470)`); continue; }
+    const s = imgSize(cover);
+    if (!s || s.w !== 800 || s.h !== 470) e(`media: cover.${lang}.png должен быть ровно 800×470, есть ${s ? s.w + '×' + s.h : '?'}`);
+    const b = readFileSync(cover);
+    if (b.length > 25 && b[25] !== 2) e(`media: cover.${lang}.png colorType ${b[25]} (нужен RGB=2)`);
+    if (statSync(cover).size > 2097152) e(`media: cover.${lang}.png >2 МБ`);
   }
   // скриншоты (контракт конвейера-чемпиона): сабмишн-глобы screenshot_landscape_*_<lang>
   // (десктоп, 16:9) и screenshot_portrait_*_<lang> (мобильные, 9:16); qa_* — не сабмишн.
@@ -119,9 +132,9 @@ function checkMedia() {
       if (s.hasAlpha) e(`media: ${f} — PNG с альфа-каналом (нужен 24-бит без альфы)`);
       if (statSync(p).size > 5242880) e(`media: ${f} >5 МБ`);
     }
-    // идентичные скрины консоль отклоняет
-    const hashes = list.map(f => execFileSync('certutil', ['-hashfile', join(mediaDir, f), 'SHA256'], { encoding: 'utf8' }).split('\n')[1]?.trim());
-    if (new Set(hashes.filter(Boolean)).size !== hashes.filter(Boolean).length) e(`media: ${list[0]?.split('_').slice(0, 2).join('_')}_* содержат идентичные файлы (консоль отклоняет)`);
+    // идентичные скрины консоль отклоняет (крипто-хэш, без Windows certutil)
+    const hashes = list.map(f => crypto.createHash('sha1').update(readFileSync(join(mediaDir, f))).digest('hex'));
+    if (new Set(hashes).size !== hashes.length) e(`media: ${list[0]?.split('_').slice(0, 2).join('_')}_* содержат идентичные файлы (консоль отклоняет)`);
   };
   for (const lang of ['ru', 'en']) {
     const desk = files.filter(f => new RegExp(`^screenshot_landscape_.+_${lang}\\.(png|jpe?g)$`, 'i').test(f));
@@ -131,16 +144,17 @@ function checkMedia() {
     if (port.length) checkShots(port, 16 / 9, '9:16'); // long:short всегда 16:9 (портрет = 720×1280)
   }
   // видео: горизонтальное ОБЯЗАТЕЛЬНО, ≤28с, ≤100 МБ
-  const vids = files.filter(f => /^gameplay_.*\.mp4$/i.test(f));
-  const horiz = vids.find(f => f.includes('landscape'));
-  if (!horiz) e('media: нет обязательного gameplay_landscape*.mp4');
-  for (const v of vids) {
+  for (const lang of ['ru', 'en']) {
+    const v = `gameplay_landscape.${lang}.mp4`;
     const p = join(mediaDir, v);
+    if (!existsSync(p)) { e(`media: нет обязательного ${v}`); continue; }
     if (statSync(p).size > 104857600) e(`media: ${v} >100 МБ`);
-    const d = ffprobeDuration(p);
-    if (d == null) w(`media: ${v} — ffprobe не смог прочитать длительность`);
-    else if (d > 28) e(`media: ${v} ${d.toFixed(1)}с > 28с`);
-    else if (d < 5) w(`media: ${v} всего ${d.toFixed(1)}с — лучше 15–28с`);
+    const meta = ffprobeVideo(p);
+    if (!meta) { e(`media: ${v}: ffprobe не читает файл`); continue; }
+    if (meta.w !== 1280 || meta.h !== 720) e(`media: ${v}: ${meta.w}×${meta.h}, нужно 1280×720`);
+    if (meta.codec !== 'h264') e(`media: ${v}: codec ${meta.codec}, нужен h264`);
+    if (!/yuvj?420p/.test(meta.pix || '')) e(`media: ${v}: pix_fmt ${meta.pix}, нужен yuv420p/yuvj420p`);
+    if (!(meta.dur > 10 && meta.dur <= 28.1)) e(`media: ${v}: ${meta.dur}s (10..28)`);
   }
 }
 
@@ -164,8 +178,27 @@ function checkBuild() {
   }
   if (total > 100 * 1024 * 1024) e(`билд: ${Math.round(total / 1048576)} МБ > 100 МБ (1.21)`);
   const html = readFileSync(join(buildDir, 'index.html'), 'utf8');
-  if (!/\/sdk\.js|sdk\.js/.test(html)) w('билд: index.html не ссылается на sdk.js — проверить подключение SDK (1.1)');
+  if (!/sdk\.js/.test(html)) e('билд: index.html не подключает sdk.js (треб. 1.1)');
   return files;
+}
+
+// ---------- 3b. проверка существующего zip (--check) ----------
+function checkZipExisting() {
+  const zipPath = join(pkgDir, 'game.zip');
+  if (!existsSync(zipPath)) { e('zip: game.zip отсутствует (запусти без --check)'); return; }
+  const py = `
+import zipfile,hashlib,os,sys
+z=zipfile.ZipFile(sys.argv[1]); src=sys.argv[2]; names=set(z.namelist()); bad=[]
+for n in sorted(names):
+    if n.endswith('/'): continue
+    p=os.path.join(src,n.replace('/',os.sep))
+    if not os.path.exists(p): bad.append('нет исходника для '+n); continue
+    if hashlib.sha1(z.read(n)).hexdigest()!=hashlib.sha1(open(p,'rb').read()).hexdigest(): bad.append('расходится '+n)
+print('\n'.join(bad))
+`;
+  const r = spawnSync(PYTHON, ['-c', py, zipPath, buildDir], { encoding: 'utf8' });
+  if (r.status !== 0) { e('zip: не удалось прочитать архив: ' + (r.stderr || '').slice(0, 120)); return; }
+  for (const line of r.stdout.split('\n').filter(Boolean)) e('zip: ' + line);
 }
 
 // ---------- 4. сборка zip ----------
@@ -262,12 +295,14 @@ const texts = checkTexts();
 checkMedia();
 const buildFiles = checkBuild();
 let zipPath = null;
+if (checkOnly && errors.length === 0) checkZipExisting();
 if (!checkOnly && errors.length === 0) zipPath = makeZip(buildFiles);
-writeChecklist(texts, zipPath);
+// CHECKLIST не перезаписываем при ошибках и в --check: иначе теряется размер архива
+if (errors.length === 0 && !checkOnly) writeChecklist(texts, zipPath);
 
 console.log(`\n=== ${name} ===`);
 for (const x of errors) console.log('ERROR: ' + x);
 for (const x of warnings) console.log('WARN : ' + x);
 if (!errors.length) console.log(zipPath ? 'OK zip: ' + zipPath : 'OK check');
-console.log('checklist: ' + join(pkgDir, 'CHECKLIST.md'));
+if (errors.length === 0 && !checkOnly) console.log('checklist: ' + join(pkgDir, 'CHECKLIST.md'));
 process.exit(errors.length ? 1 : 0);

@@ -139,7 +139,13 @@ window.Engine = window.Engine || {};
       this._acc += dt;
       var n = 0, maxSteps = 60; // защита от спирали после сворачивания вкладки
       while (this._acc >= this.fixedDt && n < maxSteps) {
-        if (!this.isPaused()) { this.update(this.fixedDt); didUpdate = true; }
+        if (!this.isPaused()) {
+          this.update(this.fixedDt); didUpdate = true;
+          // Сцены, которые обрабатывают ввод в update(), гасят edge-флаги сразу после шага:
+          // иначе при нескольких fixed-step за кадр один тап срабатывал дважды.
+          // Остальные игры (ввод в draw) сохраняют прежнее поведение.
+          if (this.scene && this.scene.consumesInputInUpdate && E.input) E.input.postUpdate();
+        }
         this._acc -= this.fixedDt; n++;
       }
       if (n === maxSteps) this._acc = 0;
@@ -147,7 +153,13 @@ window.Engine = window.Engine || {};
       this._acc += dt * this.timeScale;
       var steps2 = 0;
       while (this._acc >= this.fixedDt && steps2 < 5) {
-        if (!this.isPaused()) { this.update(this.fixedDt); didUpdate = true; }
+        if (!this.isPaused()) {
+          this.update(this.fixedDt); didUpdate = true;
+          // Сцены, которые обрабатывают ввод в update(), гасят edge-флаги сразу после шага:
+          // иначе при нескольких fixed-step за кадр один тап срабатывал дважды.
+          // Остальные игры (ввод в draw) сохраняют прежнее поведение.
+          if (this.scene && this.scene.consumesInputInUpdate && E.input) E.input.postUpdate();
+        }
         this._acc -= this.fixedDt; steps2++;
       }
       if (steps2 === 5) this._acc = 0;

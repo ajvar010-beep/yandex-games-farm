@@ -1,15 +1,32 @@
 {
   "id": "mergesweets",
   "engine": "html5-canvas",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "orientation": "any",
   "touch": true,
-  "languages": ["ru", "en"],
+  "languages": [
+    "ru",
+    "en"
+  ],
   "age": "6+",
-  "categories": ["casual", "puzzle"],
-  "monetization": ["rewarded_video", "interstitial", "banner", "iap"],
-  "iap": ["coins_500", "coins_1500", "no_ads"],
-  "leaderboards": ["sweets_depth"],
+  "categories": [
+    "casual",
+    "puzzle"
+  ],
+  "monetization": [
+    "rewarded_video",
+    "interstitial",
+    "banner",
+    "iap"
+  ],
+  "iap": [
+    "coins_500",
+    "coins_1500",
+    "no_ads"
+  ],
+  "leaderboards": [
+    "sweets_depth"
+  ],
   "cloud_saves": true,
   "levels": "endless"
 }

@@ -126,7 +126,9 @@ window.GAME = window.GAME || {};
     var img = ART.balls[Math.max(0, Math.min(tier, ART.balls.length - 1))];
     var pulse = 1 + Math.sin((t || 0) * 2 + (phase || 0)) * 0.02;
     var sc = pulse * (popK ? 1 + Math.sin(popK * Math.PI) * 0.3 : 1);
-    var d = r * 2 / 0.46 * 0.5;   // ATLAS ball r = 0.46*size → масштаб
+    // ATLAS: радиус шара = 0.46*SIZE. Полуразмер картинки d должен давать
+    // видимый радиус r: 0.46 * (2d) = r  →  d = r / 0.92.
+    var d = r / 0.92;
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(sc, sc);

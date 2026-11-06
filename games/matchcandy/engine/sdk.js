@@ -176,5 +176,54 @@ window.Engine = window.Engine || {};
     var g = K._game;
     if (g && g.scene && g.scene.onResize) { try { g.scene.onResize(g); } catch (e) {} }
   }
+
+  /* ---------- Лидерборды ---------- */
+  K._lb = null;
+  K.submitScore = function (name, score) {
+    if (!K.ysdk || typeof K.ysdk.getLeaderboards !== 'function') return;
+    try {
+      K.ysdk.getLeaderboards().then(function (lb) {
+        K._lb = lb;
+        if (lb && typeof lb.setLeaderboardScore === 'function') lb.setLeaderboardScore(name, score);
+      }).catch(function () {});
+    } catch (e) {}
+  };
+  K.getLeaderboard = function (name, onData) {
+    if (!K.ysdk || typeof K.ysdk.getLeaderboards !== 'function') { onData(null); return; }
+    try {
+      K.ysdk.getLeaderboards().then(function (lb) {
+        if (!lb || typeof lb.getLeaderboardEntries !== 'function') { onData(null); return; }
+        return lb.getLeaderboardEntries(name, { quantityTop: 10, includeUser: true });
+      }).then(function (r) { onData(r || null); }).catch(function () { onData(null); });
+    } catch (e) { onData(null); }
+  };
+
+  /* ---------- IAP (платежи) ---------- */
+  K._payments = null;
+  K.initPayments = function () {
+    if (!K.ysdk || typeof K.ysdk.getPayments !== 'function') return Promise.resolve(false);
+    try {
+      return K.ysdk.getPayments().then(function (p) { K._payments = p; return !!p; }).catch(function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
+  };
+  K.purchase = function (productId, onOk, onFail) {
+    if (!K._payments || typeof K._payments.purchase !== 'function') { if (onFail) onFail('no-payments'); return; }
+    try {
+      K._payments.purchase({ id: productId }).then(function (res) {
+        // консумаблы — consume, чтобы можно было купить повторно
+        // no_ads — непотребляемый товар: consume() удалил бы его из покупок навсегда
+        if (res && res.purchaseToken && productId !== 'no_ads' && K._payments.consumePurchase) {
+          try { K._payments.consumePurchase(res.purchaseToken); } catch (e) {}
+        }
+        if (onOk) onOk();
+      }).catch(function (e) { if (onFail) onFail(e); });
+    } catch (e) { if (onFail) onFail(e); }
+  };
+  K.getPurchases = function (onList) {
+    if (!K._payments || typeof K._payments.getPurchases !== 'function') { onList([]); return; }
+    try {
+      K._payments.getPurchases().then(function (r) { onList(r || []); }).catch(function () { onList([]); });
+    } catch (e) { onList([]); }
+  };
   E.sdk = K;
 })(window.Engine);

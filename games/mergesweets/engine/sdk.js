@@ -211,7 +211,8 @@ window.Engine = window.Engine || {};
     try {
       K._payments.purchase({ id: productId }).then(function (res) {
         // консумаблы — consume, чтобы можно было купить повторно
-        if (res && res.purchaseToken && K._payments.consumePurchase) {
+        // no_ads — непотребляемый товар: consume() удалил бы его из покупок навсегда
+        if (res && res.purchaseToken && productId !== 'no_ads' && K._payments.consumePurchase) {
           try { K._payments.consumePurchase(res.purchaseToken); } catch (e) {}
         }
         if (onOk) onOk();

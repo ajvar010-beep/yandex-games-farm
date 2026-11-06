@@ -11,10 +11,10 @@ for (let lv = 1; lv <= 30; lv++) {
   await page.waitForFunction('window.__capture && window.__capture.ready === true', { timeout: 15000 });
   const s = await page.evaluate(() => {
     const sc = window.Engine.sdk._game.scene;
-    return { lv: sc.level, cols: sc.cols, rows: sc.rows, arrows: sc.total, optimal: sc.optimal, limit: sc.tapLimit };
+    return { lv: sc.level, cols: sc.cols, rows: sc.rows, arrows: sc.total, optimal: sc.optimal, limit: sc.tapLimit, crates: sc.crateTotal, frozen: sc.frozenTotal };
   });
   rows.push(s);
-  console.log(`${s.lv}\t${s.cols}x${s.rows}\tarrows=${s.arrows}\toptimal=${s.optimal}\tlimit=${s.limit}\tratio=${(s.optimal / s.arrows).toFixed(2)}`);
+  console.log([s.lv, s.cols+'x'+s.rows, 'arrows='+s.arrows, 'crates='+s.crates, 'frozen='+s.frozen, 'optimal='+s.optimal, 'limit='+s.limit, 'ratio='+(s.optimal/s.arrows).toFixed(2)].join('	'));
 }
 const avg = rows.reduce((a, r) => a + r.optimal / r.arrows, 0) / rows.length;
 console.log('avg optimal/arrows', avg.toFixed(3));

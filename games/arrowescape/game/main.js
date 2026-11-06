@@ -36,7 +36,7 @@
 
       E.sdk.loadingReady();
       E.capture.markReady();
-      if (cap.record > 0) E.capture.maybeStartRecording();
+      if (cap.record > 0) setTimeout(function () { E.capture.maybeStartRecording(); }, 700);
     }).catch(function (err) {
       try { console.warn('boot fallback:', err); } catch (e) {}
       try {
@@ -48,6 +48,7 @@
         game.start();
         var b = document.getElementById('boot');
         if (b && b.parentNode) b.parentNode.removeChild(b);
+        E.sdk.loadingReady();
         E.capture.markReady();
       } catch (e2) {}
     });

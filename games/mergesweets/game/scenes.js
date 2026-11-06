@@ -23,6 +23,10 @@ window.GAME = window.GAME || {};
     },
     setCoins: function (n) { E.storage.set('coins', Math.max(0, Math.round(n))); },
     canDaily: function () { return E.storage.get('daily_last', '') !== todayStr(); },
+    nextStreak: function () {
+      var last = E.storage.get('daily_last', '');
+      return (last === yestStr()) ? ((E.storage.get('daily_streak', 0) | 0) + 1) : 1;
+    },
     claimDaily: function (doubleIt, onDone) {
       if (!this.canDaily()) { if (onDone) onDone(0); return; }
       var last = E.storage.get('daily_last', '');
@@ -40,21 +44,27 @@ window.GAME = window.GAME || {};
       else grant(1);
     },
     submitDepth: function (level) { E.sdk.submitScore('sweets_depth', level); },
-    iapBuy: function (pid, onOk) {
+    iapBuy: function (pid, onOk, onFail) {
       if (pid === 'noads') {
         E.sdk.purchase('no_ads', function () {
           E.storage.set('no_ads', true, true);
           E.sdk.hideBanner();
           if (onOk) onOk();
-        });
-      } else {
-        var amt = pid === 'coins_1500' ? 1500 : 500;
-        E.sdk.purchase('coins_' + amt, function () {
+        }, function () { if (onFail) onFail(); });
+      } else if (pid === 'coins_500') {
+        E.sdk.purchase('coins_500', function () {
           var play = E.sdk._game && E.sdk._game.scene;
-          if (play && play.coins != null) { play.coins += amt; Meta.setCoins(play.coins); play.buildShopButtons(E.sdk._game); }
-          else Meta.setCoins(Meta.coins() + amt);
+          if (play && play.coins != null) { play.coins += 500; Meta.setCoins(play.coins); play.buildShopButtons(E.sdk._game); }
+          else Meta.setCoins(Meta.coins() + 500);
           if (onOk) onOk();
-        });
+        }, function () { if (onFail) onFail(); });
+      } else if (pid === 'coins_1500') {
+        E.sdk.purchase('coins_1500', function () {
+          var play = E.sdk._game && E.sdk._game.scene;
+          if (play && play.coins != null) { play.coins += 1500; Meta.setCoins(play.coins); play.buildShopButtons(E.sdk._game); }
+          else Meta.setCoins(Meta.coins() + 1500);
+          if (onOk) onOk();
+        }, function () { if (onFail) onFail(); });
       }
     }
   };
@@ -68,10 +78,11 @@ window.GAME = window.GAME || {};
                hue: rng.pick(['#5b46a3', '#6d54b8', '#7a4a9a', '#4d3a85']) });
     return s;
   }
-  function drawBackground(game, ctx, blobs, t) {
+  function drawBackground(game, ctx, blobs, t, level) {
     var v = game.view, C = G.config.palette;
+    var th = G.config.themeFor(level || 1);
     var grd = ctx.createLinearGradient(0, 0, 0, v.h);
-    grd.addColorStop(0, C.bg2); grd.addColorStop(1, C.bg);
+    grd.addColorStop(0, th.bg2); grd.addColorStop(1, th.bg);
     ctx.fillStyle = grd; ctx.fillRect(0, 0, v.w, v.h);
     for (var i = 0; i < blobs.length; i++) {
       var s = blobs[i], R = s.r * Math.min(v.w, v.h);
@@ -85,11 +96,17 @@ window.GAME = window.GAME || {};
 
   /* ========================================================= MENU */
   var MenuScene = {
+    consumesInputInUpdate: true,
     enter: function (game) {
       E.audio.music('menu'); E.sdk.gameplayStop();
       if (!E.storage.get('no_ads', false)) E.sdk.showBanner(); else E.sdk.hideBanner();
-      E.sdk.initPayments();   // IAP-магазин доступен сразу (без ожидания в обработчике)
-      this.dailyPanel = null; this.lbPanel = null;
+      E.sdk.initPayments().then(function () {   // дождаться платежей, иначе getPurchases вернёт []
+        E.sdk.getPurchases(function (list) {
+          for (var i = 0; i < (list || []).length; i++)
+            if (list[i] && list[i].productId === 'no_ads') E.storage.set('no_ads', true);
+        });
+      });
+      this.dailyPanel = null; this.lbPanel = null; this.msg = null;
       this.t = 0; this.blobs = makeBlobs(12, 4242);
       var rng = new E.Rng(999); this.parade = [];
       for (var i = 0; i < 5; i++) this.parade.push({ tier: [0, 2, 5, 8, 10][i], ph: rng.range(0, 6.28) });
@@ -112,7 +129,7 @@ window.GAME = window.GAME || {};
         text: t.t('menu_play'), bg: '#3fb950', border: '#2b8a3e', fg: '#fff',
         onTap: function () { E.audio.sfx('click'); game.setScene('play', {}); }
       }));
-      var sw = Math.floor((bw - 24) / 3), fs = Math.max(10, Math.round(13 * k)), yy = contentTop + bh + 14;
+      var sw = Math.floor((bw - 24) / 3), fs = Math.max(12, Math.round(13 * k)), yy = contentTop + bh + 14;
       this.buttons.push(new E.ui.Button({
         x: cx - bw / 2, y: yy, w: sw, h: bh * 0.72, fontSize: fs, id: 'snd',
         text: E.audio.isMuted() ? t.t('snd_off') : t.t('snd_on'),
@@ -125,12 +142,12 @@ window.GAME = window.GAME || {};
       }));
       var authOn = E.storage.authorized;
       this.buttons.push(new E.ui.Button({
-        x: cx - bw / 2 + 2 * (sw + 12), y: yy, w: sw, h: bh * 0.72, fontSize: Math.max(9, Math.round(11 * k)), id: 'auth',
+        x: cx - bw / 2 + 2 * (sw + 12), y: yy, w: sw, h: bh * 0.72, fontSize: Math.max(12, Math.round(12 * k)), id: 'auth',
         text: authOn ? '✓' : t.t('login_short'),
         bg: authOn ? '#2f9e44' : '#fc5c7d', border: authOn ? '#237032' : '#c92a4f',
         onTap: function () { if (E.storage.authorized) return; E.audio.sfx('click'); E.storage.authorize().then(function (ok) { if (ok) MenuScene.layout(game); }); }
       }));
-      this.hintY = availH - 20; this.hintSize = Math.max(10, Math.round(13 * k));
+      this.hintY = availH - 36; this.hintSize = Math.max(10, Math.round(13 * k));
       // ряд монетизации: RV-монеты + IAP + дейли + лидеры
       var my = yy + bh * 0.72 + 12, mh = Math.round(46 * k), mw = Math.floor((bw - 24) / 2);
       var noAds = E.storage.get('no_ads', false);
@@ -156,21 +173,21 @@ window.GAME = window.GAME || {};
       }
       this.buttons.push(new E.ui.Button({
         x: cx - bw / 2 + (Meta.canDaily() ? mw + 24 : 0), y: my2, w: Meta.canDaily() ? mw : bw, h: mh, fontSize: fs + 1, id: 'lb',
-        text: '🏆 ' + t.t('lb_title').replace(/—/g, '').trim(), bg: '#3b2d6e', border: '#9d6bff',
+        text: t.t('lb_short'), bg: '#3b2d6e', border: '#9d6bff',
         onTap: function () { E.audio.sfx('click'); MenuScene._openLeaders(game); }
       }));
       // IAP-монеты (маленькие)
       var my3 = my2 + mh + 10;
       var iw = Math.floor((bw - 12) / 2);
-      this.buttons.push(new E.ui.Button({ x: cx - bw / 2, y: my3, w: iw, h: mh * 0.8, fontSize: fs - 1, text: t.t('iap_coins1'), onTap: function () { Meta.iapBuy('coins_500', function () {}); } }));
-      this.buttons.push(new E.ui.Button({ x: cx - bw / 2 + iw + 12, y: my3, w: iw, h: mh * 0.8, fontSize: fs - 1, text: t.t('iap_coins2'), onTap: function () { Meta.iapBuy('coins_1500', function () {}); } }));
+      this.buttons.push(new E.ui.Button({ x: cx - bw / 2, y: my3, w: iw, h: mh * 0.8, fontSize: Math.max(12, fs - 1), text: t.t('iap_coins1'), onTap: function () { Meta.iapBuy('coins_500', function () {}, function () { MenuScene.msg = { text: T('iap_fail'), t: 1.6 }; }); } }));
+      this.buttons.push(new E.ui.Button({ x: cx - bw / 2 + iw + 12, y: my3, w: iw, h: mh * 0.8, fontSize: Math.max(12, fs - 1), text: t.t('iap_coins2'), onTap: function () { Meta.iapBuy('coins_1500', function () {}, function () { MenuScene.msg = { text: T('iap_fail'), t: 1.6 }; }); } }));
     },
     _openDaily: function (game) {
       // простая панель: забрать или удвоить
       var self = this;
       this.dailyPanel = { t: 0 };
       var v = game.view, bw = Math.min(300, v.w * 0.7), bh = 46, cx = v.w / 2;
-      var streak = E.storage.get('daily_streak', 0) + 1;
+      var streak = Meta.nextStreak();
       var base = Math.min(500, 100 + (streak - 1) * 50);
       this.dailyButtons = [
         new E.ui.Button({ x: cx - bw / 2, y: v.h * 0.44, w: bw, h: bh, fontSize: 18, text: T('daily_take', { n: base }), bg: '#3fb950', border: '#2b8a3e', onTap: function () { Meta.claimDaily(false, function () { self.dailyPanel = null; MenuScene.layout(game); }); } }),
@@ -182,6 +199,7 @@ window.GAME = window.GAME || {};
       var self = this;
       this.lbPanel = { loading: true, rows: null };
       E.sdk.getLeaderboard('sweets_depth', function (r) {
+        if (!self.lbPanel) return;
         self.lbPanel.loading = false;
         self.lbPanel.rows = (r && r.entries) ? r.entries : [];
         self.lbPanel.userRank = r && r.userRank;
@@ -190,6 +208,7 @@ window.GAME = window.GAME || {};
     },
     update: function (game, dt) {
       this.t += dt;
+      if (this.msg) { this.msg.t -= dt; if (this.msg.t <= 0) this.msg = null; }
       if (E.input.pointer.pressed) {
         if (this.dailyPanel && this.dailyButtons) { if (E.ui.handleTap(this.dailyButtons, E.input.pointer.x, E.input.pointer.y)) E.audio.sfx('click'); return; }
         if (this.lbPanel && this.lbButtons) { if (E.ui.handleTap(this.lbButtons, E.input.pointer.x, E.input.pointer.y)) E.audio.sfx('click'); return; }
@@ -200,7 +219,7 @@ window.GAME = window.GAME || {};
     },
     draw: function (game, ctx) {
       var v = game.view, C = G.config.palette, t = E.i18n, cx = v.w / 2, k = this.k || 1;
-      drawBackground(game, ctx, this.blobs, this.t);
+      drawBackground(game, ctx, this.blobs, this.t, this.level || 1);
       // подиум + витрина эволюции сладостей
       var stageH = this.stageH || 150;
       ctx.save();
@@ -234,13 +253,14 @@ window.GAME = window.GAME || {};
       E.ui.text(ctx, t.t('menu_hint'), cx, this.hintY, hs, C.dim, 'center', 400);
       E.ui.text(ctx, 'v' + G.version, 10, (v.h - (this.inset || 0)) - 12, 12, C.dim, 'left', 400);
       // оверлеи мета-панелей (дейли, лидеры)
+      if (this.msg) E.ui.text(ctx, this.msg.text, v.w / 2, v.h * 0.80, 16, C.bad, 'center', 700);
       if (this.dailyPanel) this._drawDaily(game, ctx);
       if (this.lbPanel) this._drawLeaders(game, ctx);
     },
     _drawDaily: function (game, ctx) {
       var v = game.view, C = G.config.palette, t = E.i18n;
       ctx.fillStyle = 'rgba(15,10,35,0.82)'; ctx.fillRect(0, 0, v.w, v.h);
-      var streak = E.storage.get('daily_streak', 0) + 1;
+      var streak = Meta.nextStreak();
       E.ui.text(ctx, t.t('daily_title'), v.w / 2, v.h * 0.34, 32, '#ffd43b', 'center', 800);
       E.ui.text(ctx, t.t('daily_streak', { n: streak }), v.w / 2, v.h * 0.40, 18, C.dim, 'center', 600);
       E.ui.drawButtons(ctx, this.dailyButtons);
@@ -252,7 +272,8 @@ window.GAME = window.GAME || {};
       if (this.lbPanel.loading) E.ui.text(ctx, t.t('lb_loading'), v.w / 2, v.h * 0.46, 20, C.dim, 'center', 600);
       else if (!this.lbPanel.rows || !this.lbPanel.rows.length) E.ui.text(ctx, t.t('lb_empty'), v.w / 2, v.h * 0.46, 20, C.dim, 'center', 600);
       else {
-        var rows = this.lbPanel.rows.slice(0, 10);
+        var maxRows = (v.h < 520) ? 5 : 8;
+        var rows = this.lbPanel.rows.slice(0, maxRows);
         for (var i = 0; i < rows.length; i++) {
           var e = rows[i];
           var nm = (e.player && e.player.publicName) ? e.player.publicName : '—';
@@ -260,6 +281,7 @@ window.GAME = window.GAME || {};
           E.ui.text(ctx, (i + 1) + '. ' + nm + ' — ' + (e.formattedScore || e.score), v.w / 2, v.h * 0.30 + i * 30, 18, me ? '#ffd43b' : C.text, 'center', me ? 800 : 600);
         }
       }
+      if (this.lbPanel.userRank) E.ui.text(ctx, t.t('lb_you', { n: this.lbPanel.userRank }), v.w / 2, v.h * 0.66, 16, '#ffd43b', 'center', 700);
       E.ui.drawButtons(ctx, this.lbButtons);
     },
     getCaptureState: function () { return { scene: 'menu' }; }
@@ -267,6 +289,7 @@ window.GAME = window.GAME || {};
 
   /* ========================================================= PLAY */
   var PlayScene = {
+    consumesInputInUpdate: true,
     enter: function (game, params) {
       var C = G.config;
       E.sdk.hideBanner(); E.fx.reset(); G.art.init();
@@ -283,7 +306,12 @@ window.GAME = window.GAME || {};
       if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now(); // первый interstitial не раньше 60 с
       this.balls = [];
       this.goals = C.makeGoals(this.level, new E.Rng(this.rng.subSeed(this.level)));
+      this.spec = C.levelSpec(this.level);
+      this.pegNorm = []; this.pegs = [];
+      this.rebuildPegs();
       this.nextTier = this.rollDropTier();
+      this.queue = [this.rollDropTier(), this.rollDropTier()];
+      this.bannerT = (this.autopilot || E.capture.active) ? 0 : 1.8;
       this.aimX = null;             // null → центр; в CSS px
       this.dropCd = 0;
       this.boosterLvl = { bomb: 0, shuffle: 0, rainbow: 0, upgrade: 0 };
@@ -301,16 +329,48 @@ window.GAME = window.GAME || {};
     },
     exit: function () { E.sdk.gameplayStop(); },
     onResize: function (game) { this.layout(game); this.buildHudButtons(game); if (this.mode === 'paused') this.buildPauseButtons(); if (this.mode === 'over') this.buildOverButtons(game); if (this.mode === 'shop') this.buildShopButtons(game); },
-    onBack: function () { if (this.mode === 'running') this.setPaused(true); },
+    onBack: function () {
+      if (this.mode === 'running') this.setPaused(true);
+      else if (this.mode === 'paused') this.setPaused(false);
+      else if (this.mode === 'shop') this.closeShop(E.sdk._game);
+      else if (this.mode === 'over') E.sdk._game.setScene('menu', {});
+    },
 
+    rebuildPegs: function () {
+      this.spec = G.config.levelSpec(this.level);
+      var n = this.spec.pegs;
+      var rng = new E.Rng((this.seedNum ^ Math.imul(this.level + 1, 2654435761)) >>> 0);
+      this.pegNorm = [];
+      for (var i = 0; i < n; i++) {
+        for (var t = 0; t < 80; t++) {
+          var fx = 0.2 + rng.float() * 0.6, fy = 0.28 + rng.float() * 0.42;
+          var ok = true;
+          for (var j = 0; j < this.pegNorm.length; j++) {
+            var p = this.pegNorm[j];
+            if (Math.hypot((fx - p.fx) * 300, (fy - p.fy) * 400) < 72) { ok = false; break; }
+          }
+          if (ok) { this.pegNorm.push({ fx: fx, fy: fy }); break; }
+        }
+      }
+    },
+    updatePegPositions: function () {
+      if (!this.cup) { this.pegs = []; return; }
+      var cup = this.cup, cupW = cup.right - cup.left, cupH = cup.bottom - cup.top;
+      var r = Math.max(7, (this.availH || 720) * 0.018);
+      this.pegs = (this.pegNorm || []).map(function (p) {
+        return { x: cup.left + cupW * p.fx, y: cup.top + cupH * p.fy, r: r, flash: 0 };
+      });
+    },
     layout: function (game) {
       var v = game.view, C = G.config;
+      var oldCup = this.cup;
       var inset = E.sdk.bannerInsetPx(), availH = v.h - inset;
       // узкие телефоны: два ряда HUD (статус + цели), иначе цели уезжают под монеты
-      this.hudH = (v.w < 560) ? Math.max(84, availH * 0.10) : Math.max(46, availH * 0.08);
+      this.hudH = (v.w < 560) ? Math.max(104, availH * 0.12) : Math.max(46, availH * 0.08);
       this.inset = inset; this.availH = availH;
-      // стакан
-      var cupW = Math.min(v.w * C.cup.wFrac, availH * C.cup.wFrac * 0.9);
+      // стакан: ширина зависит от уровня (cupW в levelSpec)
+      var wf = (this.spec && this.spec.cupW) ? this.spec.cupW : C.cup.wFrac;
+      var cupW = Math.min(v.w * wf, availH * wf * 0.9);
       var cupBottom = availH * C.cup.bottomFrac;
       var cupH = availH * C.cup.hFrac;
       this.cup = {
@@ -325,9 +385,20 @@ window.GAME = window.GAME || {};
       this.kRad = Math.min(availH / 720, (cupW * 0.45) / maxTierR);
       // спавн-точка — над стаканом
       this.spawnY = this.cup.top - Math.max(30, availH * 0.05);
-      // обновить радиусы существующих шаров
-      for (var i = 0; i < this.balls.length; i++)
-        this.balls[i].r = G.entities.tierRadius(this.balls[i].tier, this.kRad);
+      this.updatePegPositions();
+      // обновить радиусы существующих шаров + пропорционально перенести позиции
+      var oldW = oldCup ? (oldCup.right - oldCup.left) : 0;
+      var oldH = oldCup ? (oldCup.bottom - oldCup.top) : 0;
+      for (var i = 0; i < this.balls.length; i++) {
+        var bb = this.balls[i];
+        bb.r = G.entities.tierRadius(bb.tier, this.kRad);
+        if (oldCup && oldW > 0 && oldH > 0) {
+          var fx = (bb.x - oldCup.left) / oldW;
+          var fy = (bb.y - oldCup.top) / oldH;
+          bb.x = this.cup.left + fx * (this.cup.right - this.cup.left);
+          bb.y = this.cup.top + fy * (this.cup.bottom - this.cup.top);
+        }
+      }
     },
 
     /* ---------- capture ---------- */
@@ -349,6 +420,7 @@ window.GAME = window.GAME || {};
         if (P.mode === 'shop') this.openShop(game);
       }
       if (P.coins) this.coins = Math.max(0, parseInt(P.coins, 10) || 0);
+      if (P.score) this.score = Math.max(0, parseInt(P.score, 10) || 0);
       if (P.freeze === '1') { game.pause('capture'); game.render(); }
     },
     simulateCombat: function (game, tsec) {
@@ -366,7 +438,12 @@ window.GAME = window.GAME || {};
     },
     setCaptureState: function (game, s) {
       if (s.seed != null) { this.seedNum = (typeof s.seed === 'string') ? E.seedFromString(s.seed) : (s.seed >>> 0); this.rng = new E.Rng(this.seedNum); }
-      if (s.wave) this.level = clamp(s.wave, 1, 99);
+      if (s.wave) {
+        this.level = clamp(s.wave, 1, 99);
+        this.goals = G.config.makeGoals(this.level, new E.Rng(this.rng.subSeed(this.level)));
+        this.rebuildPegs();
+        if (game) this.layout(game);
+      }
       if (s.coins != null) this.coins = s.coins;
       if (s.mode === 'shop') this.openShop(game);
       if (s.mode === 'over') { this.fillForOver(); this.gameOver(game, true); this.overT = 1; this.overShown = true; }
@@ -420,8 +497,10 @@ window.GAME = window.GAME || {};
       if (rainbow) b.tier = -1;
       b.vy = 40;
       this.balls.push(b);
-      this.dropCd = G.config.drop.cooldown;
-      this.nextTier = this.rollDropTier();
+      this.dropCd = (this.spec && this.spec.dropCd) || G.config.drop.cooldown;
+      this.nextTier = this.queue && this.queue.length ? this.queue.shift() : this.rollDropTier();
+      if (!this.queue) this.queue = [];
+      this.queue.push(this.rollDropTier());
       E.audio.sfx('shoot');
       return true;
     },
@@ -442,7 +521,7 @@ window.GAME = window.GAME || {};
         this.balls.push(nb);
         this.merges++;
         this.score += G.config.tiers[nt].score;
-        this.comboN++; this.comboT = 0.8;
+        this.comboN++; this.comboT = G.config.combo.window;
         var col = G.config.tiers[nt].color;
         E.fx.burst(nx, ny, col, 16, 150, this.visRng);
         E.fx.shake(2 + Math.min(4, nt), 0.16);
@@ -450,6 +529,10 @@ window.GAME = window.GAME || {};
         if (this.comboN >= 2) this.addFloater(nx, ny - nb.r, T('combo', { n: this.comboN }), '#ffe066');
         else this.addFloater(nx, ny - nb.r, sweetName(nt) + '!', col);
         this.addCoins(G.config.economy.coinPerTier[nt] || 1, nx, ny);
+        // бонус — за достижение вехи серии, а не за каждый мердж (иначе инфляция)
+        if (this.comboN === 3) this.addCoins(G.config.combo.at3);
+        else if (this.comboN === 5) this.addCoins(G.config.combo.at5);
+        else if (this.comboN === 8) this.addCoins(3);
         this.noteTier(nt);
         if (nt === G.config.tiers.length - 1) { // собрали финал
           this.addFloater(nx, ny, T('made_final'), '#ff5d8f');
@@ -462,7 +545,13 @@ window.GAME = window.GAME || {};
       if (tier < 0) return;
       for (var g = 0; g < this.goals.length; g++) {
         var gl = this.goals[g];
-        if (gl.tier === tier && gl.got < gl.need) gl.got++;
+        if (gl.tier === tier && gl.got < gl.need) {
+          gl.got++;
+          if (gl.got === gl.need) {
+            this.addFloater((this.cup.left + this.cup.right) / 2, this.cup.top + 30, T('goal_done'), '#6fe3a5');
+            E.audio.sfx('coin');
+          }
+        }
       }
     },
     checkGoals: function () {
@@ -475,11 +564,14 @@ window.GAME = window.GAME || {};
       if (this.recordMode) reward = Math.min(reward, G.config.record.coinCap);
       this.coins += reward; this.level++;
       this.goals = G.config.makeGoals(this.level, new E.Rng(this.rng.subSeed(this.level)));
-      for (var i = 0; i < this.balls.length; i++) this.noteTier(this.balls[i].tier);
+      this.rebuildPegs();
+      if (!silent) this.bannerT = 1.6;
+      var gg = game || E.sdk._game;
+      if (gg && gg.scene === this) this.layout(gg);
       E.storage.set('best', Math.max(E.storage.get('best', 0), this.level));
       if (!silent) {
         E.audio.sfx('wave'); E.fx.flash('#ffe066', 0.18);
-        this.addFloater((this.cup.left + this.cup.right) / 2, this.cup.top - 20, T('levelup', { n: this.level, c: reward }), '#ffe066');
+        this.addFloater((this.cup.left + this.cup.right) / 2, this.cup.top - 20, T('levelup', { n: this.level - 1, c: reward }), '#ffe066');
         // interstitial между уровнями: только живой игрок, не в no_ads, не раньше 60 с игры
         if (!this.autopilot && !this._simGuard && !E.storage.get('no_ads', false) && (Date.now() - (E.sdk._lastInterstitial || 0) > 60000))
           E.sdk.showInterstitial(function () {});
@@ -576,6 +668,7 @@ window.GAME = window.GAME || {};
       // Тапы оверлеев обрабатываются ТОЛЬКО здесь (в update), не в draw(): иначе на кадре
       // без fixed-step pointer.pressed переживает render и покупка срабатывает дважды.
       if (this.mode === 'paused' && E.input.wasPressed('Escape')) { this.setPaused(false); return; }
+      if (this.mode === 'shop' && E.input.wasPressed('Escape')) { this.closeShop(game); return; }
       if (E.input.pointer.pressed) {
         var px = E.input.pointer.x, py = E.input.pointer.y, hit = null;
         if (this.mode === 'paused' && this.pauseButtons) hit = E.ui.handleTap(this.pauseButtons, px, py);
@@ -587,6 +680,8 @@ window.GAME = window.GAME || {};
       else if (this.mode === 'over') this.updateOver(game, dt);
       for (var i = this.floaters.length - 1; i >= 0; i--) { var f = this.floaters[i]; f.t += dt; if (f.t > 1.2) this.floaters.splice(i, 1); }
       if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.comboN = 0; }
+      if (this.bannerT > 0) this.bannerT -= dt;
+      for (var pi = 0; pi < (this.pegs || []).length; pi++) if (this.pegs[pi].flash > 0) this.pegs[pi].flash -= dt;
       if (this.tutorial > 0 && this.mode === 'running' && !this.autopilot) this.tutT += dt;
       E.capture.tickRecording(dt);
     },
@@ -602,9 +697,10 @@ window.GAME = window.GAME || {};
       var above = false;
       for (var bi2 = 0; bi2 < this.balls.length; bi2++) {
         var bb = this.balls[bi2];
-        if (bb.y - bb.r < this.overY) {
+        // центр шара выше линии (а не касание краем) и держится ~0.9с — честное переполнение
+        if (bb.y + bb.r < this.overY) {
           bb.aboveT = (bb.aboveT || 0) + dt;
-          if (bb.aboveT > 0.7) above = true;
+          if (bb.aboveT > 0.9) above = true;
         } else bb.aboveT = 0;
       }
       if (above) {
@@ -661,11 +757,12 @@ window.GAME = window.GAME || {};
     },
     buildPauseButtons: function () {
       var t = E.i18n, self = this, game = E.sdk._game;
-      var bw = Math.min(260, window.innerWidth * 0.7), bh = 50, cx = window.innerWidth / 2, y0 = window.innerHeight * 0.42;
+      var v = game.view;
+      var bw = Math.min(260, v.w * 0.7), bh = 48, cx = v.w / 2, y0 = v.h * 0.38;
       this.pauseButtons = [
         new E.ui.Button({ x: cx - bw / 2, y: y0, w: bw, h: bh, fontSize: 20, text: t.t('pause_resume'), onTap: function () { E.audio.sfx('click'); self.setPaused(false); } }),
-        new E.ui.Button({ x: cx - bw / 2, y: y0 + bh + 12, w: bw, h: bh, fontSize: 20, text: t.t('pause_restart'), onTap: function () { E.audio.sfx('click'); self.restart(game); } }),
-        new E.ui.Button({ x: cx - bw / 2, y: y0 + 2 * (bh + 12), w: bw, h: bh, fontSize: 20, text: t.t('pause_menu'), onTap: function () { E.audio.sfx('click'); E.sdk.gameplayStop(); game.setScene('menu', {}); } })
+        new E.ui.Button({ x: cx - bw / 2, y: y0 + bh + 10, w: bw, h: bh, fontSize: 19, text: t.t('pause_restart'), onTap: function () { E.audio.sfx('click'); self.restart(game); } }),
+        new E.ui.Button({ x: cx - bw / 2, y: y0 + 2 * (bh + 10), w: bw, h: bh, fontSize: 19, text: t.t('pause_menu'), onTap: function () { E.audio.sfx('click'); E.sdk.gameplayStop(); game.setScene('menu', {}); } })
       ];
     },
     openShop: function (game) { if (this.mode !== 'running') return; this.mode = 'shop'; E.sdk.gameplayStop(); this.buildShopButtons(game); },
@@ -674,7 +771,10 @@ window.GAME = window.GAME || {};
       var t = E.i18n, self = this, v = game.view;
       var bw = Math.min(320, v.w * 0.82), cx = v.w / 2;
       var rows = G.config.boosters.length + 2;
-      var bh = Math.max(38, Math.min(52, (v.h * 0.5) / rows)), y0 = v.h * 0.5 - (bh + 8) * rows / 2;
+      var availH = v.h - (this.inset || 0);
+      var phS = Math.min(430, Math.max(300, availH * 0.86));
+      var bh = Math.max(32, Math.min(48, (phS - 120) / rows));
+      var y0 = Math.max(96, (availH - (bh + 8) * rows) / 2 + 16);
       this.shopButtons = [];
       G.config.boosters.forEach(function (b, i) {
         var cost = self.boosterCost(b.id);
@@ -698,9 +798,12 @@ window.GAME = window.GAME || {};
     },
     buildOverButtons: function (game) {
       var t = E.i18n, self = this, v = game.view;
-      var bw = Math.min(280, v.w * 0.74), bh = 48, cx = v.w / 2;
+      var bw = Math.min(280, v.w * 0.74), bh = 44, cx = v.w / 2;
       var rows = (this.reviveUsed || this.autopilot) ? 2 : 3;
-      var y0 = v.h * 0.5 - (bh + 12) * rows / 2 + v.h * 0.04;
+      var availH = v.h - (this.inset || 0);
+      var stack = rows * bh + (rows - 1) * 10;
+      var y0 = Math.max(96, (availH - stack) / 2 + 24);
+      this.overY0 = y0;
       this.overButtons = [];
       if (!this.reviveUsed && !this.autopilot) {
         this.overButtons.push(new E.ui.Button({
@@ -711,15 +814,16 @@ window.GAME = window.GAME || {};
         y0 += bh + 12;
       }
       this.overButtons.push(new E.ui.Button({ x: cx - bw / 2, y: y0, w: bw, h: bh, fontSize: 18, text: t.t('over_restart'), bg: '#3fb950', border: '#2b8a3e', fg: '#fff', onTap: function () { E.audio.sfx('click'); self.restart(game); } }));
-      this.overButtons.push(new E.ui.Button({ x: cx - bw / 2, y: y0 + bh + 12, w: bw, h: bh, fontSize: 18, text: t.t('over_menu'), onTap: function () { E.audio.sfx('click'); E.sdk.hideBanner(); game.setScene('menu', {}); } }));
+      this.overButtons.push(new E.ui.Button({ x: cx - bw / 2, y: y0 + bh + 10, w: bw, h: bh, fontSize: 17, text: t.t('over_menu'), onTap: function () { E.audio.sfx('click'); E.sdk.hideBanner(); game.setScene('menu', {}); } }));
     },
 
     /* ---------- отрисовка ---------- */
     draw: function (game, ctx) {
       var v = game.view, C = G.config.palette;
-      drawBackground(game, ctx, this.blobs, game.time);
+      drawBackground(game, ctx, this.blobs, game.time, this.level);
       ctx.save(); ctx.translate(E.fx.offsetX(game.time), E.fx.offsetY(game.time));
       this.drawCup(game, ctx);
+      this.drawPegs(game, ctx);
       this.drawBalls(game, ctx);
       this.drawAimer(game, ctx);
       E.fx.draw(ctx); this.drawFloaters(ctx);
@@ -728,6 +832,8 @@ window.GAME = window.GAME || {};
       this.drawGoals(game, ctx);
       this.drawHud(game, ctx);
       E.fx.drawFlash(ctx, v.w, v.h);
+      if (this.bannerT > 0 && this.mode === 'running' && !this.autopilot) this.drawBanner(game, ctx);
+      if (this.comboT > 0 && this.comboN >= 2 && this.mode === 'running') this.drawComboMeter(game, ctx);
       if (this.mode === 'paused') this.drawPause(game, ctx);
       else if (this.mode === 'shop') this.drawShop(game, ctx);
       else if (this.mode === 'over') this.drawOver(game, ctx);
@@ -744,10 +850,18 @@ window.GAME = window.GAME || {};
       ctx.moveTo(cup.left, cup.top); ctx.lineTo(cup.left, cup.bottom);
       ctx.lineTo(cup.right, cup.bottom); ctx.lineTo(cup.right, cup.top);
       ctx.stroke();
-      // линия проигрыша (пунктир)
+      // линия проигрыша (пунктир) + предупреждение, когда до неё близко
       ctx.strokeStyle = 'rgba(255,93,115,0.6)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(cup.left, this.overY); ctx.lineTo(cup.right, this.overY); ctx.stroke();
       ctx.setLineDash([]);
+      var topMost = cup.bottom;
+      for (var wi = 0; wi < this.balls.length; wi++) topMost = Math.min(topMost, this.balls[wi].y - this.balls[wi].r);
+      if (topMost < this.overY + (cup.bottom - cup.top) * 0.14) {
+        ctx.save();
+        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(game.time * 8);
+        E.ui.text(ctx, T('warn_full'), (cup.left + cup.right) / 2, this.overY - 16, 16, '#ff8a98', 'center', 800);
+        ctx.restore();
+      }
     },
     drawBalls: function (game, ctx) {
       for (var i = 0; i < this.balls.length; i++) {
@@ -787,13 +901,66 @@ window.GAME = window.GAME || {};
         ctx.globalAlpha = 1;
       } else if (ready) G.art.drawSweet(ctx, t, x, this.spawnY + bob, r, game.time, 0, 0);
       else { ctx.globalAlpha = 0.4; G.art.drawSweet(ctx, t, x, this.spawnY, r, game.time, 0, 0); ctx.globalAlpha = 1; }
+      // очередь следующих двух сладостей — планирование наперёд
+      if (this.queue) {
+        for (var qi = 0; qi < Math.min(2, this.queue.length); qi++) {
+          var qt = this.queue[qi];
+          var qr = G.entities.tierRadius(qt, this.kRad) * (qi ? 0.34 : 0.46);
+          var qx = Math.max(this.cup.left + qr + 4, x - r - 22 - qi * (qr * 2 + 8));
+          ctx.globalAlpha = qi ? 0.55 : 0.75;
+          G.art.drawSweet(ctx, qt, qx, this.spawnY, qr, game.time, 0, 0);
+          ctx.globalAlpha = 1;
+        }
+      }
+    },
+    drawPegs: function (game, ctx) {
+      for (var i = 0; i < this.pegs.length; i++) {
+        var p = this.pegs[i];
+        if (p.flash > 0) {
+          ctx.save(); ctx.globalAlpha = 0.5 * (p.flash / 0.18);
+          ctx.fillStyle = '#ffe08a';
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.8, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        var g = ctx.createRadialGradient(p.x - p.r * 0.35, p.y - p.r * 0.4, p.r * 0.15, p.x, p.y, p.r);
+        g.addColorStop(0, '#e8eefc'); g.addColorStop(0.55, '#9fb3d1'); g.addColorStop(1, '#4a5a7e');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(30,40,60,0.8)'; ctx.lineWidth = Math.max(1.5, p.r * 0.18);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath(); ctx.arc(p.x - p.r * 0.25, p.y - p.r * 0.3, p.r * 0.3, 0, Math.PI * 2); ctx.fill();
+      }
+    },
+    drawBanner: function (game, ctx) {
+      var v = game.view;
+      var a = Math.min(1, this.bannerT * 1.6);
+      var w = Math.min(320, v.w * 0.76), h = 66;
+      var x = (v.w - w) / 2, y = this.cup.top + (this.cup.bottom - this.cup.top) * 0.28;
+      ctx.save(); ctx.globalAlpha = a;
+      E.ui.roundRect(ctx, x, y, w, h, 16);
+      ctx.fillStyle = 'rgba(20,12,40,0.9)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#ff9ad5'; ctx.stroke();
+      E.ui.text(ctx, T('banner_level', { n: this.level }), v.w / 2, y + 24, 20, '#ffe0f0', 'center', 800);
+      if (this.spec && this.spec.pegs > 0 && this.level === 3) {
+        E.ui.text(ctx, T('banner_pegs'), v.w / 2, y + 47, 12, '#c9b8e8', 'center', 600);
+      }
+      ctx.restore();
+    },
+    drawComboMeter: function (game, ctx) {
+      var v = game.view;
+      var a = Math.min(1, this.comboT / 0.3);
+      var y = this.cup.top + 24;
+      ctx.save(); ctx.globalAlpha = a;
+      E.ui.text(ctx, T('combo_label', { n: this.comboN }), v.w / 2, y, 22, '#ffe066', 'center', 800);
+      ctx.restore();
     },
     drawGoals: function (game, ctx) {
       var v = game.view;
       var y, h, px, pw;
       if (v.w < 560) {
         // второй ряд на всю ширину: монеты/очки первого ряда не пересекаются с целями
-        px = 8; pw = v.w - 16; y = this.hudH * 0.46; h = this.hudH * 0.50;
+        px = 8; pw = v.w - 16; y = 58; h = this.hudH - 64;
       } else {
         y = 8; h = this.hudH - 12;
         px = 112; pw = Math.min(v.w * 0.55, 380, v.w - 232);
@@ -847,25 +1014,27 @@ window.GAME = window.GAME || {};
       var v = game.view, C = G.config.palette, t = E.i18n;
       ctx.fillStyle = 'rgba(15,10,35,0.82)'; ctx.fillRect(0, 0, v.w, v.h);
       var rows = G.config.boosters.length + 2;
-      var bh = Math.max(38, Math.min(52, (v.h * 0.5) / rows));
-      var y0 = v.h * 0.5 - (bh + 8) * rows / 2;
+      var availH = v.h - (this.inset || 0);
+      var phS = Math.min(430, Math.max(300, availH * 0.86));
+      var bh = Math.max(32, Math.min(48, (phS - 120) / rows));
+      var y0 = Math.max(96, (availH - (bh + 8) * rows) / 2 + 16);
       var pwS = Math.min(360, v.w * 0.84);
-      E.ui.roundRect(ctx, v.w / 2 - pwS / 2, y0 - 92, pwS, (bh + 8) * rows + 116, 18);
+      E.ui.roundRect(ctx, v.w / 2 - pwS / 2, y0 - 82, pwS, (bh + 8) * rows + 100, 18);
       ctx.fillStyle = 'rgba(22,15,48,0.96)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(157,107,255,0.6)'; ctx.stroke();
-      E.ui.text(ctx, t.t('shop_title'), v.w / 2, y0 - 64, 30, C.text, 'center', 800);
-      E.ui.text(ctx, t.t('shop_coins', { n: this.coins }), v.w / 2, y0 - 34, 18, C.coin, 'center', 700);
+      E.ui.text(ctx, t.t('shop_title'), v.w / 2, y0 - 54, 26, C.text, 'center', 800);
+      E.ui.text(ctx, t.t('shop_coins', { n: this.coins }), v.w / 2, y0 - 28, 16, C.coin, 'center', 700);
       E.ui.drawButtons(ctx, this.shopButtons);
-      if (E.input.wasPressed('Escape')) this.closeShop(game);
     },
     drawOver: function (game, ctx) {
       var v = game.view, C = G.config.palette, t = E.i18n;
       if (!this.overShown) return;
       ctx.fillStyle = 'rgba(15,10,35,0.82)'; ctx.fillRect(0, 0, v.w, v.h);
-      E.ui.text(ctx, t.t('over_title'), v.w / 2, v.h * 0.24, 32, C.text, 'center', 800);
-      E.ui.text(ctx, t.t('over_score', { n: this.score }), v.w / 2, v.h * 0.24 + 40, 20, C.dim, 'center', 600);
-      if (this.newBest) { ctx.globalAlpha = 0.8 + 0.2 * Math.sin(game.time * 5); E.ui.text(ctx, t.t('over_newbest'), v.w / 2, v.h * 0.24 + 70, 20, '#ffd43b', 'center', 800); ctx.globalAlpha = 1; }
-      else E.ui.text(ctx, t.t('over_best', { n: E.storage.get('best', 0) }), v.w / 2, v.h * 0.24 + 70, 18, C.dim, 'center', 600);
+      var oy = this.overY0 || Math.max(96, v.h * 0.5 - 70);
+      E.ui.text(ctx, t.t('over_title'), v.w / 2, oy - 80, 30, C.text, 'center', 800);
+      E.ui.text(ctx, t.t('over_score', { n: this.score }), v.w / 2, oy - 52, 18, C.dim, 'center', 600);
+      if (this.newBest) { ctx.globalAlpha = 0.8 + 0.2 * Math.sin(game.time * 5); E.ui.text(ctx, t.t('over_newbest'), v.w / 2, oy - 28, 18, '#ffd43b', 'center', 800); ctx.globalAlpha = 1; }
+      else E.ui.text(ctx, t.t('over_best', { n: E.storage.get('best', 0) }), v.w / 2, oy - 28, 16, C.dim, 'center', 600);
       E.ui.drawButtons(ctx, this.overButtons);
     },
     drawTutorial: function (game, ctx) {

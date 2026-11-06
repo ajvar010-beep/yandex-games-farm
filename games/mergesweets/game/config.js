@@ -4,7 +4,7 @@ window.GAME = window.GAME || {};
 (function (G) {
   'use strict';
   G.id = 'mergesweets';
-  G.version = '1.0.0';
+  G.version = '2.0.0';
 
   G.config = {
     palette: {
@@ -44,25 +44,47 @@ window.GAME = window.GAME || {};
       { id: 'upgrade', base: 55, growth: 1.35 }   // следующий шар +1 тир
     ],
     goals: { perLevel: 3 },
-    record: { coinCap: 500 }
+    record: { coinCap: 500 },
+    /* комбо: серия мерджей подряд даёт бонусные монеты */
+    combo: { window: 1.3, at3: 1, at5: 2 },
+    /* темы фона — меняются каждые 6 уровней */
+    themes: [
+      { bg: '#2b1a3e', bg2: '#3d2660', glow: 'rgba(255,154,213,0.10)' },
+      { bg: '#1d1430', bg2: '#3a2350', glow: 'rgba(177,151,252,0.12)' },
+      { bg: '#241a12', bg2: '#4a2f1a', glow: 'rgba(255,212,59,0.10)' },
+      { bg: '#101f26', bg2: '#173a45', glow: 'rgba(99,230,190,0.10)' }
+    ],
+    themeFor: function (level) { return this.themes[Math.floor((Math.max(1, level | 0) - 1) / 6) % this.themes.length]; },
+    /* параметры уровня: ширина стакана, физические штыри, темп дропа */
+    levelSpec: function (level) {
+      var lv = Math.max(1, level | 0);
+      return {
+        cupW: 0.70 + (lv % 3) * 0.02,
+        pegs: lv >= 3 ? Math.min(3, 1 + Math.floor((lv - 3) / 4)) : 0,
+        dropCd: Math.max(0.30, 0.44 - lv * 0.004),
+        gravity: 1750 + Math.min(320, lv * 16)
+      };
+    }
   };
 
   /* цели уровня: сделать N шаров тира T. Детерминированно по level+rng. */
   G.config.makeGoals = function (level, rng) {
     // Тиры целей ограничены 6-м: раньше пул доходил до 10 и уровень требовал
     // 2–7 шаров тира 9–10 (516–1024 базовых конфетки) — цель была недостижима.
-    var maxT = Math.min(6, 4 + Math.floor((level - 1) / 4));
+    var maxT = level <= 2 ? 3 : Math.min(6, 4 + Math.floor((level - 3) / 4));
+    var count = level <= 2 ? 2 : G.config.goals.perLevel;
     var pool = [];
     for (var t0 = 2; t0 <= maxT; t0++) pool.push(t0);
     for (var i = pool.length - 1; i > 0; i--) {
       var j = rng.int(0, i), tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
     }
     var out = [];
-    for (var k = 0; k < G.config.goals.perLevel; k++) {
+    for (var k = 0; k < count; k++) {
       var tier = pool.length ? pool[k % pool.length] : 2;
       // чем выше тир, тем меньше нужно: тир 6 — 1 штука, тир 5 — до 2, тир 4 — до 3
       var baseNeed = rng.int(2, 3 + Math.min(4, Math.floor(level / 2)));
       var need = Math.max(1, Math.min(baseNeed, 6 - tier));
+      if (level <= 5 && tier >= 4) need = Math.min(need, 1);
       out.push({ tier: tier, need: need, got: 0 });
     }
     return out;

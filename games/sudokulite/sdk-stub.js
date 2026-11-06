@@ -95,6 +95,27 @@
         getBannerAdvStatus: function () { return Promise.resolve(status()); }
       },
       getPlayer: function () { console.warn('[sdk-stub] getPlayer'); return Promise.resolve(makePlayer(authorized)); },
+      getLeaderboards: function () {
+        return Promise.resolve({
+          setLeaderboardScore: function (name, score) { console.warn('[sdk-stub] leaderboard ' + name + ' = ' + score); return Promise.resolve(); },
+          getLeaderboardEntries: function (name) {
+            console.warn('[sdk-stub] getLeaderboardEntries ' + name);
+            return Promise.resolve({ entries: [
+              { rank: 1, score: 25, formattedScore: '25', player: { publicName: 'Pro', uniqueID: 'a' } },
+              { rank: 2, score: 18, formattedScore: '18', player: { publicName: 'Max', uniqueID: 'b' } },
+              { rank: 3, score: 12, formattedScore: '12', player: { publicName: 'Guest', uniqueID: 'c' } }
+            ], userRank: 0 });
+          }
+        });
+      },
+      getPayments: function () {
+        console.warn('[sdk-stub] getPayments');
+        return Promise.resolve({
+          purchase: function (opts) { console.warn('[sdk-stub] purchase ' + (opts && opts.id)); return Promise.resolve({ purchaseToken: 'stub-' + Date.now() }); },
+          consumePurchase: function (t) { console.warn('[sdk-stub] consume ' + t); return Promise.resolve(); },
+          getPurchases: function () { return Promise.resolve([]); }
+        });
+      },
       auth: {
         openAuthDialog: function () { authorized = true; console.warn('[sdk-stub] openAuthDialog -> authorized'); return Promise.resolve(); }
       },

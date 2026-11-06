@@ -1,0 +1,1 @@
+Parking Escape is a puzzle: clear the car park, send cars out in convoys and beat levels in as few moves as possible.

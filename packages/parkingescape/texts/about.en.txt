@@ -1,0 +1,5 @@
+Parking Escape is a calm yet addictive car puzzle. The car park is full; tap a car with a clear exit and it drives away. Cars behind it follow in a convoy, and every link scores more.
+
+Thirty levels with growing car parks, barriers, concrete blocks, snow and tow trucks. Clear every space within the move limit; the fewer moves you use, the more stars you earn. A hint shows the best move, a tow truck clears a 3×3 area, and +5 moves saves a tough level.
+
+English and Russian, saved progress, a daily challenge and a depth leaderboard.

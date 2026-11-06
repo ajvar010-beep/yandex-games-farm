@@ -84,13 +84,16 @@ window.GAME = window.GAME || {};
           if (a.merged || b.merged) continue;
           var dx = b.x - a.x, dy = b.y - a.y;
           var dist = Math.hypot(dx, dy), min = a.r + b.r;
-          if (dist >= min || dist === 0) continue;
-          // мердж: одинаковый тир (или радуга -1)
-          if (pass === 0 && canMerge(a, b) && dist < min * 0.94) {
+          if (dist === 0) continue;
+          // мердж: одинаковый тир (или радуга -1). Проверяем ДО отсечения
+          // «dist >= min», иначе ровно соприкасающиеся шары (dist == r1+r2)
+          // пропускались и никогда не сливались. Допуск 1% — «коснулись = слились».
+          if (pass === 0 && canMerge(a, b) && dist < min * 1.01) {
             merges.push([a, b]);
             a.merged = b.merged = true;
             continue;
           }
+          if (dist >= min) continue;
           // разрешение коллизии (позиционное + импульс)
           var nx = dx / dist, ny = dy / dist, overlap = min - dist;
           var ma = a.r * a.r, mb = b.r * b.r, tm = ma + mb;

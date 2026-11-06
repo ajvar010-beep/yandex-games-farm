@@ -1,0 +1,1 @@
+Tap a car whose exit is clear — it drives off the car park. Cars behind it in the same lane follow in a convoy and score more. Clear every space before you run out of moves. A tow truck removes a 3×3 area, a hint highlights the best move, and +5 moves gives you breathing room.

@@ -132,7 +132,7 @@ window.GAME = window.GAME || {};
         onTap: function () {
           var on = !E.storage.get('stake', 0);
           if (on && coins() < C.stake.cost) { E.audio.sfx('deny'); return; }
-          if (on) addCoins(-C.stake.cost);
+          addCoins(on ? -C.stake.cost : C.stake.cost);
           E.storage.set('stake', on ? 1 : 0);
           E.audio.sfx('click');
           that._build(game);
@@ -181,8 +181,9 @@ window.GAME = window.GAME || {};
 
       coinsBadge(ctx, 18, 18);
       E.ui.drawButtons(ctx, this.buttons);
-      E.ui.text(ctx, T('best_n', { n: E.storage.get('best', 0) | 0, total: C.rivals.length }), W / 2, H - 46, Math.max(12, Math.min(W * 0.032, 13)), 'rgba(247,241,227,0.5)', 'center', 600);
-      E.ui.text(ctx, T('tavern'), W / 2, H - 24, Math.min(W * 0.036, 14), 'rgba(247,241,227,0.35)', 'center', 500);
+      var banM = (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0);
+      E.ui.text(ctx, T('best_n', { n: E.storage.get('best', 0) | 0, total: C.rivals.length }), W / 2, H - 46 - banM, Math.max(12, Math.min(W * 0.032, 13)), 'rgba(247,241,227,0.5)', 'center', 600);
+      E.ui.text(ctx, T('tavern'), W / 2, H - 24 - banM, Math.min(W * 0.036, 14), 'rgba(247,241,227,0.35)', 'center', 500);
       if (this.help) {
         ctx.fillStyle = 'rgba(6,14,11,0.9)'; ctx.fillRect(0, 0, W, H);
         var hy = H * 0.28;
@@ -209,8 +210,8 @@ window.GAME = window.GAME || {};
       var bw = Math.min(280, W * 0.6), bh = 46;
       this.buttons = [];
       var n = C.shop.length;
-      var cardH = Math.min(96, (H * 0.52) / n - 10);
-      var top = H * 0.30;
+      var cardH = Math.min(96, (H * 0.46) / n - 8);
+      var top = H * 0.24;
       for (var i = 0; i < n; i++) {
         (function (item, idx) {
           var y = top + idx * (cardH + 12);
@@ -253,7 +254,7 @@ window.GAME = window.GAME || {};
       E.ui.text(ctx, T('shop'), W / 2, H * 0.16, Math.min(W * 0.085, 40), P.gold, 'center', 800);
 
       var top = H * 0.30, n = C.shop.length;
-      var cardH = Math.min(96, (H * 0.52) / n - 10);
+      var cardH = Math.min(96, (H * 0.46) / n - 8);
       for (var i = 0; i < n; i++) {
         var item = C.shop[i];
         var w = Math.min(520, W * 0.9), x = W / 2 - w / 2, y = top + i * (cardH + 12);
@@ -367,7 +368,6 @@ window.GAME = window.GAME || {};
 
       if (E.input.pointer.pressed) this._tapCard(game, E.input.pointer.x, E.input.pointer.y);
       if (E.input.wasPressed('Space') && L.canPass(st, 0)) { L.pass(st, 0); E.audio.sfx('click'); }
-      if (E.input.wasPressed('Escape') && L.canTake(st, 0)) { L.take(st, 0); E.audio.sfx('hit'); }
       if (st.phase === 'over') this._finish(0);
     },
 
@@ -471,7 +471,7 @@ window.GAME = window.GAME || {};
         }
         if (!r.win) {
           list.push(new E.ui.Button({
-            x: cx - bw / 2, y: y + (r.redealt ? bh + 10 : bh * 2 + 20), w: bw, h: bh * 0.8,
+            x: cx - bw / 2, y: Math.min(y + (r.redealt ? bh + 10 : bh * 2 + 20), Lt.handY - bh - 8), w: bw, h: bh * 0.8,
             text: T('back'), bg: 'rgba(12,28,22,0.7)', border: 'rgba(247,241,227,0.2)', fg: 'rgba(247,241,227,0.7)',
             fontSize: 15,
             onTap: function () { E.audio.sfx('click'); that._leave(false); }
@@ -649,6 +649,13 @@ window.GAME = window.GAME || {};
         G.art.card(ctx, s.x, s.y, s.w, s.h, card, { hi: isHint, lift: isHint ? 6 : 0 });
       }
 
+      if (this.denyT > 0) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, this.denyT * 3.2);
+        ctx.lineWidth = 3; ctx.strokeStyle = '#e05a4f';
+        E.ui.roundRect(ctx, Lt.pad, Lt.handY - 14, Lt.W - Lt.pad * 2, Lt.cardH + 26, 14);
+        ctx.stroke(); ctx.restore();
+      }
       // подпись хода (canTake надёжнее, чем phase: в capture фаза может быть сдвинута)
       var cap = T('your_turn');
       if (L.canTake(st, 0) || (st.phase === 'defend' && st.turn === 0)) cap = T('defend');

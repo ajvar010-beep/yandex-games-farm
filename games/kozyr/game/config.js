@@ -55,7 +55,7 @@ window.GAME = window.GAME || {};
     ],
 
     /* Ставка: бесконечный сток монет — риск на партию. */
-    stake: { cost: 50, win: 110 },
+    stake: { cost: 50, win: 90 },
 
     coins: {
       win: 40,

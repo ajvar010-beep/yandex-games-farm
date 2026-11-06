@@ -1,0 +1,5 @@
+Rolling Fortress is a zombie convoy you build yourself. The fortress rolls down the street, zombies come out to meet it, and between waves you place blocks and guns: saw and shocker up front, machine gun and grenade launcher at the tail. Every weapon has its own row and range, and the layout decides whether the convoy makes it to the end of the street.
+
+Blocks add hull strength, weapons fire on their own, and coins drop for every hit, so upgrades never wait for the fight to end. Twelve streets unlock in order: the first six bring a new weapon, after that the city only gets meaner. A boss waits at the end of every street — the Elder Brute, the Broodmother or the Shieldbearer, or that street's own elite.
+
+Lost the street? Your blocks stay in place and boss damage is saved, so you can come back and finish the build.

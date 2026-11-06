@@ -1,0 +1,5 @@
+1. Tap a cell on the fortress, pick a block or a weapon and place it.
+2. Mind the rows: saw and shocker work in rows 1–2, flamethrower in 2–4, laser in 3–5, machine gun in 4–6, grenade launcher in 5–6. A weapon in the wrong row does not fire.
+3. Every weapon has its own range: the saw shreds at the wall, the machine gun reaches eight cells.
+4. Between waves repair the hull, add blocks and upgrade weapons — up to three levels.
+5. Press Fight! and the fortress rolls on its own. Reach the boss at the end of the street and bring it down.

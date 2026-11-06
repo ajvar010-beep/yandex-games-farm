@@ -1,0 +1,15 @@
+{
+  "id": "rollfort",
+  "engine": "html5-canvas",
+  "version": "1.0.0",
+  "orientation": "any",
+  "touch": true,
+  "languages": ["ru", "en"],
+  "age": "6+",
+  "categories": ["strategy", "action", "casual"],
+  "monetization": ["rewarded_video", "interstitial", "banner"],
+  "iap": [],
+  "leaderboards": ["rollfort_chapter"],
+  "cloud_saves": true,
+  "levels": 12
+}

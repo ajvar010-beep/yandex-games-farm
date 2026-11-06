@@ -442,7 +442,7 @@ window.GAME = window.GAME || {};
       this.buildLevel();
       this.layout(game);
       this.buildButtons(game);
-      E.audio.music('play'); E.sdk.gameplayStart();
+      E.audio.music('parking'); E.sdk.gameplayStart();
       if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       this.applyCaptureParams(game);
       E.storage.set('tutorialSeen', true);
@@ -726,7 +726,7 @@ window.GAME = window.GAME || {};
         // ежедневный вызов не двигает кампанию и не пишет в лидерборд глубины
         if (!this.daily) { Meta.saveLevel(this.level + 1); Meta.starFor(this.level, stars); Meta.submit(this.level); }
       }
-      E.audio.sfx('pulse'); E.fx.flash('#8ff0d2', 0.22);
+      E.audio.sfx('win'); E.fx.flash('#8ff0d2', 0.22);
       if (!silent) {
         for (var i = 0; i < 48; i++) {
           E.fx.spawn(this.bx + this.visRng.float() * this.boardW, this.by + this.boardH * 0.5,

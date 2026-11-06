@@ -81,11 +81,12 @@ window.Engine = window.Engine || {};
     shoot:   function () { tone({ f0: 880, f1: 220, dur: 0.09, type: 'sawtooth', vol: 0.06 }); },
     hit:     function () { noise({ dur: 0.08, vol: 0.12, lp: 3000 }); },
     tick:    function () { tone({ f0: 520, f1: 380, dur: 0.05, type: 'triangle', vol: 0.06 }); },
-    engine:  function () { tone({ f0: 150, f1: 70, dur: 0.24, type: 'sawtooth', vol: 0.12 }); noise({ dur: 0.18, vol: 0.06, lp: 900 }); },
-    horn:    function () { tone({ f0: 440, dur: 0.12, type: 'square', vol: 0.10 }); tone({ f0: 554, dur: 0.16, type: 'square', vol: 0.09, delay: 0.11 }); },
-    skid:    function () { noise({ dur: 0.22, vol: 0.14, hp: 1200 }); },
-    crunch:  function () { noise({ dur: 0.14, vol: 0.12, lp: 900 }); tone({ f0: 180, f1: 90, dur: 0.12, type: 'triangle', vol: 0.08 }); },
-    tow:     function () { tone({ f0: 880, dur: 0.10, type: 'square', vol: 0.10 }); tone({ f0: 660, dur: 0.12, type: 'square', vol: 0.09, delay: 0.12 }); },
+    engine:  function () { tone({ f0: 130, f1: 68, dur: 0.30, type: 'sawtooth', vol: 0.09 }); tone({ f0: 65, f1: 42, dur: 0.28, type: 'triangle', vol: 0.07 }); noise({ dur: 0.22, vol: 0.05, lp: 700 }); },
+    horn:    function () { tone({ f0: 392, dur: 0.11, type: 'square', vol: 0.09 }); tone({ f0: 494, dur: 0.15, type: 'square', vol: 0.08, delay: 0.10 }); },
+    skid:    function () { noise({ dur: 0.26, vol: 0.13, hp: 1400 }); tone({ f0: 240, f1: 120, dur: 0.18, type: 'sawtooth', vol: 0.04 }); },
+    crunch:  function () { noise({ dur: 0.16, vol: 0.12, lp: 1000 }); tone({ f0: 190, f1: 80, dur: 0.12, type: 'triangle', vol: 0.07 }); },
+    tow:     function () { tone({ f0: 990, dur: 0.09, type: 'square', vol: 0.08 }); tone({ f0: 740, dur: 0.11, type: 'square', vol: 0.08, delay: 0.11 }); tone({ f0: 990, dur: 0.11, type: 'square', vol: 0.08, delay: 0.23 }); },
+    win:     function () { tone({ f0: 523, dur: 0.16, type: 'triangle', vol: 0.12 }); tone({ f0: 659, dur: 0.18, type: 'triangle', vol: 0.11, delay: 0.12 }); tone({ f0: 784, dur: 0.26, type: 'triangle', vol: 0.11, delay: 0.24 }); },
     explode: function () { noise({ dur: 0.30, vol: 0.26, lp: 1200 }); tone({ f0: 160, f1: 40, dur: 0.30, vol: 0.18 }); },
     coin:    function () { tone({ f0: 990, dur: 0.06, type: 'square', vol: 0.08 }); tone({ f0: 1320, dur: 0.10, type: 'square', vol: 0.08, delay: 0.06 }); },
     pulse:   function () { tone({ f0: 220, f1: 990, dur: 0.25, type: 'sine', vol: 0.20 }); noise({ dur: 0.2, vol: 0.10, hp: 800 }); },
@@ -102,7 +103,8 @@ window.Engine = window.Engine || {};
   var SCALE = [0, 3, 5, 7, 10, 12, 15];
   var PATTERNS = {
     menu: { bpm: 72, base: 220.0, steps: [0, 2, 4, 2, 5, 4, 2, 1], wave: 'sine', vol: 0.09 },
-    play: { bpm: 96, base: 196.0, steps: [0, 0, 3, 2, 0, 4, 3, 2], wave: 'triangle', vol: 0.07 }
+    play: { bpm: 96, base: 196.0, steps: [0, 0, 3, 2, 0, 4, 3, 2], wave: 'triangle', vol: 0.07 },
+    parking: { bpm: 82, base: 164.81, steps: [0, 2, 4, 2, 5, 4, 2, 1, 0, 3, 5, 3, 4, 2, 1, 0], wave: 'sine', vol: 0.075 }
   };
   function scheduleMusic() {
     if (!ctx || !musicName || muted || adSuspended || ctx.state !== 'running') return;

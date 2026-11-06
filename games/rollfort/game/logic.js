@@ -90,9 +90,11 @@ window.GAME = window.GAME || {};
       combatT: 0, t: 0, nextId: 1,
       bossRef: null, bossHp: (o.bossHp | 0) || 0, bossKilled: false,
       hpAtWaveStart: 0, clearBonus: 0,
-      holdBuild: false, recordSafe: false
+      holdBuild: false, recordSafe: false,
+      perks: {}, perkChoices: null,
+      bonus: o.bonus || { hull: 0, dmg: 0, rate: 0 }
     };
-    st.maxHp = L.maxHpFor(layout);
+    st.maxHp = L.maxHpFor(layout) + (st.bonus.hull || 0) * C.hangarStep.hull;
     st.hp = st.maxHp;
     st.hpAtWaveStart = st.hp;
     return st;
@@ -174,22 +176,47 @@ window.GAME = window.GAME || {};
 
   /* ---------- волны ---------- */
   L.isBossWave = function (st) { return st.wave >= C.waves; };
+  L.modOf = function (chapter) {
+    var ch = C.chapters[Math.max(0, Math.min(C.chapters.length - 1, (chapter | 0) - 1))];
+    return (ch && ch.mod) ? ch.mod : '';
+  };
 
   function pickType(st) {
     var c = st.chapter, r = st.rng.float();
+    var mod = L.modOf(c);
     var flyer = c >= 7 ? 0.18 : 0;
     var brute = c >= 4 ? 0.16 + Math.min(0.12, (c - 4) * 0.02) : 0;
     var runner = c >= 2 ? 0.30 : 0.10;
+    if (mod === 'air') { flyer = 0.34; brute = 0.10; runner = 0.28; }
+    else if (mod === 'horde') { flyer = c >= 7 ? 0.12 : 0; brute *= 0.8; runner = 0.32; }
+    else if (mod === 'rush') { runner = 0.44; brute = Math.max(brute, 0.14); }
+    else if (mod === 'mixed') { flyer = 0.22; brute = 0.22; runner = 0.28; }
     if (r < flyer) return 'flyer';
     if (r < flyer + brute) return 'brute';
     if (r < flyer + brute + runner) return 'runner';
     return 'walker';
   }
 
-  L.buildQueue = function (st) {
+  L.previewWave = function (st) {
     var boss = L.isBossWave(st);
     var count = (boss ? 8 + Math.floor(st.chapter * 0.6) : 6 + (st.wave + 1) * 2 + Math.floor(st.chapter * 0.6));
+    var mod = L.modOf(st.chapter);
+    if (mod === 'horde') count = Math.round(count * 1.35);
+    var types = ['walker'];
+    if (st.chapter >= 2 || mod === 'mixed') types.push('runner');
+    if (st.chapter >= 4 || mod === 'mixed' || mod === 'rush') types.push('brute');
+    if (st.chapter >= 7 || mod === 'mixed' || mod === 'air') types.push('flyer');
+    return { count: count, types: types, mod: mod, boss: boss };
+  };
+
+  L.buildQueue = function (st) {
+    var boss = L.isBossWave(st);
+    var mod = L.modOf(st.chapter);
+    var count = (boss ? 8 + Math.floor(st.chapter * 0.6) : 6 + (st.wave + 1) * 2 + Math.floor(st.chapter * 0.6));
+    if (mod === 'horde') count = Math.round(count * 1.35);
     var gap = Math.max(0.38, 1.12 - st.chapter * 0.04 - st.wave * 0.05);
+    if (mod === 'rush') gap *= 0.76;
+    if (mod === 'horde') gap *= 0.9;
     var at = boss ? 2.4 : 0.3;
     var q = [];
     var laneShift = st.rng.int(0, LANES - 1);
@@ -204,7 +231,7 @@ window.GAME = window.GAME || {};
     var def = C.zombies[type] || C.zombies.walker;
     var z = {
       id: st.nextId++, type: type, lane: lane, d: d,
-      hp: def.hp, maxHp: def.hp, speed: def.speed, dmg: def.dmg,
+      hp: def.hp, maxHp: def.hp, speed: def.speed * (st.perks.slow ? 0.9 : 1), dmg: def.dmg,
       atkCd: def.atkCd, atk: 0.6, air: !!def.air, r: def.r,
       t: st.rng.range(0, 6), dead: false, deathT: 0, boss: false
     };
@@ -221,7 +248,7 @@ window.GAME = window.GAME || {};
     var hp = st.bossHp > 0 ? Math.min(st.bossHp, full) : full;
     var z = {
       id: st.nextId++, type: bd.type, lane: bd.lane, d: 7.8,
-      hp: hp, maxHp: full, speed: bd.speed, dmg: bd.dmg,
+      hp: hp, maxHp: full, speed: bd.speed * (st.perks.slow ? 0.9 : 1), dmg: bd.dmg,
       atkCd: bd.atkCd, atk: bd.atkCd, air: false, r: bd.r,
       t: 0, dead: false, deathT: 0, boss: true, bossId: bd.id,
       shield: bd.shield || 0, maxShield: bd.shield || 0,
@@ -237,6 +264,7 @@ window.GAME = window.GAME || {};
     st.phase = 'combat';
     st.combatT = 0;
     st.hpAtWaveStart = st.hp;
+    if (st.perkChoices && st.perkChoices.length) L.applyPerk(st, st.perkChoices[0]);
     st.spawnQueue = L.buildQueue(st);
     if (L.isBossWave(st)) spawnBoss(st);
     st.events.push({ type: 'wave' });
@@ -254,7 +282,30 @@ window.GAME = window.GAME || {};
     st.phase = 'build';
     st.buildT = C.buildTime;
     st.hpAtWaveStart = st.hp;
+    L.rollPerks(st);
     st.events.push({ type: 'build' });
+    return true;
+  };
+
+  /* ---------- улучшения между волнами ---------- */
+  L.rollPerks = function (st) {
+    var avail = [];
+    for (var i = 0; i < C.perks.length; i++) {
+      if (!st.perks[C.perks[i].id]) avail.push(C.perks[i].id);
+    }
+    for (var j = avail.length - 1; j > 0; j--) {
+      var k = st.rng.int(0, j), t = avail[j]; avail[j] = avail[k]; avail[k] = t;
+    }
+    st.perkChoices = avail.slice(0, 3);
+    return st.perkChoices;
+  };
+  L.applyPerk = function (st, id) {
+    if (!st.perkChoices || st.perkChoices.indexOf(id) < 0) return false;
+    st.perks[id] = 1;
+    if (id === 'hull') { st.maxHp += 25; st.hp += 25; }
+    if (id === 'repair') st.hp = st.maxHp;
+    st.perkChoices = null;
+    st.events.push({ type: 'perk', id: id });
     return true;
   };
 
@@ -268,8 +319,10 @@ window.GAME = window.GAME || {};
       z.hp -= dmg;
     }
     st.hits++;
-    st.coins += C.economy.hit;
-    st.earned += C.economy.hit;
+    var hitCoin = Math.round(C.economy.hit * (st.perks.coin ? 1.5 : 1));
+    st.coins += hitCoin;
+    st.earned += hitCoin;
+    z.flash = 0.10;
     if (z.hp <= 0) {
       z.dead = true;
       z.deathT = 0;
@@ -351,8 +404,11 @@ window.GAME = window.GAME || {};
       if (it.cd > 0) continue;
       var targets = pickTargets(st, def, lane);
       if (!targets.length) continue;
-      it.cd = def.cd;
-      var dmg = def.dmg * LVL[it.lvl - 1];
+      var rateMult = (st.perks.rate ? 0.85 : 1) * (1 - (st.bonus.rate || 0) * C.hangarStep.rate);
+      it.cd = def.cd * rateMult;
+      var dmgMult = 1 + (st.perks.dmg ? 0.20 : 0) + (st.bonus.dmg || 0) * C.hangarStep.dmg;
+      var dmg = def.dmg * LVL[it.lvl - 1] * dmgMult;
+      if (st.perks.crit && st.rng.float() < 0.10) dmg *= 2;
       var list = [];
       for (var k = 0; k < targets.length; k++) {
         list.push({ lane: targets[k].lane, d: targets[k].d, air: targets[k].air });
@@ -394,6 +450,7 @@ window.GAME = window.GAME || {};
     for (i = 0; i < st.zombies.length; i++) {
       var z = st.zombies[i];
       z.t += dt;
+      if (z.flash > 0) z.flash -= dt;
       if (z.dead) { z.deathT += dt; continue; }
       if (z.d > CONTACT) {
         z.d -= z.speed * dt;

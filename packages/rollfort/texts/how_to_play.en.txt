@@ -3,3 +3,4 @@
 3. Every weapon has its own range: the saw shreds at the wall, the machine gun reaches eight cells.
 4. Between waves repair the hull, add blocks and upgrade weapons — up to three levels.
 5. Press Fight! and the fortress rolls on its own. Reach the boss at the end of the street and bring it down.
+6. After every wave pick an upgrade: damage, fire rate, armor, repair, coins, slow or crit. Permanent bonuses are bought in the Workshop from the menu.

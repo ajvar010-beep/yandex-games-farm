@@ -28,6 +28,7 @@ const GAMEPLAY_SHOTS = [
 const QA_SHOTS = [
   { name: 'menu', q: 'scene=menu&freeze=1', expect: { scene: 'menu' } },
   { name: 'shop', q: 'scene=play&wave=5&mode=shop&freeze=1', expect: { scene: 'play', mode: 'shop' } },
+  { name: 'perks', q: 'scene=play&wave=5&mode=perk&freeze=1', expect: { scene: 'play', mode: 'shop' } },
   { name: 'win', q: 'scene=play&wave=4&mode=win&freeze=1', expect: { scene: 'play', mode: 'win' } },
   { name: 'gameover', q: 'scene=play&wave=6&mode=over&freeze=1', expect: { scene: 'play', mode: 'over' } }
 ];
@@ -75,6 +76,21 @@ async function shoot(url, file, w, h, expect, label) {
     console.log('shot', path.basename(file));
   } finally { await ctx.close(); }
 }
+async function shootHangar(lang) {
+  const { ctx, page } = await freshPage();
+  try {
+    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
+    await page.goto(`${gameUrl}?scene=menu&freeze=1&lang=${lang}&mute=1`, { waitUntil: 'load' });
+    await page.waitForFunction('window.__capture && window.__capture.ready === true', { timeout: 15000 });
+    await page.evaluate("(() => { const g = window.Engine.sdk._game, s = g.scene; s.hangar = true; s._buildHangar(g); })()");
+    await new Promise(r => setTimeout(r, 200));
+    const mf = path.join(outDir, `qa_hangar_${lang}.png`);
+    fs.writeFileSync(mf, await canvasPng(page));
+    flattenPng(mf);
+    await gate(page);
+    console.log('shot', `qa_hangar_${lang}.png`);
+  } finally { await ctx.close(); }
+}
 async function shootMap(lang) {
   const { ctx, page } = await freshPage();
   try {
@@ -96,6 +112,7 @@ for (const lang of langs) {
   for (const s of GAMEPLAY_PORTRAIT) await shoot(`${gameUrl}?${s.q}&lang=${lang}&mute=1`, path.join(outDir, `screenshot_portrait_${s.name}_${lang}.png`), 720, 1280, s.expect, `${s.name}/${lang}/portrait`);
   for (const s of QA_SHOTS) await shoot(`${gameUrl}?${s.q}&lang=${lang}&mute=1`, path.join(outDir, `qa_${s.name}_${lang}.png`), 1280, 720, s.expect, `${s.name}/${lang}/qa`);
   await shootMap(lang);
+  await shootHangar(lang);
 }
 
 // видео: автопилот, record=26с wall-clock

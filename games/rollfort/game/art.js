@@ -671,6 +671,17 @@ window.GAME = window.GAME || {};
       }
     }
 
+    if (opts.flash) {
+      ctx.save();
+      ctx.globalAlpha *= 0.5;
+      var fg = ctx.createRadialGradient(0, -12, 2, 0, -12, 44);
+      fg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      fg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.arc(0, -12, 44, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore();
 
     // полоса HP (в экранных координатах)

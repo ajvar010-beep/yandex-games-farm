@@ -31,6 +31,7 @@ function playChapter(chapter, layout, coins, seed) {
     if (st.phase === 'build') {
       L.autoBuild(st, { level: chapter >= 9 ? 2 : 1, blocks: 4 });
       if (L.repairCost(st) > 0 && st.coins >= L.repairCost(st)) L.repair(st);
+      if (st.perkChoices && st.perkChoices.length) L.applyPerk(st, st.perkChoices[0]);
       L.startWave(st);
     } else if (st.phase === 'clear') {
       L.nextWave(st);

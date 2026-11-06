@@ -18,6 +18,9 @@ window.GAME = window.GAME || {};
   var BOSS_NAME = { brute: 'boss_brute', matka: 'boss_matka', shield: 'boss_shield', elite: 'boss_elite' };
   var BOSS_TAG = { brute: 'boss_brute_tag', matka: 'boss_matka_tag', shield: 'boss_shield_tag' };
   var Z_NAME = { walker: 'z_walker', runner: 'z_runner', brute: 'z_brute', flyer: 'z_flyer' };
+  var PERK_GLYPH = { dmg: '★', rate: '⚡', hull: '▮', repair: '✚', coin: '✦', slow: '❄', crit: '◎' };
+  var PERK_COLOR = { dmg: '#ffd166', rate: '#6fd3ff', hull: '#8a97a8', repair: '#6ee07a', coin: '#f2c14e', slow: '#9fe6ff', crit: '#ff8a7a' };
+  var MOD_LABEL = { air: 'mod_air', horde: 'mod_horde', mixed: 'mod_mixed', rush: 'mod_rush' };
 
   /* ---------------- мета / сохранения ---------------- */
   var Meta = {
@@ -47,6 +50,15 @@ window.GAME = window.GAME || {};
       if (hp > 0) b[ch] = Math.round(hp); else delete b[ch];
       E.storage.set('bosshp', b);
     },
+    hangar: function () {
+      var h = E.storage.get('hangar', null);
+      h = (h && typeof h === 'object' && !Array.isArray(h)) ? h : {};
+      var out = {};
+      for (var i = 0; i < C.hangar.length; i++) out[C.hangar[i].id] = clamp(h[C.hangar[i].id] | 0, 0, C.hangar[i].max);
+      return out;
+    },
+    saveHangar: function (h) { E.storage.set('hangar', h); },
+    hangarCost: function (item, lvl) { return item.base + item.step * lvl; },
     submit: function () { E.sdk.submitScore('rollfort_chapter', Meta.chapter()); }
   };
 
@@ -116,6 +128,7 @@ window.GAME = window.GAME || {};
     consumesInputInUpdate: true,
     enter: function (game) {
       this.game = game; this.t = 0; this.help = false; this.toast = null;
+      this.hangar = false; this.hangarButtons = []; this.hangarCards = [];
       E.audio.music('menu');
       E.sdk.gameplayStop();
       E.sdk.showBanner();
@@ -188,11 +201,88 @@ window.GAME = window.GAME || {};
       sb.onTap = function () { E.audio.sfx('click'); that.help = !that.help; };
       list.push(sb);
       list.push(soundButton(W - 56 - 46, 14));
+      list.push(new E.ui.Button({
+        x: W - 148, y: 14, w: 40, h: 40, bg: 'rgba(8,11,15,0.62)', border: 'rgba(240,193,75,0.35)',
+        icon: function (ctx, b) { A.wrench(ctx, b.x + b.w / 2, b.y + b.h / 2, 20, P.cream); },
+        onTap: function () { E.audio.sfx('click'); that.hangar = true; that._buildHangar(game); }
+      }));
       this.buttons = list;
+    },
+    _buildHangar: function (game) {
+      var v = game.view, W = v.w, H = v.h, that = this;
+      var bw = Math.min(520, W * 0.9);
+      var bh = Math.min(104, (H * 0.52) / C.hangar.length - 10);
+      var top = H * 0.26;
+      var list = [];
+      this.hangarCards = [];
+      for (var i = 0; i < C.hangar.length; i++) {
+        (function (item, idx) {
+          var y = top + idx * (bh + 10);
+          var x = W / 2 - bw / 2;
+          that.hangarCards.push({ item: item, x: x, y: y, w: bw, h: bh });
+          var h = Meta.hangar(), lvl = h[item.id] | 0;
+          var maxed = lvl >= item.max;
+          var cost = Meta.hangarCost(item, lvl);
+          list.push(new E.ui.Button({
+            x: x + bw - 122, y: y + bh / 2 - 20, w: 112, h: 40,
+            text: maxed ? T('maxed') : String(cost),
+            bg: maxed ? 'rgba(30,36,44,0.9)' : '#3d4a5c',
+            border: maxed ? 'rgba(120,132,148,0.4)' : P.hazard,
+            fg: maxed ? P.dim : P.cream, fontSize: 15,
+            enabled: !maxed,
+            onTap: function () { that.buyHangar(game, item); }
+          }));
+        })(C.hangar[i], i);
+      }
+      var banM = (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0);
+      list.push(new E.ui.Button({
+        x: W / 2 - 80, y: H - 86 - banM, w: 160, h: 44, text: T('back'),
+        bg: 'rgba(18,23,30,0.9)', border: 'rgba(240,193,75,0.45)', fg: P.cream, fontSize: 17,
+        onTap: function () { E.audio.sfx('click'); that.hangar = false; }
+      }));
+      this.hangarButtons = list;
+    },
+    buyHangar: function (game, item) {
+      var h = Meta.hangar(), lvl = h[item.id] | 0;
+      if (lvl >= item.max) return;
+      var cost = Meta.hangarCost(item, lvl);
+      if (Meta.coins() < cost) { this.toast = { t: 1.4, text: T('not_enough') }; E.audio.sfx('deny'); return; }
+      addCoins(-cost);
+      h[item.id] = lvl + 1;
+      Meta.saveHangar(h);
+      E.audio.sfx('buy');
+      this._buildHangar(game);
+    },
+    _drawHangar: function (ctx) {
+      var v = this.game.view, W = v.w, H = v.h;
+      ctx.fillStyle = 'rgba(6,9,13,0.94)'; ctx.fillRect(0, 0, W, H);
+      E.ui.text(ctx, T('hangar_title'), W / 2, H * 0.14, Math.min(W * 0.08, 34), P.hazard, 'center', 800);
+      E.ui.text(ctx, T('hangar_hint'), W / 2, H * 0.14 + 26, Math.min(W * 0.036, 14), 'rgba(241,233,216,0.6)', 'center', 500);
+      var h = Meta.hangar();
+      for (var i = 0; i < this.hangarCards.length; i++) {
+        var c = this.hangarCards[i], item = c.item, lvl = h[item.id] | 0;
+        E.ui.roundRect(ctx, c.x, c.y, c.w, c.h, 14);
+        ctx.fillStyle = 'rgba(28,34,42,0.95)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(240,193,75,0.3)'; ctx.stroke();
+        E.ui.text(ctx, T(item.name), c.x + 16, c.y + c.h * 0.32, Math.min(17, c.h * 0.2), P.cream, 'left', 700);
+        E.ui.text(ctx, T(item.desc), c.x + 16, c.y + c.h * 0.60, Math.min(12, c.h * 0.13), 'rgba(241,233,216,0.6)', 'left', 500);
+        var pw = Math.min(16, c.w * 0.035), gap = 5;
+        for (var p = 0; p < item.max; p++) {
+          ctx.fillStyle = p < lvl ? P.toxic : 'rgba(120,132,148,0.3)';
+          E.ui.roundRect(ctx, c.x + 16 + p * (pw + gap), c.y + c.h * 0.76, pw, 6, 3); ctx.fill();
+        }
+        if (lvl < item.max) A.coin(ctx, c.x + c.w - 138, c.y + c.h / 2, 9);
+      }
+      E.ui.drawButtons(ctx, this.hangarButtons);
     },
     update: function (game, dt) {
       this.t += dt;
       if (this.toast) { this.toast.t -= dt; if (this.toast.t <= 0) this.toast = null; }
+      if (this.hangar) {
+        if (E.input.wasPressed('Escape')) { this.hangar = false; return; }
+        if (E.input.pointer.pressed) E.ui.handleTap(this.hangarButtons, E.input.pointer.x, E.input.pointer.y);
+        return;
+      }
       if (this.help) { if (E.input.pointer.pressed) this.help = false; return; }
       if (E.input.pointer.pressed) E.ui.handleTap(this.buttons, E.input.pointer.x, E.input.pointer.y);
       if (E.input.wasPressed('Enter') || E.input.wasPressed('Space')) {
@@ -249,6 +339,7 @@ window.GAME = window.GAME || {};
         }
         E.ui.text(ctx, T('close'), W / 2, H * 0.82, 16, 'rgba(241,233,216,0.6)', 'center', 600);
       }
+      if (this.hangar) this._drawHangar(ctx);
     },
     getCaptureState: function () { return { scene: 'menu' }; }
   };
@@ -331,6 +422,9 @@ window.GAME = window.GAME || {};
       var name = T(ch.name);
       var nfs = E.ui.fit(ctx, name, w * 0.84, Math.max(9, Math.min(w * 0.115, h * 0.13)), 600);
       E.ui.text(ctx, name, x + w * 0.09, y + h * 0.83, nfs, locked ? 'rgba(140,150,163,0.45)' : 'rgba(241,233,216,0.72)', 'left', 600);
+      if (ch.mod && MOD_LABEL[ch.mod]) {
+        E.ui.text(ctx, T(MOD_LABEL[ch.mod]), x + w * 0.09, y + h * 0.62, Math.max(9, Math.min(w * 0.08, 12)), locked ? 'rgba(140,150,163,0.35)' : P.hazard, 'left', 700);
+      }
 
       // награда главы
       if (ch.boss) {
@@ -416,6 +510,7 @@ window.GAME = window.GAME || {};
         coins: Meta.coins(),
         rng: new E.Rng(this.seedNum || 1),
         bossHp: Meta.bossHp(this.chapter),
+        bonus: Meta.hangar(),
         first: firstRun && !this.autopilot
       });
       this.st.recordSafe = this.autopilot || E.capture.active;
@@ -508,6 +603,19 @@ window.GAME = window.GAME || {};
       this.buttons = [pb];
     },
 
+    perkRects: function () {
+      var Lt = this.Lt, W = Lt.W;
+      var n = Math.max(1, this.st.perkChoices ? this.st.perkChoices.length : 3);
+      var gap = 14;
+      var cw = Math.min(Lt.portrait ? 200 : 260, (W - 40 - (n - 1) * gap) / n);
+      var chh = Math.min(Lt.portrait ? 240 : 200, (Lt.panelTop - Lt.top) * (Lt.portrait ? 0.5 : 0.6));
+      var total = cw * n + gap * (n - 1);
+      var x0 = (W - total) / 2;
+      var y = Lt.top + Math.max(40, (Lt.panelTop - Lt.top - chh) / 2);
+      var out = [];
+      for (var i = 0; i < n; i++) out.push({ x: x0 + i * (cw + gap), y: y, w: cw, h: chh });
+      return out;
+    },
     cellRect: function (idx) {
       var Lt = this.Lt, r = L.rowOf(idx), l = L.laneOf(idx);
       if (Lt.portrait) return { x: Lt.gx + l * Lt.cw, y: Lt.gy + (r - 1) * Lt.ch, w: Lt.cw, h: Lt.ch };
@@ -536,10 +644,11 @@ window.GAME = window.GAME || {};
       var Lt = this.Lt, W = Lt.W, self = this;
       var list = [];
       var isBuild = this.st.phase === 'build';
+      var perkActive = !!(isBuild && this.st.perkChoices && this.st.perkChoices.length);
       var hy = Lt.panelTop + 8, hh = 44;
       var fightW = Math.min(120, W * 0.31);
       var actRight = W - 10;
-      if (isBuild) {
+      if (isBuild && !perkActive) {
         list.push(new E.ui.Button({
           x: W - 10 - fightW, y: hy, w: fightW, h: hh, text: T('fight'),
           bg: '#3d5a34', border: P.toxic, fg: '#eaf6dc', fontSize: Math.min(17, hh * 0.40),
@@ -548,7 +657,7 @@ window.GAME = window.GAME || {};
         actRight = W - 10 - fightW - 6;
       }
       var it = this.selected != null ? this.st.layout[this.selected] : null;
-      if (isBuild && it && it.k === 'w' && it.lvl < 3) {
+      if (isBuild && !perkActive && it && it.k === 'w' && it.lvl < 3) {
         var uw = Math.min(84, W * 0.22);
         list.push(new E.ui.Button({
           x: actRight - uw, y: hy, w: uw, h: hh, text: T('upgrade') + ' ' + L.upgradePriceAt(this.st, this.selected),
@@ -557,7 +666,7 @@ window.GAME = window.GAME || {};
         }));
         actRight -= uw + 4;
       }
-      if (isBuild && it) {
+      if (isBuild && !perkActive && it) {
         var rw = Math.min(78, W * 0.20);
         list.push(new E.ui.Button({
           x: actRight - rw, y: hy, w: rw, h: hh, text: T('remove') + ' +' + it.spent,
@@ -566,7 +675,12 @@ window.GAME = window.GAME || {};
         }));
         actRight -= rw + 4;
       }
-      if (isBuild) {
+      if (perkActive) {
+        var rects = this.perkRects();
+        for (var pi = 0; pi < rects.length; pi++) {
+          list.push(this.makePerkButton(pi, rects[pi].x, rects[pi].y, rects[pi].w, rects[pi].h, game));
+        }
+      } else if (isBuild) {
         var cols = Lt.portrait ? 4 : 8, rows = Lt.portrait ? 2 : 1;
         var pad = 8, gap = 5;
         var gridTop = hy + hh + 6;
@@ -596,6 +710,41 @@ window.GAME = window.GAME || {};
         onTap: function () { self.itemTap(game, i, type); }
       });
     },
+    perkDef: function (id) {
+      for (var i = 0; i < C.perks.length; i++) if (C.perks[i].id === id) return C.perks[i];
+      return null;
+    },
+    makePerkButton: function (i, x, y, w, h, game) {
+      var self = this, id = this.st.perkChoices[i];
+      return new E.ui.Button({
+        x: x, y: y, w: w, h: h,
+        bg: 'rgba(40,47,56,0.97)', border: 'rgba(240,193,75,0.55)',
+        icon: function (ctx, b) { self.drawPerk(ctx, b, id); },
+        onTap: function () { self.pickPerk(game, id); }
+      });
+    },
+    drawPerk: function (ctx, b, id) {
+      var def = this.perkDef(id);
+      if (!def) return;
+      var cx = b.x + b.w / 2;
+      var col = PERK_COLOR[id] || P.hazard;
+      var r = Math.max(12, Math.min(24, b.h * 0.16));
+      ctx.beginPath(); ctx.arc(cx, b.y + b.h * 0.28, r, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill();
+      E.ui.text(ctx, PERK_GLYPH[id] || '★', cx, b.y + b.h * 0.28 + 1, Math.max(12, r * 0.95), '#0e1218', 'center', 800);
+      var ns = E.ui.fit(ctx, T(def.name), b.w - 10, Math.min(15, b.h * 0.14), 700);
+      E.ui.text(ctx, T(def.name), cx, b.y + b.h * 0.56, ns, P.cream, 'center', 700);
+      if (b.h > 64 && b.w > 150) {
+        var ds = E.ui.fit(ctx, T(def.desc), b.w - 12, Math.min(12, b.h * 0.095), 500);
+        E.ui.text(ctx, T(def.desc), cx, b.y + b.h * 0.78, ds, 'rgba(241,233,216,0.65)', 'center', 500);
+      }
+    },
+    pickPerk: function (game, id) {
+      if (L.applyPerk(this.st, id)) {
+        E.audio.sfx('buy');
+        this.buildPanel(game);
+      }
+    },
     drawItem: function (ctx, b, i, type, def, unlocked, cost, afford) {
       var x = b.x, y = b.y, w = b.w, h = b.h;
       if (type === 'block') {
@@ -618,6 +767,7 @@ window.GAME = window.GAME || {};
       }
     },
     panelInfo: function () {
+      if (this.st.perkChoices && this.st.perkChoices.length) return T('perk_title');
       if (this.pending) {
         var nm = this.pending === 'block' ? T('block_name') : T(W_NAME[this.pending]);
         return nm + ' · ' + T('place_here');
@@ -894,6 +1044,10 @@ window.GAME = window.GAME || {};
               { vx: (this.st.rng.float() - 0.5) * 200, vy: -80 - this.st.rng.float() * 180,
                 life: 0.7 + this.st.rng.float() * 0.5, size: 2 + this.st.rng.float() * 3, color: '#f0c14b', grav: 500 });
           }
+        } else if (e.type === 'perk') {
+          var pd = this.perkDef(e.id);
+          this.sfx('buy', 0.2);
+          if (pd) this.toast = { t: 2.2, text: T('perk_picked', { name: T(pd.name) }) };
         } else if (e.type === 'build') {
           this.sfx('click', 0.12);
         } else if (e.type === 'remove' || e.type === 'move') {
@@ -1022,7 +1176,10 @@ window.GAME = window.GAME || {};
     autoTick: function (dt) {
       var st = this.st;
       if (st.phase === 'build') {
-        if (!this.autoBuilt) {
+        if (st.perkChoices && st.perkChoices.length) {
+          this.autoT += dt;
+          if (this.autoT > 0.25) { this.autoT = 0; L.applyPerk(st, st.perkChoices[0]); this.buildPanel(this.game); }
+        } else if (!this.autoBuilt) {
           this.autoBuilt = true;
           L.autoBuild(st, { level: this.chapter >= 9 ? 3 : (this.chapter >= 6 ? 2 : 1), blocks: 6 });
           Meta.setCoins(st.coins);
@@ -1052,6 +1209,15 @@ window.GAME = window.GAME || {};
         L.simulate(this.st, tb);
         this.forceCombat();
         this.mode = 'running';
+      } else if (mode === 'perk') {
+        this.st.wave = 2;
+        this.st.phase = 'build';
+        this.st.buildT = C.buildTime;
+        this.st.holdBuild = true;
+        L.rollPerks(this.st);
+        this.mode = 'shop';
+        this.panel = 'shop';
+        this.selected = null;
       } else if (mode === 'shop') {
         this.st.phase = 'build';
         this.st.holdBuild = true;
@@ -1441,7 +1607,7 @@ window.GAME = window.GAME || {};
         A.zombie(ctx, z.type, p.x, p.y, size, z.t, {
           air: z.air, boss: z.boss, bossId: z.bossId, dead: z.dead, deathT: z.deathT,
           flip: !Lt.portrait, eye: z.boss ? '#ff5c4d' : def.eye,
-          hpRatio: z.dead ? null : Math.max(0, z.hp / z.maxHp)
+          hpRatio: z.dead ? null : Math.max(0, z.hp / z.maxHp), flash: z.flash > 0
         });
       }
     },
@@ -1521,10 +1687,12 @@ window.GAME = window.GAME || {};
         if (b.y === hy && b.x < minX) minX = b.x;
       }
       if (this.st.phase === 'build') {
-        var info = this.panelInfo();
-        var maxW = minX - 12 - 10;
-        var fs = E.ui.fit(ctx, info, Math.max(40, maxW), Math.min(15, hh * 0.34), 600);
-        E.ui.text(ctx, info, 12, hy + hh / 2, fs, this.pending ? P.toxic : P.cream, 'left', 600);
+        if (!(this.st.perkChoices && this.st.perkChoices.length)) {
+          var info = this.panelInfo();
+          var maxW = minX - 12 - 10;
+          var fs = E.ui.fit(ctx, info, Math.max(40, maxW), Math.min(15, hh * 0.34), 600);
+          E.ui.text(ctx, info, 12, hy + hh / 2, fs, this.pending ? P.toxic : P.cream, 'left', 600);
+        }
       } else {
         // во время боя панель — табло волны
         var st = this.st;
@@ -1661,6 +1829,23 @@ window.GAME = window.GAME || {};
       E.ui.drawButtons(ctx, this.endButtons);
     },
 
+    drawPreview: function (ctx) {
+      var Lt = this.Lt, st = this.st;
+      if (st.phase !== 'build') return;
+      var pv = L.previewWave(st);
+      var W = Lt.W;
+      var pw = Math.min(360, W * 0.68), ph = 34;
+      var x = W / 2 - pw / 2, y = Lt.top + 8;
+      pill(ctx, x, y, pw, ph, 'rgba(8,11,15,0.74)', 'rgba(240,193,75,0.28)');
+      var label = (pv.boss ? T('boss_wave') : T('next_wave')) + ' · ' + pv.count;
+      E.ui.text(ctx, label, x + 12, y + ph / 2, Math.min(12, W * 0.03), P.hazard, 'left', 700);
+      var n = pv.types.length, isz = 24;
+      var ix = x + pw - 10 - n * isz;
+      for (var i = 0; i < n; i++) {
+        var zd = C.zombies[pv.types[i]];
+        A.zombie(ctx, pv.types[i], ix + i * isz + isz / 2, y + ph / 2 + 6, isz, 0, { flip: !Lt.portrait, eye: zd.eye, hpRatio: null });
+      }
+    },
     draw: function (game, ctx) {
       var Lt = this.Lt, st = this.st;
       this.drawBg(ctx);
@@ -1684,7 +1869,13 @@ window.GAME = window.GAME || {};
         ctx.fillStyle = vg; ctx.fillRect(0, 0, Lt.W, Lt.H);
       }
 
+      if (st.phase === 'build' && st.perkChoices && st.perkChoices.length) {
+        ctx.fillStyle = 'rgba(6,9,13,0.62)';
+        ctx.fillRect(0, Lt.top, Lt.W, Lt.panelTop - Lt.top);
+        E.ui.text(ctx, T('perk_title'), Lt.W / 2, Lt.top + 22, Math.min(Lt.W * 0.06, 24), P.hazard, 'center', 800);
+      }
       this.drawHud(ctx);
+      if (!(st.perkChoices && st.perkChoices.length)) this.drawPreview(ctx);
       E.ui.drawButtons(ctx, this.buttons);
       this.drawPanel(ctx);
       this.drawBanner(ctx);

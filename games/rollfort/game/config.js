@@ -5,7 +5,7 @@ window.GAME = window.GAME || {};
   'use strict';
 
   G.id = 'rollfort';
-  G.version = '1.0.0';
+  G.version = '1.1.0';
 
   G.config = {
     palette: {
@@ -73,6 +73,25 @@ window.GAME = window.GAME || {};
     /* level — множитель урона, а не отдельная сущность */
     levelMult: [1, 1.8, 3],
 
+    /* Улучшения между волнами: берётся одно из трёх, действует до конца главы. */
+    perks: [
+      { id: 'dmg', name: 'perk_dmg', desc: 'perk_dmg_d' },
+      { id: 'rate', name: 'perk_rate', desc: 'perk_rate_d' },
+      { id: 'hull', name: 'perk_hull', desc: 'perk_hull_d' },
+      { id: 'repair', name: 'perk_repair', desc: 'perk_repair_d' },
+      { id: 'coin', name: 'perk_coin', desc: 'perk_coin_d' },
+      { id: 'slow', name: 'perk_slow', desc: 'perk_slow_d' },
+      { id: 'crit', name: 'perk_crit', desc: 'perk_crit_d' }
+    ],
+
+    /* Постоянные улучшения за монеты (Мастерская). */
+    hangar: [
+      { id: 'hull', name: 'hangar_hull', desc: 'hangar_hull_d', max: 3, base: 120, step: 140 },
+      { id: 'dmg', name: 'hangar_dmg', desc: 'hangar_dmg_d', max: 3, base: 150, step: 160 },
+      { id: 'rate', name: 'hangar_rate', desc: 'hangar_rate_d', max: 3, base: 170, step: 180 }
+    ],
+    hangarStep: { hull: 20, dmg: 0.05, rate: 0.03 },
+
     zombies: {
       walker: { name: 'z_walker', hp: 3, speed: 0.55, dmg: 3, atkCd: 1.4, r: 0.56, air: false, eye: '#9ef05c' },
       runner: { name: 'z_runner', hp: 2, speed: 1.15, dmg: 2, atkCd: 1.0, r: 0.50, air: false, eye: '#ffb84d' },
@@ -100,11 +119,11 @@ window.GAME = window.GAME || {};
       { n: 4, name: 'ch_4_name', weapon: 'laser', boss: 'brute' },
       { n: 5, name: 'ch_5_name', weapon: 'mg' },
       { n: 6, name: 'ch_6_name', weapon: 'grenade' },
-      { n: 7, name: 'ch_7_name' },
+      { n: 7, name: 'ch_7_name', mod: 'air' },
       { n: 8, name: 'ch_8_name', boss: 'matka' },
-      { n: 9, name: 'ch_9_name' },
-      { n: 10, name: 'ch_10_name' },
-      { n: 11, name: 'ch_11_name' },
+      { n: 9, name: 'ch_9_name', mod: 'horde' },
+      { n: 10, name: 'ch_10_name', mod: 'mixed' },
+      { n: 11, name: 'ch_11_name', mod: 'rush' },
       { n: 12, name: 'ch_12_name', boss: 'shield' }
     ],
 

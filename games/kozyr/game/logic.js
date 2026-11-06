@@ -260,7 +260,7 @@ window.GAME = window.GAME || {};
     // ИИ с высоким take охотнее возьмёт, чем потратит старший козырь
     var risky = best.s === st.trump && best.r >= 11 && st.deck.length > 4;
     var endgame = st.deck.length === 0;
-    var threshold = endgame ? 999 : (60 + rv.take * 90);
+    var threshold = endgame ? 999 : (60 + rv.take * 90 - rv.thrift * 30);
     // smart: к концу колоды не берёт лишнего — карты на руках дороже козыря
     if (risky && cost > threshold && st.rng.float() < 0.5 + rv.take * 0.5) return { type: 'take' };
     if (!endgame && rv.smart > 0.6 && best.s === st.trump && best.r >= 13 && st.hands[p].length > 4) {

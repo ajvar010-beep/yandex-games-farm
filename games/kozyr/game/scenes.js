@@ -132,6 +132,7 @@ window.GAME = window.GAME || {};
         onTap: function () {
           var on = !E.storage.get('stake', 0);
           if (on && coins() < C.stake.cost) { E.audio.sfx('deny'); return; }
+          if (on) addCoins(-C.stake.cost);
           E.storage.set('stake', on ? 1 : 0);
           E.audio.sfx('click');
           that._build(game);
@@ -145,8 +146,8 @@ window.GAME = window.GAME || {};
     },
     update: function (game, dt) {
       this.t += dt;
-      if (E.input.pointer.pressed) E.ui.handleTap(this.buttons, E.input.pointer.x, E.input.pointer.y);
       if (this.help) { if (E.input.pointer.pressed) this.help = false; return; }
+      if (E.input.pointer.pressed) E.ui.handleTap(this.buttons, E.input.pointer.x, E.input.pointer.y);
       if (E.input.wasPressed('Enter') || E.input.wasPressed('Space')) this.goto('play', {});
     },
     draw: function (game, ctx) {
@@ -234,7 +235,7 @@ window.GAME = window.GAME || {};
         })(C.shop[i], i);
       }
       this.buttons.push(new E.ui.Button({
-        x: W / 2 - bw / 2, y: H - 78, w: bw, h: bh, text: T('back'),
+        x: W / 2 - bw / 2, y: H - 78 - (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0), w: bw, h: bh, text: T('back'),
         bg: 'rgba(12,28,22,0.8)', border: 'rgba(242,193,78,0.45)', fg: P.cream, fontSize: 18,
         onTap: function () { E.audio.sfx('click'); that.game.setScene(that.from || 'menu', {}); }
       }));
@@ -299,7 +300,7 @@ window.GAME = window.GAME || {};
       if (params.captureState) this.setCaptureState(game, params.captureState);
     },
     onResize: function () { /* раскладка вычисляется на кадре */ },
-    onBack: function (game) { if (this.st.phase === 'over') game.setScene('menu', {}); },
+    onBack: function (game) { game.setScene('menu', {}); },
     exit: function () { E.sdk.gameplayStop(); },
 
     /* --- раскладка --- */
@@ -435,7 +436,7 @@ window.GAME = window.GAME || {};
       if (st.phase === 'over') {
         if (!this.result) this._finish(st.winner === 0 ? 0 : 1);
         var r = this.result || { win: true, coins: 0 };
-        var y = Math.min(Lt.H * 0.58, Lt.handY - bh * 2 - 24);
+        var y = Math.min(this._resLay(Lt).btn, Lt.handY - bh * 2 - 24);
         list.push(new E.ui.Button({
           x: cx - bw / 2, y: y, w: bw, h: bh,
           text: r.win ? T('next_rival') : T('retry'),
@@ -503,8 +504,8 @@ window.GAME = window.GAME || {};
     /* --- перки --- */
     _swap: function () {
       var st = this.st;
-      if (!useCharge('swap')) { this.toast = { t: 1.4, text: T('not_enough') }; E.audio.sfx('deny'); return; }
       if (st.swapped || st.deck.length < 2) { this.toast = { t: 1.2, text: T('not_enough') }; E.audio.sfx('deny'); return; }
+      if (!useCharge('swap')) { this.toast = { t: 1.4, text: T('not_enough') }; E.audio.sfx('deny'); return; }
       st.swapped = true;
       var take = Math.min(2, st.hands[0].length);
       for (var i = 0; i < take; i++) {
@@ -540,7 +541,6 @@ window.GAME = window.GAME || {};
       var staked = (E.storage.get('stake', 0) | 0) === 1;
       if (staked) {
         if (win) reward += C.stake.win;
-        else reward = Math.max(0, reward - C.stake.cost);
         E.storage.set('stake', 0);
       }
       addCoins(reward);
@@ -662,11 +662,6 @@ window.GAME = window.GAME || {};
         G.art.card(ctx, gx, gy, gh.w, gh.h, gh.card, {});
         ctx.globalAlpha = 1;
       }
-      if (st.phase === 'over' && this.result && this.result.win && this.resT < 0.9) {
-        var pr = 40 + this.resT * 900, pa = Math.max(0, 1 - this.resT / 0.9);
-        ctx.save(); ctx.globalAlpha = pa * 0.55; ctx.lineWidth = 6; ctx.strokeStyle = P.gold;
-        ctx.beginPath(); ctx.arc(v.w / 2, Lt.H * 0.34, pr, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-      }
       if (st.phase === 'over' && this.result) this._drawResult(ctx, v, Lt);
 
       E.ui.drawButtons(ctx, this.buttons);
@@ -679,24 +674,33 @@ window.GAME = window.GAME || {};
       }
     },
 
+    _resLay: function (Lt) {
+      var cy = Lt.H * 0.30, gap = Lt.H < 560 ? 26 : 34;
+      return { cy: cy, sub: cy + gap, taunt: cy + gap * 1.8, pill: cy + gap * 2.6, btn: cy + gap * 3.7 };
+    },
     _drawResult: function (ctx, v, Lt) {
       var r = this.result;
       ctx.fillStyle = 'rgba(6,14,11,0.72)';
       ctx.fillRect(0, 0, v.w, v.h);
-      var cy = Lt.H * 0.34;
+      var RL = this._resLay(Lt), cy = RL.cy;
       E.ui.text(ctx, r.win ? T('win_title') : T('lose_title'), v.w / 2, cy, Math.min(v.w * 0.11, 52), r.win ? P.gold : '#e07070', 'center', 800);
       var sub = r.win ? T('win_sub', { name: rivalName(this.rival) }) : T('lose_sub', { name: rivalName(this.rival) });
-      E.ui.text(ctx, sub, v.w / 2, cy + Math.min(v.w * 0.075, 34), Math.min(v.w * 0.04, 17), 'rgba(247,241,227,0.8)', 'center', 500);
+      E.ui.text(ctx, sub, v.w / 2, RL.sub, Math.min(v.w * 0.04, 17), 'rgba(247,241,227,0.8)', 'center', 500);
       if (!(this.rival === C.rivals.length - 1 && r.win)) {
-        E.ui.text(ctx, T(RIVAL_TAUNT[rivalAt(this.rival).key] || 'rival'), v.w / 2, cy + Math.min(v.w * 0.075, 34) + 24, Math.max(13, Math.min(v.w * 0.032, 15)), 'rgba(242,193,78,0.85)', 'center', 500);
+        E.ui.text(ctx, T(RIVAL_TAUNT[rivalAt(this.rival).key] || 'rival'), v.w / 2, RL.taunt, Math.max(13, Math.min(v.w * 0.032, 15)), 'rgba(242,193,78,0.85)', 'center', 500);
       }
       if (this.rival === C.rivals.length - 1 && r.win) {
-        E.ui.text(ctx, T('final_sub'), v.w / 2, cy + Math.min(v.w * 0.075, 34) + 24, Math.min(v.w * 0.036, 14), P.gold, 'center', 600);
+        E.ui.text(ctx, T('final_sub'), v.w / 2, RL.taunt, Math.min(v.w * 0.036, 14), P.gold, 'center', 600);
       }
       var cw = 150;
-      pill(ctx, v.w / 2 - cw / 2, cy + 44, cw, 40, 'rgba(8,20,15,0.7)', 'rgba(242,193,78,0.35)');
-      G.art.coin(ctx, v.w / 2 - cw / 2 + 22, cy + 64, 11);
-      E.ui.text(ctx, T('won_coins', { n: (r.doubled ? r.coins * 2 : r.coins) }), v.w / 2 + 8, cy + 64, 17, P.gold, 'center', 700);
+      pill(ctx, v.w / 2 - cw / 2, RL.pill, cw, 40, 'rgba(8,20,15,0.7)', 'rgba(242,193,78,0.35)');
+      G.art.coin(ctx, v.w / 2 - cw / 2 + 22, RL.pill + 20, 11);
+      E.ui.text(ctx, T('won_coins', { n: (r.doubled ? r.coins * 2 : r.coins) }), v.w / 2 + 8, RL.pill + 20, 17, P.gold, 'center', 700);
+      if (r.win && this.resT < 0.9) {
+        var pr = 40 + this.resT * 900, pa = Math.max(0, 1 - this.resT / 0.9);
+        ctx.save(); ctx.globalAlpha = pa * 0.6; ctx.lineWidth = 6; ctx.strokeStyle = P.gold;
+        ctx.beginPath(); ctx.arc(v.w / 2, cy, pr, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      }
     },
 
     /* --- capture --- */
@@ -709,8 +713,8 @@ window.GAME = window.GAME || {};
       // третья атака намеренно не отбита: на кадре видно решение «отбей или возьми»
       var table = [
         { a: mk('h', 8), d: mk('h', 11) },
-        { a: mk('d', 9), d: mk(st.trump, 6) },
-        { a: mk('c', 10), d: null }
+        { a: mk('d', 8), d: mk('d', 9) },
+        { a: mk('c', 8), d: null }
       ];
       var used = {};
       table.forEach(function (p) { used[p.a.s + p.a.r] = 1; if (p.d) used[p.d.s + p.d.r] = 1; });

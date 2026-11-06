@@ -1,0 +1,9 @@
+Each player gets six cards. The bottom card of the deck sets the trump suit.
+
+To attack, tap a card in your hand and it goes to the table. You may add only ranks that are already on the table, and at most six attacks per round.
+
+To defend, tap a card in your hand that can beat the open attack. Beat with a higher card of the same suit; a trump can only be beaten by a higher trump. If you cannot beat it, press Take.
+
+Once every attack is beaten, press Done: the table goes to the discard pile and you become the attacker. If the defender takes the cards, you keep attacking.
+
+After each round both players draw back up to six cards while the deck lasts. Whoever runs out of cards first wins.

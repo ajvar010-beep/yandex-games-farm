@@ -47,11 +47,15 @@ window.GAME = window.GAME || {};
       { key: 'akim',      color: '#b8860b', aggr: 0.74, thrift: 0.55, take: 0.20, smart: 0.95, mistake: 0 }
     ],
 
+    /* hint — разовый пассивный перк; swap/peek — расходники: покупаешь заряды. */
     shop: [
-      { id: 'hint', price: 120 },
-      { id: 'swap', price: 180 },
-      { id: 'peek', price: 150 }
+      { id: 'hint', price: 120, once: true },
+      { id: 'swap', price: 90, charge: 3 },
+      { id: 'peek', price: 100, charge: 2 }
     ],
+
+    /* Ставка: бесконечный сток монет — риск на партию. */
+    stake: { cost: 50, win: 110 },
 
     coins: {
       win: 40,

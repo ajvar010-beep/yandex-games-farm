@@ -302,6 +302,7 @@ window.GAME = window.GAME || {};
       this.result = null; this.buttons = []; this.toast = null; this.t = 0;
       this.autoRestart = 0; this.ghosts = []; this.resT = 0;
       this.dealT = 0; this.birth = []; this.aiAnim = this.st.hands[1].length; this.scrimT = 0; this.shakeT = 0;
+      this.fades = []; this.prevTable = [];
       this.matches = E.storage.get('matches', 0) | 0;
       E.audio.music('play');
       E.sdk.hideBanner();
@@ -355,6 +356,19 @@ window.GAME = window.GAME || {};
       if (this.result) this.scrimT = Math.min(1, this.scrimT + dt / 0.32);
       if (this.shakeT > 0) this.shakeT -= dt;
       var stA = this.st;
+      if (stA.table.length < this.prevTable.length) {
+        var Lf = this.layout(this.game.view);
+        for (var rf = 0; rf < this.prevTable.length; rf++) {
+          var rowF = this.prevTable[rf], posF = this.pairPos(Lf, rf, this.prevTable.length);
+          this.fades.push({ card: rowF.a, x: posF.x, y: posF.y, w: Lf.cardW, h: Lf.cardH, t: 0, dur: 0.28 });
+          if (rowF.d) this.fades.push({ card: rowF.d, x: posF.x, y: posF.y + Lf.cardH * 0.62, w: Lf.cardW, h: Lf.cardH, t: 0, dur: 0.28 });
+        }
+      }
+      for (var ff = this.fades.length - 1; ff >= 0; ff--) {
+        this.fades[ff].t += dt;
+        if (this.fades[ff].t >= this.fades[ff].dur) this.fades.splice(ff, 1);
+      }
+      this.prevTable = stA.table.map(function (r) { return { a: r.a, d: r.d }; });
       this.aiAnim = lerp(this.aiAnim, stA.hands[1].length, Math.min(1, dt * 9));
       while (this.birth.length < stA.table.length) this.birth.push(this.t);
       if (this.birth.length > stA.table.length) this.birth.length = stA.table.length;
@@ -434,7 +448,7 @@ window.GAME = window.GAME || {};
       var Lt0 = this.layout(this.game.view);
       var act = L.aiAct(st);
       if (act.type === 'attack') { this._ghost(act.card, Lt0.W - Lt0.pad - Lt0.cardW, Lt0.pad + 10); L.attack(st, p, act.card); E.audio.sfx('click'); }
-      else if (act.type === 'defend') { L.defend(st, p, act.card); E.audio.sfx('tick'); }
+      else if (act.type === 'defend') { this._ghost(act.card, Lt0.W - Lt0.pad - Lt0.cardW, Lt0.pad + 10); L.defend(st, p, act.card); E.audio.sfx('tick'); }
       else if (act.type === 'take') { L.take(st, p); E.audio.sfx('hit'); }
       else { L.pass(st, p); E.audio.sfx('click'); }
       if (st.phase === 'over') this._finish(st.winner === 0 ? 0 : 1);
@@ -658,6 +672,12 @@ window.GAME = window.GAME || {};
         }
       }
 
+      for (var fj = 0; fj < this.fades.length; fj++) {
+        var fd = this.fades[fj], fk = Math.min(1, fd.t / fd.dur);
+        ctx.globalAlpha = 1 - fk;
+        G.art.card(ctx, fd.x, fd.y + easeOut(fk) * 66, fd.w, fd.h, fd.card, {});
+        ctx.globalAlpha = 1;
+      }
       // рука игрока
       var slots = this.handSlots(Lt, st.hands[0].length);
       var hint = hasPerk('hint') ? L.hintCards(st) : [];
@@ -703,6 +723,15 @@ window.GAME = window.GAME || {};
       }
     },
 
+    pairPos: function (Lt, idx, total) {
+      var pairW = Lt.cardW;
+      var avail = Lt.W - Lt.pad * 2 - (Lt.portrait ? 0 : Lt.cardW * 1.1);
+      var step2 = total > 1 ? Math.min(pairW * 1.02, (avail - pairW) / (total - 1)) : 0;
+      var tw = pairW + step2 * Math.max(0, total - 1);
+      var tx0 = (Lt.W - tw) / 2 - (Lt.portrait ? 0 : Lt.cardW * 0.35);
+      var pairH = Lt.cardH * 1.62;
+      return { x: tx0 + idx * step2, y: (Lt.tableTop + Lt.tableBottom) / 2 - pairH / 2 };
+    },
     _resLay: function (Lt) {
       var cy = Lt.H * 0.30, gap = Lt.H < 560 ? 26 : 34;
       return { cy: cy, sub: cy + gap, taunt: cy + gap * 1.8, pill: cy + gap * 2.6, btn: cy + gap * 3.7 };

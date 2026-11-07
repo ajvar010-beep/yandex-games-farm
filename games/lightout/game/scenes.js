@@ -33,6 +33,17 @@ window.GAME = window.GAME || {};
       return (c && typeof c === 'object' && !Array.isArray(c)) ? c : {};
     },
     count: function (id) { return Meta.charges()[id] | 0; },
+    bought: function (id) {
+      var b = E.storage.get('bought', null);
+      b = (b && typeof b === 'object' && !Array.isArray(b)) ? b : {};
+      return b[id] | 0;
+    },
+    addBought: function (id) {
+      var b = E.storage.get('bought', null);
+      b = (b && typeof b === 'object' && !Array.isArray(b)) ? b : {};
+      b[id] = (b[id] | 0) + 1;
+      E.storage.set('bought', b);
+    },
     addCharge: function (id, n) {
       var c = Meta.charges();
       c[id] = (c[id] | 0) + (n | 0);
@@ -61,7 +72,8 @@ window.GAME = window.GAME || {};
   function priceOf(id, st) {
     var it = shopItem(id);
     if (!it) return 0;
-    var n = (id === 'move') ? ((st && st.bought.move) | 0) : Meta.count(id);
+    // цена растёт от числа ПОКУПОК, а не от остатка зарядов
+    var n = Meta.bought(id);
     return it.price + it.step * n;
   }
 
@@ -567,6 +579,7 @@ window.GAME = window.GAME || {};
       var price = priceOf(id, st);
       if (Meta.coins() < price) { E.audio.sfx('deny'); this.toast(T('not_enough')); return; }
       Meta.addCoins(-price);
+      Meta.addBought(id);
       if (id === 'move') {
         st.limit += it.charge;
         st.bought.move = (st.bought.move | 0) + 1;

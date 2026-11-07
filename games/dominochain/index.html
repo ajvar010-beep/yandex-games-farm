@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="«Домино-Цепь» — ярмарочная цепь из костяшек: приставляй домино к открытым концам, собирай серии и доводи гирлянду до края стола.">
+<title>Домино-Цепь</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: #1a0f07;
+    position: fixed; inset: 0;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    touch-action: none; overscroll-behavior: none;
+  }
+  #game { display: block; width: 100%; height: 100%; touch-action: none; }
+  /* Boot-оверлей: одна костяшка 5|3 на тёмном дереве, без текста. */
+  #boot {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 40%, #2a1a0c 0%, #140b04 100%);
+  }
+  #bootmark {
+    width: 96px; height: 48px; border-radius: 9px;
+    background: linear-gradient(180deg, #fff8e6 0%, #f6e9c9 45%, #e3cfa6 100%);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.55), inset 0 0 0 2px #5a3a1c;
+    position: relative;
+    animation: bootpulse 1.15s ease-in-out infinite;
+  }
+  #bootmark::before {
+    content: ''; position: absolute; left: 50%; top: 7px; bottom: 7px;
+    width: 2px; margin-left: -1px; background: rgba(90,58,28,0.55);
+  }
+  #bootmark::after {
+    /* точки: 5 слева (углы + центр), 3 справа (диагональ) */
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px),
+      radial-gradient(circle, #c0392b 0 4.2px, transparent 4.6px);
+    background-repeat: no-repeat;
+    background-position:
+      14px 12px, 14px 24px, 14px 36px, 34px 12px, 34px 36px,
+      62px 13px, 74px 24px, 86px 35px;
+    background-size: 20px 20px;
+  }
+  @keyframes bootpulse {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50%      { transform: translateY(-5px) rotate(2deg); }
+  }
+</style>
+</head>
+<body>
+<div id="boot"><div id="bootmark"></div></div>
+<canvas id="game"></canvas>
+<script>
+  (function () {
+    var p = location.protocol;
+    if (p !== 'file:' && p !== 'about:' && p !== 'data:') {
+      document.write('<script src="/sdk.js"><\/script>');
+    }
+  })();
+</script>
+<script src="sdk-stub.js"></script>
+<script src="engine/rng.js"></script>
+<script src="engine/i18n.js"></script>
+<script src="engine/audio.js"></script>
+<script src="engine/input.js"></script>
+<script src="engine/ui.js"></script>
+<script src="engine/fx.js"></script>
+<script src="engine/storage.js"></script>
+<script src="engine/sdk.js"></script>
+<script src="engine/core.js"></script>
+<script src="engine/capture.js"></script>
+<script src="game/config.js"></script>
+<script src="game/i18n.js"></script>
+<script src="game/logic.js"></script>
+<script src="game/art.js"></script>
+<script src="game/scenes.js"></script>
+<script src="game/main.js"></script>
+</body>
+</html>

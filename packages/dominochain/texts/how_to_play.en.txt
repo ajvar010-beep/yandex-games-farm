@@ -1,0 +1,5 @@
+1. Tap a domino in your hand and it joins an open end of the chain with the matching pips.
+2. Playable tiles glow. If a tile fits both ends, the game highlights them — tap the end you want.
+3. Stuck? Tap the bazaar for a draw. Draw tokens are limited; once they run out, a draw costs a heart.
+4. A double scores extra and grants a draw token. A clean streak multiplies your points.
+5. Your goal is to place the required number of tiles. Three misses break the chain.

@@ -1,0 +1,1 @@
+A fairground domino chain: match the pips on either open end, build scoring streaks, draw from the bazaar and clear 12 levels.

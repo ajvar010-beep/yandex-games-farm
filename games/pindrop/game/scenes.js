@@ -175,8 +175,8 @@ window.GAME = window.GAME || {};
 
         var tx = c.x + c.h * 0.78;
         E.ui.text(ctx, T(item.name), tx, c.y + c.h * 0.30, Math.min(17, c.h * 0.20), P.cream, 'left', 700);
-        E.ui.fit(ctx, T(item.desc), c.w - (tx - c.x) - Math.min(150, c.w * 0.36), Math.max(11, c.h * 0.13), 500);
-        E.ui.text(ctx, T(item.desc), tx, c.y + c.h * 0.56, Math.max(11, Math.min(13, c.h * 0.13)), 'rgba(244,234,214,0.62)', 'left', 500);
+        var dsz = E.ui.fit(ctx, T(item.desc), c.w - (tx - c.x) - Math.min(150, c.w * 0.36), Math.max(11, c.h * 0.13), 500);
+        E.ui.text(ctx, T(item.desc), tx, c.y + c.h * 0.56, dsz, 'rgba(244,234,214,0.62)', 'left', 500);
         // уровень
         var pw = Math.max(10, c.w * 0.022), gap = 4;
         E.ui.text(ctx, T('owned_n', { n: lv, max: item.max }), tx, c.y + c.h * 0.80, Math.max(11, Math.min(13, c.h * 0.12)), P.amberHi, 'left', 600);
@@ -695,6 +695,7 @@ window.GAME = window.GAME || {};
       this.drawBoard(ctx);
       this.drawHud(ctx);
       this.drawBoosters(ctx);
+      if (this.pauseBtn) E.ui.drawButtons(ctx, [this.pauseBtn]);
 
       // всплывающие цифры
       for (var i = 0; i < this.floaters.length; i++) {
@@ -755,7 +756,7 @@ window.GAME = window.GAME || {};
       // бункеры
       var sp = st.lv.spawn || [50];
       for (var k = 0; k < sp.length; k++) {
-        A.hopper(ctx, X(sp[k]), Y(-4.5), s * 18, s * 11.5, 0, L.ballsLeft(st), t);
+        A.hopper(ctx, X(sp[k]), Math.max(Y(-4.5), 2), s * 18, s * 11.5, 0, L.ballsLeft(st), t);
       }
 
       // шары

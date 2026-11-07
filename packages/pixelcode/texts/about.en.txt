@@ -1,0 +1,5 @@
+Pixel Code is a nonogram for people who like quiet and order. The numbers beside every row and column tell you how many cells are filled in a run. Fill exactly the right cells and a symmetrical pixel picture rises out of the neon mosaic.
+
+Twelve patterns grow from 10×10 to 15×15. Every picture is checked for clean logic, so you can solve it step by step without guessing. Finished lines cross themselves out, which keeps your head on the picture instead of the bookkeeping.
+
+Three mistakes per pattern: fill a cell that is not in the picture and you lose one. A hint reveals a whole row or column, the eraser clears your mistakes, and +1 mistake buys a spare try. Finished patterns pay coins, and a flawless one pays a bonus.

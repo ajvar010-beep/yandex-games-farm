@@ -1,0 +1,6 @@
+1. The numbers above a column and beside a row show runs of filled cells.
+2. Tap a cell to fill it. Switch to Cross mode to mark cells you know are empty.
+3. Numbers go in order and need at least one empty cell between them.
+4. A completed line is crossed out automatically.
+5. Three mistakes per pattern: filling a cell that is not in the picture costs one try.
+6. A hint reveals a whole row or column, the eraser clears mistakes, and +1 mistake gives you a spare try.

@@ -695,6 +695,7 @@ window.GAME = window.GAME || {};
     _closeShop: function (game) {
       if (this.mode !== 'shop') return;
       this.mode = 'running';
+      if (!this.st.solved && L.movesLeft(this.st) > 0) E.sdk.gameplayStart();
       this._rebuild(game);
     },
     refreshShop: function (game) {
@@ -725,7 +726,7 @@ window.GAME = window.GAME || {};
       this.reward = reward;
       this.doubled = false;
       this.result = { win: true, reward: reward };
-      addCoins(reward);
+      if (!capture) addCoins(reward);
       E.audio.sfx('win');
       this.mode = 'win';
       E.sdk.gameplayStop();
@@ -1009,17 +1010,17 @@ window.GAME = window.GAME || {};
       if (best) E.ui.text(ctx, T('best_moves', { n: best }), Lt.pad, Lt.pad + 54, 12, P.gold, 'left', 600);
 
       var y2 = Lt.pad + (best ? 78 : 64);
-      var low = st.moves >= st.limit - 3;
+      var low = L.movesLeft(st) <= 3;
       var bw = Math.max(78, 15 * 5.1);
       coinBadge(ctx, Lt.pad, y2 - 14, 15);
-      E.ui.text(ctx, T('moves_n', { n: st.moves, max: st.limit }), Lt.pad + bw + 12, y2, 13, low ? '#e0915c' : P.cream, 'left', 600);
+      E.ui.text(ctx, T('moves_n', { n: L.movesLeft(st), max: st.limit }), Lt.pad + bw + 12, y2, 13, low ? '#e0915c' : P.cream, 'left', 600);
       E.ui.text(ctx, T('par_n', { n: st.par }), W - Lt.pad, y2, 13, P.dim, 'right', 500);
 
       // индикатор лимита
       var barW = W - Lt.pad * 2, barY = Lt.pad + (best ? 96 : 82);
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       E.ui.roundRect(ctx, Lt.pad, barY, barW, 4, 2); ctx.fill();
-      var k = clamp(st.moves / Math.max(1, st.limit), 0, 1);
+      var k = clamp(L.movesLeft(st) / Math.max(1, st.limit), 0, 1);
       ctx.fillStyle = low ? '#d8794a' : P.brass;
       E.ui.roundRect(ctx, Lt.pad, barY, Math.max(2, barW * k), 4, 2); ctx.fill();
     },

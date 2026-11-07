@@ -41,6 +41,12 @@ window.GAME = window.GAME || {};
     },
     perfect: function () { return Math.max(0, E.storage.get('perf', 0) | 0); },
     addPerfect: function () { E.storage.set('perf', Meta.perfect() + 1); },
+    perfects: function () {
+      var p = E.storage.get('perfl', null);
+      return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {};
+    },
+    markPerfect: function (n) { var p = Meta.perfects(); p[n] = 1; E.storage.set('perfl', p); },
+    isPerfect: function (n) { return !!Meta.perfects()[n]; },
     shopUse: function () {
       var s = E.storage.get('shopn', null);
       return (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
@@ -224,7 +230,8 @@ window.GAME = window.GAME || {};
           x: Q.gx + c * (Q.cell + Q.gap), y: Q.gy + r * (Q.cell + Q.gap),
           w: Q.cell, h: Q.cell, n: i + 1,
           locked: (i + 1) > Meta.level(),
-          done: Meta.isDone(i + 1)
+          done: Meta.isDone(i + 1),
+          perfect: Meta.isPerfect(i + 1)
         });
       }
       var bm = bannerInset();
@@ -256,6 +263,7 @@ window.GAME = window.GAME || {};
           ctx.lineWidth = 1.6; ctx.strokeStyle = r.done ? tint : 'rgba(168,85,247,0.6)'; ctx.stroke();
           E.ui.text(ctx, String(r.n), r.x + r.w / 2, r.y + r.h / 2, Math.round(r.h * 0.4), P.text, 'center', 800);
           if (r.done) A.shopIcon(ctx, 'check', r.x + r.w - 11, r.y + 11, 13, tint);
+          if (r.done && r.perfect) E.ui.text(ctx, '★', r.x + 11, r.y + 12, 14, P.gold, 'center', 700);
         }
       }
       E.ui.drawButtons(ctx, this.levelButtons);
@@ -644,7 +652,7 @@ window.GAME = window.GAME || {};
         Meta.addCoins(reward);
         Meta.markDone(this.level);
         Meta.setLevel(Math.max(Meta.level(), Math.min(TOTAL, this.level + 1)));
-        if (perfect) Meta.addPerfect();
+        if (perfect) { Meta.addPerfect(); Meta.markPerfect(this.level); }
       }
       E.audio.sfx('win');
       E.sdk.gameplayStop();

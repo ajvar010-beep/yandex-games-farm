@@ -1037,6 +1037,9 @@ window.GAME = window.GAME || {};
           var s = L.pathText(this.st, this.sel);
           var y0 = this.gy - 18;
           if (y0 < this.hudH + 14) y0 = this.gy + this.n * this.cell + 16;
+          // не даём живому слову уехать за кромку экрана (ландшафт 844×390)
+          var Hv = this.game && this.game.view ? this.game.view.h : 720;
+          y0 = Math.max(24, Math.min(Hv - 18, y0));
           ctx.font = '700 16px Georgia, "Times New Roman", serif';
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillStyle = 'rgba(44,42,50,0.75)';

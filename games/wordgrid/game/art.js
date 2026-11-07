@@ -147,11 +147,11 @@ window.GAME = window.GAME || {};
           rr(ctx, cc.x - c * 0.42, cc.y - c * 0.42, c * 0.84, c * 0.84, c * 0.18);
           ctx.fill();
         }
-        ctx.globalAlpha = 0.17;
+        ctx.globalAlpha = 0.13;
         ctx.strokeStyle = accent;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.lineWidth = c * 0.74;
+        ctx.lineWidth = c * 0.36;
         ctx.beginPath();
         for (j = 0; j < p.length; j++) {
           cc = cellCenter(o, p[j]);

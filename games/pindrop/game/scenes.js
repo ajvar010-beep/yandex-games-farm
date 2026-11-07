@@ -331,6 +331,8 @@ window.GAME = window.GAME || {};
       this.game = game;
       this.captureMode = !!(E.capture && E.capture.active);
       this.autopilot = !!(E.capture.autoplay || E.capture.record > 0);
+      // первый interstitial — не раньше 60 с от старта сессии (правило площадки)
+      if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       var lv = params.level != null ? params.level : (cp.wave != null ? cp.wave : level());
       this.level = clamp(parseInt(lv, 10) || 1, 1, L.count());
       var sh = shopLv();
@@ -417,22 +419,25 @@ window.GAME = window.GAME || {};
         x0 = (bx + bw + W) / 2 - bs / 2;
         byy = Lt.by + Lt.bh * 0.56;
       }
-      var mk = function (idx, iconFn, id) {
+      var mk = function (idx, iconFn, id, label) {
         return new E.ui.Button({
           x: portrait ? x0 + idx * (bs + gap) : x0,
           y: portrait ? byy : byy + idx * (bs + gap),
           w: bs, h: bs,
           bg: 'rgba(20,17,13,0.9)', border: 'rgba(201,162,74,0.40)',
-          icon: function (ctx, b) { iconFn(ctx, b); },
+          icon: function (ctx, b) {
+            iconFn(ctx, b);
+            E.ui.text(ctx, label, b.x + b.w / 2, b.y + b.h - 8, Math.max(10, Math.min(12, b.w * 0.2)), 'rgba(243,231,201,0.72)', 'center', 600);
+          },
           onTap: function () { self.useBooster(id, game); }
         });
       };
       this.boost = [
-        mk(0, function (ctx, b) { A.clock(ctx, b.x + b.w / 2, b.y + b.h / 2 - 3, b.w * 0.26, P.amberHi); countTag(ctx, b, self.st.slowLeft); }, 'slow'),
-        mk(1, function (ctx, b) { A.pliers(ctx, b.x + b.w / 2, b.y + b.h / 2 - 3, b.w * 0.30, P.steelHi); countTag(ctx, b, self.st.pliersLeft); }, 'pliers'),
+        mk(0, function (ctx, b) { A.clock(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.24, P.amberHi); countTag(ctx, b, self.st.slowLeft); }, 'slow', T('shop_slow')),
+        mk(1, function (ctx, b) { A.pliers(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.28, P.steelHi); countTag(ctx, b, self.st.pliersLeft); }, 'pliers', T('shop_pliers')),
         mk(2, function (ctx, b) {
-          A.wrench(ctx, b.x + b.w / 2, b.y + b.h / 2 - 3, b.w * 0.26, P.brass);
-        }, 'shop')
+          A.wrench(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.24, P.brass);
+        }, 'shop', T('shop'))
       ];
       this.buttons = this.buttons.concat(this.boost);
     },

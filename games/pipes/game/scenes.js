@@ -640,6 +640,7 @@ window.GAME = window.GAME || {};
       if (this.mode === 'win' || this.mode === 'over' || this.st.solved) return;
       if (this.mode !== 'paused') this.pausePrev = this.mode;
       this.mode = 'shop';
+      E.sdk.gameplayStop();
       this.buildShop(game);
     },
     closeShop: function (game) {
@@ -1082,6 +1083,15 @@ window.GAME = window.GAME || {};
         pill(ctx, cx - rw / 2, y + 52 * k, rw, rh, 'rgba(6,20,23,0.85)', 'rgba(242,193,78,0.42)');
         A.coin(ctx, cx - rw / 2 + 22, y + 52 * k + rh / 2, 10 * k);
         E.ui.text(ctx, T('won_coins', { n: this.reward }), cx + 8, y + 52 * k + rh / 2 + 1, 15 * k, P.gold, 'center', 700);
+        var stn = this.stars | 0;
+        if (!stn) {
+          var limS = Math.max(1, this.st.limit || 1), leftS = Math.max(0, this.st.movesLeft | 0);
+          stn = leftS >= Math.ceil(limS * 0.40) ? 3 : (leftS >= Math.ceil(limS * 0.15) ? 2 : 1);
+        }
+        for (var si = 0; si < 3; si++) {
+          E.ui.text(ctx, '★', cx + rw / 2 - 58 + si * 13 * k, y + 52 * k + rh / 2,
+            13 * k, si < stn ? P.gold : 'rgba(242,193,78,0.22)', 'center', 700);
+        }
         var lineY = y + 100 * k;
         if (this.perfect) {
           E.ui.text(ctx, T('perfect_bonus', { n: this.perfect }), cx, lineY, 12 * k, P.ok, 'center', 600);
@@ -1091,7 +1101,9 @@ window.GAME = window.GAME || {};
       } else if (this.mode === 'over') {
         E.ui.text(ctx, T('lose_title'), cx, y + 20 * k, Math.min(W * 0.082, 32 * k), P.danger, 'center', 800);
         E.ui.text(ctx, T('lose_sub'), cx, y + 46 * k, Math.min(W * 0.036, 14 * k), 'rgba(233,245,242,0.7)', 'center', 500);
-        E.ui.text(ctx, T('second_chance_d'), cx, y + 66 * k, 12 * k, 'rgba(233,245,242,0.45)', 'center', 500);
+        if (!this.reviveUsed && !this.captureMode) {
+          E.ui.text(ctx, T('second_chance_d'), cx, y + 66 * k, 12 * k, 'rgba(233,245,242,0.45)', 'center', 500);
+        }
       }
       E.ui.drawButtons(ctx, this.endButtons);
     },

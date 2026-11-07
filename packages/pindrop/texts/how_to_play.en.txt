@@ -1,0 +1,5 @@
+1. Balls drop from the hopper one at a time. Each one bounces off the pins and lands in one of three cups.
+2. Tap a pin to pop it out — the next balls will take a different path.
+3. Check what each cup needs: its window shows how many balls are inside and how many are required.
+4. Fill all three cups to clear the level. If you run out of balls, restart or watch an ad for extra balls.
+5. Spend coins in the workshop on ball stock, a brake and pliers.

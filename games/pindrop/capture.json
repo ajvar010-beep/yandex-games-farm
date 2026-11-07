@@ -1,0 +1,21 @@
+{
+  "variant": 103,
+  "landscape": [
+    { "name": "shop_early", "q": "scene=play&wave=1&t=3.0&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "gate_mid", "q": "scene=play&wave=5&t=3.2&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "double_late", "q": "scene=play&wave=10&t=3.4&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "final", "q": "scene=play&wave=15&t=3.2&freeze=1", "expect": { "scene": "play", "mode": "running" } }
+  ],
+  "portrait": [
+    { "name": "three_cups", "q": "scene=play&wave=2&t=3.0&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "two_hoppers", "q": "scene=play&wave=7&t=3.2&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "gate_late", "q": "scene=play&wave=12&t=3.4&freeze=1", "expect": { "scene": "play", "mode": "running" } }
+  ],
+  "qa": [
+    { "name": "menu", "q": "scene=menu&freeze=1", "expect": { "scene": "menu" } },
+    { "name": "shop", "q": "scene=play&wave=5&mode=shop&freeze=1", "expect": { "scene": "play", "mode": "shop" } },
+    { "name": "win", "q": "scene=play&wave=4&mode=win&freeze=1", "expect": { "scene": "play", "mode": "win" } },
+    { "name": "over", "q": "scene=play&wave=6&mode=over&freeze=1", "expect": { "scene": "play", "mode": "over" } }
+  ],
+  "video": { "q": "autoplay=1&record=26&wave=8&seed=31", "seconds": 26 }
+}

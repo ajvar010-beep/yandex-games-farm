@@ -128,12 +128,12 @@ window.GAME = window.GAME || {};
     var pad = w * 0.035;
     rr(ctx, x + pad, y + pad, w - pad * 2, h - pad * 2, w * 0.018);
     var sg = ctx.createLinearGradient(x, y + pad, x, y + h - pad);
-    sg.addColorStop(0, '#1b2028');
+    sg.addColorStop(0, '#232b36');
     sg.addColorStop(0.35, '#12161c');
     sg.addColorStop(1, '#0d1014');
     ctx.fillStyle = sg; ctx.fill();
     ctx.lineWidth = Math.max(1.5, w * 0.006);
-    ctx.strokeStyle = 'rgba(160,180,205,0.20)';
+    ctx.strokeStyle = 'rgba(180,205,230,0.42)';
     ctx.stroke();
 
     // винты по углам

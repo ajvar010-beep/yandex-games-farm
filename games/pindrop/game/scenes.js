@@ -371,6 +371,7 @@ window.GAME = window.GAME || {};
       if (this.shopOpen) { this.shopOpen = false; return; }
       if (this.mode === 'running') this.setPaused(true, game);
       else if (this.mode === 'paused') this.setPaused(false, game);
+      else if (this.mode === 'win' || this.mode === 'over') game.setScene('menu', {});
     },
     closeShop: function () {
       this.shopOpen = false;
@@ -428,7 +429,7 @@ window.GAME = window.GAME || {};
           bg: 'rgba(20,17,13,0.9)', border: 'rgba(201,162,74,0.40)',
           icon: function (ctx, b) {
             iconFn(ctx, b);
-            E.ui.text(ctx, label, b.x + b.w / 2, b.y + b.h - 8, Math.max(10.5, Math.min(12, b.w * 0.22)), 'rgba(243,231,201,0.78)', 'center', 600);
+            E.ui.text(ctx, label, b.x + b.w / 2, b.y + b.h - 8, Math.max(12, Math.min(13.5, b.w * 0.25)), 'rgba(243,231,201,0.78)', 'center', 600);
           },
           onTap: function () { self.useBooster(id, game); }
         });

@@ -306,6 +306,8 @@ window.GAME = window.GAME || {};
   L.rotate = function (st, cell) {
     var t = st.tiles[cell];
     if (!t || st.solved) return false;
+    // без ходов повороты запрещены: иначе поражение можно отложить лишними тапами
+    if (st.movesLeft <= 0) return false;
     t.rot = (t.rot + 1) & 3;
     t.mask = L.rotMask(t.base, t.rot);
     t.anim = 1;

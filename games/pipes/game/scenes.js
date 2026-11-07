@@ -158,7 +158,7 @@ window.GAME = window.GAME || {};
         icon: function (ctx, b) {
           A.coin(ctx, b.x + 22, b.y + b.h / 2, 10);
           E.ui.text(ctx, T('coins_150', { n: C.ads.rewardedCoins }), b.x + 40, b.y + b.h / 2 - 6, 13, P.gold, 'left', 700);
-          E.ui.text(ctx, T('coins_ad'), b.x + 40, b.y + b.h / 2 + 8, 10, P.dim, 'left', 500);
+          E.ui.text(ctx, T('coins_ad'), b.x + 40, b.y + b.h / 2 + 9, 12, P.dim, 'left', 500);
           ctx.fillStyle = 'rgba(242,193,78,0.85)';
           ctx.beginPath();
           ctx.moveTo(b.x + b.w - 22, b.y + b.h / 2 - 6);
@@ -368,7 +368,7 @@ window.GAME = window.GAME || {};
       A.plantRoom(ctx, W, H, this.t, 1);
       ctx.fillStyle = 'rgba(4,16,19,0.45)';
       ctx.fillRect(0, 0, W, H);
-      E.ui.text(ctx, T('map_title'), W / 2, (M.top - M.banner * 0) * 0.48 + 6, Math.min(W * 0.085, 34), P.gold, 'center', 800);
+      E.ui.text(ctx, T('map_title'), W / 2, M.top * 0.48 + 6, Math.min(W * 0.085, 34), P.gold, 'center', 800);
       E.ui.text(ctx, T('map_hint'), W / 2, M.top * 0.48 + 34, Math.min(W * 0.033, 13), 'rgba(233,245,242,0.55)', 'center', 500);
       coinsBadge(ctx, 12, 12, Meta.coins(), 86, 40);
       E.ui.drawButtons(ctx, this.buttons);

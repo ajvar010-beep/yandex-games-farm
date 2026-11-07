@@ -16,6 +16,7 @@ window.GAME = window.GAME || {};
       close: 'Закрыть',
 
       level_n: 'Доска {n}',
+      best_moves: 'рекорд: {n}',
       moves_n: 'Ходы {n} / {max}',
       par_n: 'Пар {n}',
       size_n: '{n}×{n}',
@@ -77,6 +78,7 @@ window.GAME = window.GAME || {};
       close: 'Close',
 
       level_n: 'Board {n}',
+      best_moves: 'best: {n}',
       moves_n: 'Moves {n} / {max}',
       par_n: 'Par {n}',
       size_n: '{n}×{n}',

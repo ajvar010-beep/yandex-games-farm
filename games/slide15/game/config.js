@@ -42,8 +42,8 @@ window.GAME = window.GAME || {};
     levels: [
       { n: 3, scramble: 6, limit: 15 },
       { n: 3, scramble: 10, limit: 20 },
-      { n: 3, scramble: 14, limit: 26 },
-      { n: 3, scramble: 18, limit: 32 },
+      { n: 4, scramble: 14, limit: 26 },
+      { n: 4, scramble: 18, limit: 32 },
       { n: 4, scramble: 20, limit: 40 },
       { n: 4, scramble: 26, limit: 50 },
       { n: 4, scramble: 32, limit: 58 },

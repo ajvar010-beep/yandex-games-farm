@@ -421,6 +421,8 @@ window.GAME = window.GAME || {};
       this.autoNext = 0;
       this.shakeT = 0;
       this.autopilot = !!(E.capture.autoplay || E.capture.record > 0);
+      // первый interstitial — не раньше 60 с от старта сессии (правило площадки)
+      if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       this.buttons = [];
       this.endButtons = [];
       this.shopButtons = [];
@@ -776,9 +778,11 @@ window.GAME = window.GAME || {};
         return;
       }
       useCharge('shuffle');
+      var usedMoves = this.st.moves;
       var seed = this.rng.int(1, 999983);
       this.rng = new E.Rng(seed + this.level * 7919);
       this.st = L.newPuzzle(this.rng, C.levels[this.level - 1]);
+      this.st.moves = usedMoves;   // перемешать — не бесплатный рестарт
       this.anim.length = 0;
       this.hint = null;
       E.audio.sfx('buy');
@@ -988,8 +992,10 @@ window.GAME = window.GAME || {};
       var W = Lt.W, st = this.st;
       E.ui.text(ctx, T('level_n', { n: this.level }), Lt.pad, Lt.pad + 18, Math.min(18, W * 0.05), P.cream, 'left', 700);
       E.ui.text(ctx, T('size_n', { n: st.n }), Lt.pad, Lt.pad + 38, 12, P.dim, 'left', 500);
+      var best = doneMap()[this.level] | 0;
+      if (best) E.ui.text(ctx, T('best_moves', { n: best }), Lt.pad, Lt.pad + 54, 12, P.gold, 'left', 600);
 
-      var y2 = Lt.pad + 64;
+      var y2 = Lt.pad + (best ? 78 : 64);
       var low = st.moves >= st.limit - 3;
       var bw = Math.max(78, 15 * 5.1);
       coinBadge(ctx, Lt.pad, y2 - 14, 15);
@@ -997,7 +1003,7 @@ window.GAME = window.GAME || {};
       E.ui.text(ctx, T('par_n', { n: st.par }), W - Lt.pad, y2, 13, P.dim, 'right', 500);
 
       // индикатор лимита
-      var barW = W - Lt.pad * 2, barY = Lt.pad + 82;
+      var barW = W - Lt.pad * 2, barY = Lt.pad + (best ? 96 : 82);
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       E.ui.roundRect(ctx, Lt.pad, barY, barW, 4, 2); ctx.fill();
       var k = clamp(st.moves / Math.max(1, st.limit), 0, 1);
@@ -1010,10 +1016,12 @@ window.GAME = window.GAME || {};
       var titleSize = Math.min(26, Math.max(16, w * 0.075));
       E.ui.text(ctx, T('level_n', { n: this.level }), x, Lt.by + titleSize * 0.5, titleSize, P.cream, 'left', 800);
       E.ui.text(ctx, T('size_n', { n: st.n }), x, Lt.by + titleSize + 14, 13, P.dim, 'left', 500);
+      var bestW = doneMap()[this.level] | 0;
+      if (bestW) E.ui.text(ctx, T('best_moves', { n: bestW }), x, Lt.by + titleSize + 32, 12, P.gold, 'left', 600);
 
-      coinBadge(ctx, x, Lt.by + titleSize + 30, 15);
+      coinBadge(ctx, x, Lt.by + titleSize + (bestW ? 48 : 30), 15);
 
-      var my = Lt.by + titleSize + 92;
+      var my = Lt.by + titleSize + (bestW ? 110 : 92);
       var low = st.moves >= st.limit - 3;
       E.ui.text(ctx, T('moves_n', { n: st.moves, max: st.limit }), x, my, Math.min(18, Math.max(13, w * 0.05)), low ? '#e0915c' : P.cream, 'left', 700);
       E.ui.text(ctx, T('par_n', { n: st.par }), x, my + 24, 13, P.dim, 'left', 500);

@@ -388,6 +388,8 @@ window.GAME = window.GAME || {};
       this.result = null; this.reward = 0; this.doubled = false; this.reviveUsed = false;
       this.hintT = 0; this.selPulse = 0; this.toast = null;
       this.captureMode = false;
+      // первый interstitial — не раньше 60 с от начала сессии (правило площадки)
+      if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       this.shopCards = []; this.shopButtons = []; this.endButtons = [];
       E.audio.music('play');
       E.sdk.hideBanner();
@@ -1041,6 +1043,15 @@ window.GAME = window.GAME || {};
       var stackH = 128 * k;
       var y = Math.max(areaTop, areaBottom - stackH);
       var cx = W / 2;
+
+      if (this.mode === 'win' || this.mode === 'over') {
+        var cardTop = y - 14 * k;
+        var cardH = Math.max(60, (areaBottom - 2) - cardTop);
+        var cardW = Math.min(400, W * 0.9);
+        E.ui.roundRect(ctx, cx - cardW / 2, cardTop, cardW, cardH, 16);
+        ctx.fillStyle = 'rgba(5,20,23,0.94)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(47,179,168,0.5)'; ctx.stroke();
+      }
 
       if (this.mode === 'paused') {
         E.ui.text(ctx, T('paused'), cx, areaBottom - 30 * k, Math.min(W * 0.085, 32 * k), P.gold, 'center', 800);

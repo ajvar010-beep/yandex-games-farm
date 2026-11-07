@@ -424,7 +424,7 @@ window.GAME = window.GAME || {};
       var handLen = Math.min((W - 130 - (hn - 1) * gap) / hn, maxLen);
       handLen = Math.max(30, handLen);
       var handTh = handLen / 2;
-      var handH = handTh + clamp(handTh * 0.62, 24, 46);
+      var handH = Math.max(56, handTh + clamp(handTh * 0.62, 24, 46));
 
       var panelTop = H - banner - handH;
       var boardTop = hudH + 6;
@@ -434,6 +434,10 @@ window.GAME = window.GAME || {};
 
       var slots = this.st.goal + 2;
       var path = A.chainPath(boardRect, slots);
+      // сколько костей реально влезает на каждую сторону: сумма = goal + 1,
+      // поэтому до цели всегда есть куда поставить
+      this.caps = { left: path.startIdx, right: path.slots.length - 1 - path.startIdx };
+      this.st.caps = { left: this.caps.left, right: this.caps.right };
 
       // панель HUD
       var ph = Math.min(44, hudH - 10);
@@ -453,7 +457,7 @@ window.GAME = window.GAME || {};
       var goalRect = { x: goalX, y: py + 4, w: Math.max(56, goalRight - goalX), h: ph - 8 };
 
       // панель руки
-      var shopS = Math.min(46, handH - 12);
+      var shopS = Math.max(44, Math.min(46, handH - 12));
       var shopBtn = new E.ui.Button({
         x: W - 10 - shopS, y: panelTop + (handH - shopS) / 2, w: shopS, h: shopS,
         bg: 'rgba(120,64,32,0.92)', border: P.gold,
@@ -504,7 +508,10 @@ window.GAME = window.GAME || {};
         var s = path.slots[clamp(idx, 0, path.slots.length - 1)];
         return { x: s.x - Math.cos(s.a) * path.tileLen * 0.34, y: s.y - Math.sin(s.a) * path.tileLen * 0.34, r: r };
       }
-      return { left: at(sL), right: at(sR) };
+      var zl = at(sL), zr = at(sR);
+      zl.full = nL >= (this.caps ? this.caps.left : 99);
+      zr.full = nR >= (this.caps ? this.caps.right : 99);
+      return { left: zl, right: zr };
     },
 
     slotPos: function (side, index) {
@@ -782,6 +789,23 @@ window.GAME = window.GAME || {};
     /* ---------- ход игрока ---------- */
     doPlay: function (tileId, side) {
       var st = this.st;
+      var capL = this.caps ? this.caps.left : 99;
+      var capR = this.caps ? this.caps.right : 99;
+      var len = side === 'left' ? st.left.length : st.right.length;
+      var cap = side === 'left' ? capL : capR;
+      if (len >= cap) {
+        var other = side === 'left' ? 'right' : 'left';
+        var otherLen = other === 'left' ? st.left.length : st.right.length;
+        var otherCap = other === 'left' ? capL : capR;
+        if (otherLen < otherCap) {
+          side = other;
+          this.toast ? this.toast(T('side_full')) : null;
+        } else {
+          if (this.toast) this.toast(T('both_full'));
+          E.audio.sfx('deny');
+          return false;
+        }
+      }
       var at = this.slotPos(side, side === 'left' ? st.left.length : st.right.length);
       var rec = L.play(st, tileId, side);
       if (!rec) return false;
@@ -891,7 +915,7 @@ window.GAME = window.GAME || {};
       this.layout(game);
       if (mode === 'shop') { this.openShop(game); this.buildShop(game); return; }
       if (mode === 'win') { this.st.phase = 'play'; this.onWin(game, true); return; }
-      if (mode === 'over') { this.st.phase = 'over'; this.onLose(game, true); return; }
+      if (mode === 'over') { this.st.phase = 'over'; this.st.hearts = 0; this.onLose(game, true); return; }
       this.mode = 'running';
       E.sdk.gameplayStart();
       this.buildEnd(game);
@@ -1030,8 +1054,24 @@ window.GAME = window.GAME || {};
       // открытые концы: пульсирующие кружки с числом
       var ez = this.endZones;
       var pulse = 1 + Math.sin(this.t * 3.2) * 0.08;
-      A.pipMark(ctx, ez.left.x, ez.left.y, Math.max(11, th * 0.52) * pulse, st.ends.left, 'left', s0.a + Math.PI);
-      A.pipMark(ctx, ez.right.x, ez.right.y, Math.max(11, th * 0.52) * pulse, st.ends.right, 'right', s0.a);
+      var self = this;
+      function endMark(z, val, sideName, angle) {
+        var rr = Math.max(11, th * 0.52) * pulse;
+        if (z.full) {
+          ctx.save(); ctx.globalAlpha = 0.35;
+          A.pipMark(ctx, z.x, z.y, rr, val, sideName, angle);
+          ctx.restore();
+          ctx.save(); ctx.strokeStyle = 'rgba(224,90,79,0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(z.x - rr * 0.55, z.y - rr * 0.55); ctx.lineTo(z.x + rr * 0.55, z.y + rr * 0.55);
+          ctx.moveTo(z.x + rr * 0.55, z.y - rr * 0.55); ctx.lineTo(z.x - rr * 0.55, z.y + rr * 0.55);
+          ctx.stroke(); ctx.restore();
+        } else {
+          A.pipMark(ctx, z.x, z.y, rr, val, sideName, angle);
+        }
+      }
+      endMark(ez.left, st.ends.left, 'left', s0.a + Math.PI);
+      endMark(ez.right, st.ends.right, 'right', s0.a);
     },
 
     drawPending: function (ctx) {

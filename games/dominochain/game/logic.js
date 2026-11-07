@@ -81,6 +81,7 @@ window.GAME = window.GAME || {};
       start: start,
       left: [],               // кости левее центра: [0] — ближайшая к центру
       right: [],              // кости правее центра
+      caps: { left: 99, right: 99 }, // ёмкость сторон по слотам пути (ставит сцена)
       ends: { left: sa, right: sb },
       hand: hand,
       stock: deck,            // базар (закрытая стопка)
@@ -127,7 +128,9 @@ window.GAME = window.GAME || {};
     var out = [];
     for (var i = 0; i < st.hand.length; i++) {
       var s = L.sides(st, st.hand[i]);
-      if (s.left || s.right) out.push({ tile: st.hand[i], index: i, left: s.left, right: s.right });
+      var l = s.left && st.left.length < st.caps.left;
+      var r = s.right && st.right.length < st.caps.right;
+      if (l || r) out.push({ tile: st.hand[i], index: i, left: l, right: r });
     }
     return out;
   };
@@ -149,6 +152,8 @@ window.GAME = window.GAME || {};
     for (var i = 0; i < st.hand.length; i++) if (st.hand[i].id === tileId) { idx = i; break; }
     if (idx < 0) return null;
     var tile = st.hand[idx];
+    if (side === 'left' && st.left.length >= st.caps.left) return null;
+    if (side === 'right' && st.right.length >= st.caps.right) return null;
     var end = st.ends[side];
     if (end == null) return null;
     var inner, outer;

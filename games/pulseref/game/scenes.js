@@ -541,7 +541,7 @@ window.GAME = window.GAME || {};
       this.prevBest = Meta.bestFor(this.stage);
       this.newBest = false;
       this.fxRng = new E.Rng((E.seedFromString('fx' + String(seed)) || 7) >>> 0);
-      E.audio.music(null);
+      E.audio.music('play');
       E.sdk.hideBanner();
       E.sdk.gameplayStart();
       this.layout(game);
@@ -759,6 +759,18 @@ window.GAME = window.GAME || {};
           self.leave(game, 'menu');
         });
         list.push(soundButton(14, 12));
+        // магазин прямо из паузы (код покупок уже был, но был недоступен в игре)
+        list.push(new E.ui.Button({
+          x: 66, y: 12, w: 44, h: 44,
+          bg: 'rgba(18,8,32,0.9)', border: 'rgba(162,148,201,0.35)',
+          icon: function (ctx, b) {
+            var cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+            ctx.strokeStyle = P.cream; ctx.lineWidth = 2;
+            E.ui.roundRect(ctx, cx - 9, cy - 3, 18, 13, 3); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx, cy - 3, 5, Math.PI, 0); ctx.stroke();
+          },
+          onTap: function () { E.audio.sfx('click'); self.openShop(game); }
+        }));
       } else if (this.mode === 'win') {
         var last = this.stage >= C.stages;
         add(last ? T('to_map') : T('next_song'), '#2a1450', P.green, '#eaffff', function () {
@@ -962,7 +974,7 @@ window.GAME = window.GAME || {};
       E.ui.text(ctx, T(SONG_NAME[this.stage]), pad, 37, Math.min(11, W * 0.031), P.dim, 'left', 500);
       var scX = W - (this.pauseBtn ? this.pauseBtn.w : 40) - 18;
       E.ui.text(ctx, String(st.score), scX, 20, Math.min(19, W * 0.049), P.gold, 'right', 800);
-      E.ui.text(ctx, T('score_label'), scX, 37, Math.min(9.5, W * 0.027), P.dim, 'right', 600);
+      E.ui.text(ctx, T('score_label'), scX, 37, 12, P.dim, 'right', 600);
 
       var p = L.progress(st);
       ctx.fillStyle = 'rgba(246,233,255,0.12)';
@@ -979,14 +991,14 @@ window.GAME = window.GAME || {};
       var rightW = Math.min(62, W * 0.16);
       var bx = Lt.x0 + labelW;
       var bw = Math.max(60, Lt.lanesW - labelW - rightW);
-      E.ui.text(ctx, T('pulse_label'), Lt.x0, by + 3, Math.min(9, W * 0.026), 'rgba(246,233,255,0.58)', 'left', 600);
+      E.ui.text(ctx, T('pulse_label'), Lt.x0, by + 3, 11.5, 'rgba(246,233,255,0.58)', 'left', 600);
       A.pulseBar(ctx, bx, by, bw, 6, st.pulse, this.t);
       if (st.shieldMax > 0) {
         E.ui.text(ctx, T('shield_label') + ' ' + st.shield, Lt.x0 + Lt.lanesW, by + 3,
-          Math.min(10, W * 0.028), P.cyan, 'right', 700);
+          11.5, P.cyan, 'right', 700);
       } else if (st.slowDur > 0 && st.clock < st.slowDur) {
         E.ui.text(ctx, T('slow_label'), Lt.x0 + Lt.lanesW, by + 3,
-          Math.min(9, W * 0.026), P.violet, 'right', 700);
+          11.5, P.violet, 'right', 700);
       }
       if (st.combo >= 5 && this.mode === 'running') {
         var cy = Lt.top + (Lt.hitY - Lt.top) * 0.22;

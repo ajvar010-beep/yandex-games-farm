@@ -1,0 +1,21 @@
+{
+  "variant": 109,
+  "landscape": [
+    { "name": "board_early", "q": "scene=play&wave=1&t=4&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "board_mid", "q": "scene=play&wave=5&t=6&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "board_late", "q": "scene=play&wave=9&t=8&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "board_final", "q": "scene=play&wave=12&t=10&freeze=1", "expect": { "scene": "play", "mode": "running" } }
+  ],
+  "portrait": [
+    { "name": "board_early", "q": "scene=play&wave=1&t=4&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "board_mid", "q": "scene=play&wave=5&t=6&freeze=1", "expect": { "scene": "play", "mode": "running" } },
+    { "name": "board_late", "q": "scene=play&wave=9&t=8&freeze=1", "expect": { "scene": "play", "mode": "running" } }
+  ],
+  "qa": [
+    { "name": "menu", "q": "scene=menu&freeze=1", "expect": { "scene": "menu" } },
+    { "name": "shop", "q": "scene=play&wave=5&mode=shop&freeze=1", "expect": { "scene": "play", "mode": "shop" } },
+    { "name": "win", "q": "scene=play&wave=4&mode=win&freeze=1", "expect": { "scene": "play", "mode": "win" } },
+    { "name": "gameover", "q": "scene=play&wave=6&mode=over&freeze=1", "expect": { "scene": "play", "mode": "over" } }
+  ],
+  "video": { "q": "autoplay=1&record=26&wave=5&seed=31", "seconds": 26 }
+}

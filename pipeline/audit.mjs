@@ -113,6 +113,16 @@ function auditI18n(game, issues) {
 }
 
 // ---------- медиа и пакет ----------
+// средняя яркость кадра: ffmpeg уменьшает до 8x8 и отдаёт 64 байта серого
+function frameMean(f) {
+  try {
+    const buf = execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-vf', 'scale=8:8:flags=area', '-f', 'rawvideo', '-pix_fmt', 'gray', '-'], { maxBuffer: 1 << 20 });
+    let sum = 0, dark = 0;
+    for (let i = 0; i < buf.length; i++) { sum += buf[i]; if (buf[i] < 12) dark++; }
+    return { mean: sum / buf.length, dark: dark / buf.length };
+  } catch (e) { return null; }
+}
+
 function pngSize(f) {
   const b = fs.readFileSync(f);
   return [b.readUInt32BE(16), b.readUInt32BE(20)];
@@ -162,6 +172,14 @@ function auditPackage(game, issues) {
     // скриншоты: ≥3 альбомных на язык
     const shots = fs.existsSync(media) ? fs.readdirSync(media).filter(f => f.startsWith('screenshot_landscape') && f.endsWith(`_${lang}.png`)) : [];
     if (shots.length < 3) fail(issues, 'media', `скриншотов landscape ${lang}: ${shots.length}`);
+    // чёрный/пустой кадр — медиа не показывает игру
+    if (lang === 'ru') {
+      for (const sh of shots) {
+        const st = frameMean(path.join(media, sh));
+        if (st && st.mean < 18) fail(issues, 'media', `${sh}: слишком тёмный кадр (яркость ${st.mean.toFixed(0)}/255)`);
+        else if (st && st.dark > 0.8) fail(issues, 'media', `${sh}: почти чёрный кадр (${Math.round(st.dark * 100)}% тёмных)`);
+      }
+    }
   }
   // тексты
   for (const [field, [min, max]] of Object.entries(TEXT_LIMITS)) {

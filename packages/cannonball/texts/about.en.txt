@@ -1,0 +1,5 @@
+Cannonball is a ballistics puzzle on a sunset firing range. The cannon sits on the left, the targets are on the right behind steel blocks. You drag away from the cannon: the direction sets the angle, the length of the drag sets the power. Let go and the ball flies an arc — gravity pulls it down, and blocks, range walls and even the ceiling bounce it on. A single ball can smash several targets at once.
+
+Fifteen ranges teach you to read the field: first an open target, then walls, narrow slits, hanging ledges and swinging targets. Each range gives you a limited number of balls, and losing is honest: you see where the ball went and which angle would have worked.
+
+Cleared ranges pay coins. The Armoury sells permanent upgrades: an ammo rack (+1 ball on every level), sighting (shows the flight arc while you aim) and a chronometer (slow-motion charges to watch the ricochet). Prices grow with every step. Ads are optional: double the reward, take a second chance, or watch for coins.

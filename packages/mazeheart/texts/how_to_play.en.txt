@@ -1,0 +1,7 @@
+1. Swipe anywhere on the maze or use the arrow keys: the orb steps one cell.
+2. Collect the three keys: they glow gold.
+3. The door opens once every key is with you, so head for it.
+4. Do not linger next to a warden: each one patrols a fixed route.
+5. Caught by a warden: one life gone, and the orb returns to your last key.
+6. Pause with the corner button or Escape; the shop and sound live there.
+7. Coins buy a starting map, a shield that takes one hit and an extra heart.

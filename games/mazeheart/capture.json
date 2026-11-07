@@ -1,0 +1,100 @@
+{
+  "variant": 108,
+  "landscape": [
+    {
+      "name": "maze_early",
+      "q": "scene=play&wave=1&seed=11&t=4&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "maze_mid",
+      "q": "scene=play&wave=5&seed=17&t=6&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "maze_late",
+      "q": "scene=play&wave=9&seed=23&t=11&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "maze_final",
+      "q": "scene=play&wave=12&seed=31&t=8&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    }
+  ],
+  "portrait": [
+    {
+      "name": "maze_early",
+      "q": "scene=play&wave=1&seed=11&t=4&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "maze_mid",
+      "q": "scene=play&wave=5&seed=17&t=6&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "maze_late",
+      "q": "scene=play&wave=9&seed=23&t=11&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    }
+  ],
+  "qa": [
+    {
+      "name": "menu",
+      "q": "scene=menu&freeze=1",
+      "expect": {
+        "scene": "menu"
+      }
+    },
+    {
+      "name": "shop",
+      "q": "scene=play&wave=5&coins=500&mode=shop&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "shop"
+      }
+    },
+    {
+      "name": "win",
+      "q": "scene=play&wave=4&mode=win&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "win"
+      }
+    },
+    {
+      "name": "over",
+      "q": "scene=play&wave=6&mode=over&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "over"
+      }
+    }
+  ],
+  "video": {
+    "q": "autoplay=1&record=26&wave=4&seed=31",
+    "seconds": 26
+  }
+}

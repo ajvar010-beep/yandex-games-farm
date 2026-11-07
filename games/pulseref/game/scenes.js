@@ -542,7 +542,7 @@ window.GAME = window.GAME || {};
       this.prevBest = Meta.bestFor(this.stage);
       this.newBest = false;
       this.fxRng = new E.Rng((E.seedFromString('fx' + String(seed)) || 7) >>> 0);
-      E.audio.music('play', this.st.bpm);
+      E.audio.music('play', this.st.info ? this.st.info.bpm : 0);
       E.sdk.hideBanner();
       E.sdk.gameplayStart();
       this.layout(game);
@@ -826,7 +826,7 @@ window.GAME = window.GAME || {};
     leave: function (game, to, params) {
       if (E.capture.active || this.autopilot) { game.setScene(to, params || {}); return; }
       var runs = Meta.runs();
-      var needAd = to === 'menu' && runs > 0 && runs % C.ads.interstitialEvery === 0;
+      var needAd = runs > 0 && runs % C.ads.interstitialEvery === 0;
       if (needAd) { E.sdk.showInterstitial(function () { game.setScene(to, params || {}); }); return; }
       game.setScene(to, params || {});
     },

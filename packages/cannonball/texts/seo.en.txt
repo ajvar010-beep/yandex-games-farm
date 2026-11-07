@@ -1,0 +1,1 @@
+Cannonball is a sunset-range ballistics puzzle: set the angle and power, fire an arcing shot with ricochets and smash every target. 15 ranges.

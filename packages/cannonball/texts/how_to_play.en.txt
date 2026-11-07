@@ -1,0 +1,7 @@
+1. Drag your finger (or the mouse) away from the cannon toward the target: the direction sets the angle, the length sets the power.
+2. Release and the ball flies an arc. Gravity pulls it down; steel blocks and the range walls bounce it on.
+3. Smash every target before your balls run out. Swinging targets keep moving — aim ahead of them.
+4. One ball can smash several targets in a row: plan the path and the ricochets.
+5. The Slow button in the corner slows the flight down; charges are shown on the button.
+6. Cleared ranges pay coins; the Armoury sells ammo, sighting and slow motion, and prices grow with each step.
+7. On a keyboard: arrows aim, Space fires, Esc pauses.

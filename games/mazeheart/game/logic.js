@@ -345,7 +345,7 @@ window.GAME = window.GAME || {};
     }
     st.lives--;
     st.guards[gi].alert = 0.6;
-    st.events.push({ t: 'caught', gi: gi, lives: st.lives });
+    st.events.push({ t: 'caught', gi: gi, lives: st.lives, cell: st.ball.cell });
     if (st.lives <= 0) {
       st.phase = 'over';
       st.events.push({ t: 'over' });

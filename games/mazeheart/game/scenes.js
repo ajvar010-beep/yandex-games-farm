@@ -158,6 +158,7 @@ window.GAME = window.GAME || {};
       this.game = game;
       this.t = 0;
       this.buttons = [];
+      this.levelSel = false;
       E.fx.reset();
       E.audio.music('menu');
       E.sdk.showBanner();
@@ -205,6 +206,7 @@ window.GAME = window.GAME || {};
       var M = this.menuLayout(v);
       var that = this;
       var list = [];
+      if (this.levelSel) { this.buildLevels(game); return; }
       list.push(new E.ui.Button({
         x: W / 2 - M.bw / 2, y: M.playY, w: M.bw, h: M.bh, text: T('play'),
         bg: '#1f4a36', border: P.gold, fg: P.cream, fontSize: Math.round(M.bh * 0.36),
@@ -222,17 +224,83 @@ window.GAME = window.GAME || {};
           game.setScene('play', { level: Meta.level(), shop: true });
         }
       }));
+      list.push(new E.ui.Button({
+        x: W / 2 - 70, y: H - 58 - (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0), w: 140, h: 40,
+        text: T('levels'), bg: 'rgba(16,28,22,0.82)', border: 'rgba(243,210,100,0.35)', fg: P.cream,
+        fontSize: 15,
+        onTap: function () { E.audio.sfx('click'); that.levelSel = true; that.build(game); }
+      }));
       list.push(soundButton(W - 54, 12, 42, 40));
       list.push(langButton(W - 102, 12, 42, 40, function () { that.build(game); }));
       this.buttons = list;
       this.M = M;
     },
 
+    buildLevels: function (game) {
+      var v = game.view, W = v.w, H = v.h, self = this;
+      var M = this.menuLayout(v);
+      var cols = W > H * 1.2 ? 6 : 4;
+      var rows = Math.ceil(C.finalLevel / cols);
+      var bottom = H - 74 - (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0);
+      var gap = 8;
+      var tw = Math.min(96, (Math.min(W, 560) - 40 - (cols - 1) * gap) / cols);
+      var availH = bottom - 70;
+      var th = Math.min(92, Math.max(52, (availH - (rows - 1) * gap) / rows));
+      var blockH = rows * th + (rows - 1) * gap;
+      var top = Math.max(70, (bottom + 70 - blockH) / 2);
+      var x0 = (W - (cols * tw + (cols - 1) * gap)) / 2;
+      var list = [];
+      this.levelRects = [];
+      for (var i = 0; i < C.finalLevel; i++) {
+        (function (n) {
+          var c = i % cols, r = Math.floor(i / cols);
+          var x = x0 + c * (tw + gap), y = top + r * (th + gap);
+          self.levelRects.push({ x: x, y: y, w: tw, h: th, n: n });
+          list.push(new E.ui.Button({
+            x: x, y: y, w: tw, h: th, bg: 'rgba(0,0,0,0)', border: 'rgba(0,0,0,0)',
+            icon: function (ctx, b) { self._drawLevelTile(ctx, b, n); },
+            onTap: function () {
+              if (n > Meta.level()) { E.audio.sfx('deny'); return; }
+              E.audio.sfx('click');
+              game.setScene('play', { level: n });
+            }
+          }));
+        })(i + 1);
+      }
+      list.push(new E.ui.Button({
+        x: W / 2 - 70, y: H - 58 - (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0), w: 140, h: 40,
+        text: T('back'), bg: 'rgba(16,28,22,0.86)', border: 'rgba(243,210,100,0.35)', fg: P.cream,
+        fontSize: 15,
+        onTap: function () { E.audio.sfx('click'); self.levelSel = false; self.build(game); }
+      }));
+      this.buttons = list;
+      this.M = M;
+    },
+    _drawLevelTile: function (ctx, b, n) {
+      var locked = n > Meta.level();
+      var done = n <= Meta.best();
+      var cur = n === Meta.level();
+      E.ui.roundRect(ctx, b.x, b.y, b.w, b.h, 12);
+      ctx.fillStyle = locked ? 'rgba(16,28,22,0.9)' : (done ? 'rgba(31,74,54,0.95)' : 'rgba(24,40,32,0.92)');
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = locked ? 'rgba(120,140,125,0.25)' : (cur ? P.gold : 'rgba(243,210,100,0.35)');
+      ctx.stroke();
+      E.ui.text(ctx, String(n), b.x + b.w / 2, b.y + b.h * 0.44, Math.min(b.h * 0.42, b.w * 0.5),
+        locked ? 'rgba(160,180,165,0.4)' : P.cream, 'center', 800);
+      if (locked) {
+        ctx.strokeStyle = 'rgba(160,180,165,0.45)'; ctx.lineWidth = 2;
+        ctx.strokeRect(b.x + b.w * 0.38, b.y + b.h * 0.64, b.w * 0.24, b.h * 0.17);
+        ctx.beginPath(); ctx.arc(b.x + b.w * 0.5, b.y + b.h * 0.64, b.w * 0.09, Math.PI, 0); ctx.stroke();
+      } else if (done) {
+        E.ui.text(ctx, '★', b.x + b.w * 0.5, b.y + b.h * 0.80, Math.min(14, b.w * 0.2), P.gold, 'center', 700);
+      }
+    },
     update: function (game, dt) {
       this.t += dt;
       var Ptr = E.input.pointer;
       if (Ptr.pressed) E.ui.handleTap(this.buttons, Ptr.x, Ptr.y);
-      if (E.input.wasPressed('Enter') || E.input.wasPressed('Space')) {
+      if (!this.levelSel && (E.input.wasPressed('Enter') || E.input.wasPressed('Space'))) {
         game.setScene('play', { level: Meta.level() });
       }
     },
@@ -246,6 +314,13 @@ window.GAME = window.GAME || {};
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       A.fog(ctx, W, H, t, 3, 0.05);
+      if (this.levelSel) {
+        ctx.fillStyle = 'rgba(6,12,9,0.9)'; ctx.fillRect(0, 0, W, H);
+        E.ui.text(ctx, T('levels'), W / 2, Math.max(34, H * 0.075), Math.min(W * 0.08, 30), P.gold, 'center', 800);
+        E.ui.drawButtons(ctx, this.buttons);
+        coinsBadge(ctx, 10, 12, Meta.coins());
+        return;
+      }
 
       var M = this.M || this.menuLayout(game.view);
       /* медальон */
@@ -818,7 +893,7 @@ window.GAME = window.GAME || {};
           E.audio.sfx('hit');
           E.audio.sfx('core');
           E.fx.shake(Math.min(14, this.cs * 0.25), 0.35);
-          this.burst(this.st.ball.cell, P.danger, 16);
+          this.burst(ev.cell != null ? ev.cell : this.st.ball.cell, P.danger, 16);
           this.toastMsg(T('caught'), 1.6);
         } else if (ev.t === 'shield') {
           E.audio.sfx('pulse');

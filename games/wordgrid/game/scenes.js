@@ -25,6 +25,8 @@ window.GAME = window.GAME || {};
     best: function () { return Math.max(0, E.storage.get('best', 0) | 0); },
     setBest: function (n) { if ((n | 0) > Save.best()) E.storage.set('best', n | 0); },
     bought: function (key) { return Math.max(0, E.storage.get('buy_' + key, 0) | 0); },
+    noAds: function () { return !!E.storage.get('no_ads', false); },
+    setNoAds: function () { E.storage.set('no_ads', true); },
     addBought: function (key) { E.storage.set('buy_' + key, Save.bought(key) + 1); }
   };
 
@@ -50,7 +52,14 @@ window.GAME = window.GAME || {};
     enter: function (game) {
       E.audio.music('menu');
       E.sdk.gameplayStop();
-      E.sdk.showBanner();
+      if (!Save.noAds()) E.sdk.showBanner(); else E.sdk.hideBanner();
+      E.sdk.initPayments().then(function () {
+        E.sdk.getPurchases(function (list) {
+          for (var pi = 0; pi < (list ? list.length : 0); pi++) {
+            if (list[pi] && list[pi].productId === 'no_ads') { Save.setNoAds(); E.sdk.hideBanner(); break; }
+          }
+        });
+      });
       this.t = 0;
       this.menuLevel = Save.level();
       this.best = Save.best();
@@ -462,11 +471,15 @@ window.GAME = window.GAME || {};
     },
 
     shopItems: function () {
-      return [
+      var items = [
         { id: 'hint', name: T('item_hint'), desc: T('item_hint_d'), price: L.price(C.economy.hintPrice, Save.bought('hint')), icon: 'bulb' },
         { id: 'shuffle', name: T('item_shuffle'), desc: T('item_shuffle_d'), price: L.price(C.economy.shufflePrice, Save.bought('shuffle')), icon: 'shuffle' },
         { id: 'time', name: T('item_time'), desc: T('item_time_d'), price: L.price(C.economy.timePrice, Save.bought('time')), icon: 'clock' }
       ];
+      if (!Save.noAds()) {
+        items.push({ id: 'no_ads', name: T('item_no_ads'), desc: T('item_no_ads_d'), price: 0, iap: true, icon: 'noAds' });
+      }
+      return items;
     },
 
     buildShop: function (game) {
@@ -502,7 +515,22 @@ window.GAME = window.GAME || {};
               var c2 = b.x + b.h / 2 + 2, cy2 = b.y + b.h / 2;
               if (it.icon === 'bulb') A.iconBulb(ctx, c2, cy2, b.h * 0.56, P.ink);
               else if (it.icon === 'shuffle') A.iconShuffle(ctx, c2, cy2 + 2, b.h * 0.56, P.ink);
-              else A.iconClock(ctx, c2, cy2, b.h * 0.56, P.ink);
+              else if (it.icon === 'clock') A.iconClock(ctx, c2, cy2, b.h * 0.56, P.ink);
+              else {
+                ctx.save();
+                ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink;
+                ctx.lineWidth = Math.max(1.5, b.h * 0.055);
+                var aw = b.h * 0.42, ah = b.h * 0.28;
+                ctx.strokeRect(c2 - aw / 2, cy2 - ah / 2, aw, ah);
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = '700 ' + Math.round(b.h * 0.17) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+                ctx.fillText('AD', c2, cy2 + 1);
+                ctx.beginPath();
+                ctx.moveTo(c2 - aw * 0.66, cy2 + ah * 0.74);
+                ctx.lineTo(c2 + aw * 0.66, cy2 - ah * 0.74);
+                ctx.stroke();
+                ctx.restore();
+              }
               ctx.textAlign = 'left';
               ctx.textBaseline = 'middle';
               ctx.fillStyle = P.ink;
@@ -514,13 +542,20 @@ window.GAME = window.GAME || {};
               E.ui.fit(ctx, it.desc, Math.max(60, descW), Math.max(12, Math.round(b.h * 0.2)), 400);
               ctx.fillText(it.desc, c2 + b.h * 0.52, cy2 + b.h * 0.18);
               // цена
-              var pr = String(it.price);
-              ctx.font = '700 ' + Math.round(b.h * 0.26) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-              var pw = ctx.measureText(pr).width;
-              A.coin(ctx, b.x + b.w - 18 - pw - 12, cy2, b.h * 0.15);
-              ctx.textAlign = 'right';
-              ctx.fillStyle = afford ? P.accent2 : P.bad;
-              ctx.fillText(pr, b.x + b.w - 14, cy2 + 1);
+              if (it.iap) {
+                ctx.textAlign = 'right';
+                ctx.fillStyle = P.accent2;
+                ctx.font = '700 ' + Math.round(b.h * 0.23) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+                ctx.fillText(T('item_no_ads_price'), b.x + b.w - 14, cy2 + 1);
+              } else {
+                var pr = String(it.price);
+                ctx.font = '700 ' + Math.round(b.h * 0.26) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+                var pw = ctx.measureText(pr).width;
+                A.coin(ctx, b.x + b.w - 18 - pw - 12, cy2, b.h * 0.15);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = afford ? P.accent2 : P.bad;
+                ctx.fillText(pr, b.x + b.w - 14, cy2 + 1);
+              }
             },
             onTap: function () { self.buy(game, it); }
           }));
@@ -549,6 +584,20 @@ window.GAME = window.GAME || {};
     },
 
     buy: function (game, it) {
+      if (it.id === 'no_ads') {
+        var self = this;
+        E.sdk.purchase('no_ads', function () {
+          Save.setNoAds();
+          E.sdk.hideBanner();
+          E.audio.sfx('coin');
+          self.toast = { text: T('item_no_ads_owned'), t: 1.9, color: P.accent2 };
+          self.buildOver(game);
+        }, function () {
+          E.audio.sfx('deny');
+          self.toast = { text: T('iap_fail'), t: 1.6, color: P.bad };
+        });
+        return;
+      }
       if (this.coins < it.price) {
         E.audio.sfx('deny');
         this.toast = { text: T('not_enough'), t: 1.4, color: P.bad };
@@ -650,7 +699,7 @@ window.GAME = window.GAME || {};
       var self = this;
       var next = this.level + 1;
       var go = function () { game.setScene('play', { level: next }); };
-      if (!this.captureMode && !this.autopilot && this.level % C.ads.interstitialEvery === 0) {
+      if (!this.captureMode && !this.autopilot && !Save.noAds() && this.level % C.ads.interstitialEvery === 0) {
         E.sdk.showInterstitial(function () { go(); });
       } else {
         go();

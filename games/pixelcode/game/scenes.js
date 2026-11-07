@@ -241,7 +241,7 @@ window.GAME = window.GAME || {};
       dim(ctx, W, H, 0.78);
       var panel = { x: Q.px, y: Q.py, w: Q.panelW, h: Q.panelH };
       E.ui.roundRect(ctx, panel.x, panel.y, panel.w, panel.h, 16);
-      ctx.fillStyle = 'rgba(22,13,44,0.97)'; ctx.fill();
+      ctx.fillStyle = '#160d2c'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(168,85,247,0.45)'; ctx.stroke();
       E.ui.text(ctx, T('level_sel_title'), W / 2, Q.py + 32, Math.min(W * 0.06, 24), P.cyanHi, 'center', 800);
       for (var i = 0; i < this.levelRects.length; i++) {
@@ -267,7 +267,7 @@ window.GAME = window.GAME || {};
       var pw = Math.min(W - 28, 430), ph = Math.min((H - banner) - 40, 380);
       var px = (W - pw) / 2, py = ((H - banner) - ph) / 2;
       E.ui.roundRect(ctx, px, py, pw, ph, 16);
-      ctx.fillStyle = 'rgba(22,13,44,0.98)'; ctx.fill();
+      ctx.fillStyle = '#160d2c'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(168,85,247,0.5)'; ctx.stroke();
       E.ui.text(ctx, T('rules_title'), W / 2, py + 30, Math.min(W * 0.062, 24), P.cyanHi, 'center', 800);
       var size = Math.min(W * 0.036, 15);
@@ -392,6 +392,8 @@ window.GAME = window.GAME || {};
       this.autopilot = !!(E.capture.autoplay || E.capture.record > 0);
       this.captureMode = !!(E.capture && E.capture.active);
       this.recordSafe = this.autopilot || this.captureMode;
+      // первый interstitial — не раньше 60 с от старта сессии (правило площадки)
+      if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       var lv = parseInt(params.level != null ? params.level : (cp.wave != null ? cp.wave : Meta.level()), 10);
       this.level = clamp(lv || 1, 1, TOTAL);
       var def = C.levels[this.level - 1];
@@ -1092,7 +1094,7 @@ window.GAME = window.GAME || {};
       if (!p) return;
       dim(ctx, this.L.W, this.L.H, alpha);
       E.ui.roundRect(ctx, p.x, p.y, p.w, p.h, 16);
-      ctx.fillStyle = 'rgba(22,13,44,0.97)'; ctx.fill();
+      ctx.fillStyle = '#160d2c'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(168,85,247,0.5)'; ctx.stroke();
     },
 
@@ -1146,10 +1148,10 @@ window.GAME = window.GAME || {};
 
     drawShop: function (ctx) {
       var Lg = this.L, W = Lg.W, H = Lg.H, p = this.shopPanel;
-      dim(ctx, W, H, 0.8);
+      dim(ctx, W, H, 0.88);
       if (!p) { E.ui.drawButtons(ctx, this.shopButtons); return; }
       E.ui.roundRect(ctx, p.x, p.y, p.w, p.h, 16);
-      ctx.fillStyle = 'rgba(22,13,44,0.98)'; ctx.fill();
+      ctx.fillStyle = '#160d2c'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(94,234,212,0.45)'; ctx.stroke();
       E.ui.text(ctx, T('shop_title'), p.x + 20, p.y + 28, Math.min(W * 0.062, 22), P.cyanHi, 'left', 800);
       var cw = 100;

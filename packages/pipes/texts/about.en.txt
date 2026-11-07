@@ -1,0 +1,5 @@
+Pipe Flow is a calm rotating puzzle set inside a steampunk waterworks. Copper tiles lie on a grid: straights and elbows, and from level nine T-junctions and crosses as well. A tap waits on the left, a drain on the right: tap any tile to turn it 90 degrees and make the water run the whole way through.
+
+Every turn costs a move, and each level gives you a strict limit, so it pays to read the route instead of tapping at random. When the water reaches the drain the pipes light up turquoise, steam hisses from the open ends, and moves you save at the end turn into coins.
+
+Fifteen rooms grow from 5×5 to 8×8. From level nine a second tap opens: both routes merge into a junction, and both must reach the drain. The shop sells a hint for one tile, five extra moves and a fifteen-second freeze on the move counter. Prices rise with each purchase, but a hint is never required: every level can be solved without the shop.

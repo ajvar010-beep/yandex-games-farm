@@ -1,0 +1,5 @@
+Maze Heart is an escape puzzle set in mossy catacombs. You steer a glowing orb through stone corridors, collect three keys and reach the door that holds the heart of the maze. Stone wardens patrol the halls on their own fixed routes, and running into one costs a life.
+
+Twelve mazes grow from 7×7 to 12×12: more openings, more wardens, longer routes. Every cleared maze pays coins, and the keeper's shop sells a starting map, a charm that absorbs one hit and an extra heart.
+
+One movement to learn: swipe anywhere or use the arrow keys and the orb steps one cell. Three lives, a checkpoint at every key you find and a shield hit leave room to make mistakes.

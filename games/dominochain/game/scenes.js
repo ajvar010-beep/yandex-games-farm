@@ -770,6 +770,8 @@ window.GAME = window.GAME || {};
             E.sdk.showRewarded({
               onReward: function () {
                 self.reviveUsed = true;
+                self.stuckRescue = false;
+                self.stuckT = 0;
                 self.st.hearts = Math.max(2, C.hearts - 1);
                 self.st.draws += 4;
                 self.st.phase = 'play';
@@ -988,6 +990,14 @@ window.GAME = window.GAME || {};
       }
 
       if (this.mode === 'running' && this.st.phase === 'play' && L.stuck(this.st)) {
+        if (!this.stuckRescue) {
+          this.stuckRescue = true;
+          if (L.rescue(this.st)) {
+            this.toast = { t: 1.9, text: T('reshuffled') };
+            E.audio.sfx('shuffle');
+            return;
+          }
+        }
         this.stuckT = (this.stuckT || 0) + dt;
         if (this.stuckT > 0.9) { this.stuckT = 0; this.onLose(game, false); return; }
       } else this.stuckT = 0;

@@ -117,7 +117,9 @@ window.GAME = window.GAME || {};
           if ((sd.left && st.left.length < st.caps.left) || (sd.right && st.right.length < st.caps.right)) { swap = si2; break; }
         }
         if (swap < 0) break;
+        var oldT = st.hand[st.hand.length - 1];
         st.hand[st.hand.length - 1] = st.stock.splice(swap, 1)[0];
+        st.stock.push(oldT);
       }
     }
     return st;
@@ -151,6 +153,34 @@ window.GAME = window.GAME || {};
   L.blocked = function (st) {
     if (st.phase !== 'play') return false;
     return L.playable(st).length === 0;
+  };
+
+  /* Спасение из тупика: рука возвращается в колоду, тасуется и раздаётся заново.
+     Бесплатный шанс на уровень; если хода всё равно нет — честное поражение. */
+  L.rescue = function (st) {
+    if (!st || st.phase !== 'play') return false;
+    st.stock = st.stock.concat(st.hand || []);
+    st.hand = [];
+    L.shuffle(st.stock, st.rng);
+    var maxHand = C.hand.max;
+    while (st.hand.length < maxHand && st.stock.length) st.hand.push(st.stock.shift());
+    for (var guard = 0; guard < 40; guard++) {
+      if (L.playable(st).length || !st.stock.length) break;
+      if (st.hand.length < maxHand) {
+        st.hand.push(st.stock.shift());
+      } else {
+        var swap = -1;
+        for (var si = 0; si < st.stock.length; si++) {
+          var sd = L.sides(st, st.stock[si]);
+          if ((sd.left && st.left.length < st.caps.left) || (sd.right && st.right.length < st.caps.right)) { swap = si; break; }
+        }
+        if (swap < 0) break;
+        var oldT = st.hand[st.hand.length - 1];
+        st.hand[st.hand.length - 1] = st.stock.splice(swap, 1)[0];
+        st.stock.push(oldT);
+      }
+    }
+    return L.playable(st).length > 0;
   };
 
   L.stuck = function (st) {

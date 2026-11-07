@@ -1,0 +1,1 @@
+A brass sliding puzzle: 12 boards, par moves, engraved tiles.

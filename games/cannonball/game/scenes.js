@@ -622,7 +622,7 @@ window.GAME = window.GAME || {};
         E.sdk.gameplayStop();
         this.buildEnd(game);
       } else if (!on && this.mode === 'paused') {
-        this.mode = this.pausePrev === 'shop' ? 'running' : 'running';
+        this.mode = 'running';
         E.sdk.gameplayStart();
         this.buildEnd(game);
       }
@@ -791,7 +791,8 @@ window.GAME = window.GAME || {};
         }
         if (Ptr.released) {
           var d = this.drag; this.drag = null;
-          if (d.power > 0.07) this.fire(game, d.angle, d.power);
+          // короткий тап без прицела не должен стоить ядра
+          if (d.power > 0.18) this.fire(game, d.angle, d.power);
         }
       }
       // клавиатура: стрелки наводят, пробел стреляет

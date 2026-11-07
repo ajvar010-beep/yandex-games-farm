@@ -1,0 +1,5 @@
+Pin Drop is a calm physics puzzle set in a steel workshop. Steel balls drop from a hopper one at a time and bounce off pins on their way to three brass cups. Tap a pin and it pops out with a clang, so the next balls take a different path.
+
+Fifteen levels keep adding one twist at a time: a second hopper, bars over the cups, long chutes. Some cups want two balls, some want three. A mistake never ends the run at once: balls keep coming, and you can always restart the level.
+
+Cleared levels pay coins. In the workshop you spend them on extra ball stock, a brake that slows the balls, and pliers that pull the right pin for you. Your progress and best level are saved.

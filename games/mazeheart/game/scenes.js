@@ -158,7 +158,7 @@ window.GAME = window.GAME || {};
       this.game = game;
       this.t = 0;
       this.buttons = [];
-      this.levelSel = false;
+      this.levelSel = !!(E.capture && E.capture.active && E.capture.params && E.capture.params.levels);
       E.fx.reset();
       E.audio.music('menu');
       E.sdk.showBanner();
@@ -413,6 +413,8 @@ window.GAME = window.GAME || {};
       var cp = (E.capture && E.capture.params) || {};
       this.game = game;
       this.captureMode = !!(E.capture && E.capture.active);
+      // стартовая метка рекламы: кулдаун 60 с считается от входа в игру
+      if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       this.autopilot = !!(E.capture.autoplay || (E.capture.record > 0));
       this.seedBase = (E.capture.seed != null) ? E.capture.seed : 31;
       this.mode = 'running';

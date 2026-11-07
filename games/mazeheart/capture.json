@@ -91,6 +91,13 @@
         "scene": "play",
         "mode": "over"
       }
+    },
+    {
+      "name": "levels",
+      "q": "scene=menu&levels=1&freeze=1",
+      "expect": {
+        "scene": "menu"
+      }
     }
   ],
   "video": {

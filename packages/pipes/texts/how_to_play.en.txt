@@ -1,0 +1,7 @@
+1. Tap a copper pipe to turn it 90 degrees clockwise.
+2. Join the tap on the left to the drain on the right: the water must cross the whole chain.
+3. Every turn costs a move. Run out of moves and the level fails.
+4. The more moves you save, the more coins you earn.
+5. A shop hint turns one wrong pipe the right way and costs no move.
+6. A fifteen-second freeze lets you turn pipes for free.
+7. From level nine there are two taps: a junction must link both routes to the drain.

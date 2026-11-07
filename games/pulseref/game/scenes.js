@@ -991,14 +991,14 @@ window.GAME = window.GAME || {};
       var rightW = Math.min(62, W * 0.16);
       var bx = Lt.x0 + labelW;
       var bw = Math.max(60, Lt.lanesW - labelW - rightW);
-      E.ui.text(ctx, T('pulse_label'), Lt.x0, by + 3, 11.5, 'rgba(246,233,255,0.58)', 'left', 600);
+      E.ui.text(ctx, T('pulse_label'), Lt.x0, by + 3, 12, 'rgba(246,233,255,0.58)', 'left', 600);
       A.pulseBar(ctx, bx, by, bw, 6, st.pulse, this.t);
       if (st.shieldMax > 0) {
         E.ui.text(ctx, T('shield_label') + ' ' + st.shield, Lt.x0 + Lt.lanesW, by + 3,
-          11.5, P.cyan, 'right', 700);
+          12, P.cyan, 'right', 700);
       } else if (st.slowDur > 0 && st.clock < st.slowDur) {
-        E.ui.text(ctx, T('slow_label'), Lt.x0 + Lt.lanesW, by + 3,
-          11.5, P.violet, 'right', 700);
+        E.ui.text(ctx, T('slow_hud'), Lt.x0 + Lt.lanesW, by + 3,
+          12, P.violet, 'right', 700);
       }
       if (st.combo >= 5 && this.mode === 'running') {
         var cy = Lt.top + (Lt.hitY - Lt.top) * 0.22;
@@ -1006,7 +1006,7 @@ window.GAME = window.GAME || {};
         ctx.globalAlpha = 0.92;
         E.ui.text(ctx, String(st.combo), W / 2, cy, Math.min(40, Lt.laneW * 0.52), '#ffffff', 'center', 800);
         E.ui.text(ctx, '×' + Math.round(L.comboMult(st) * 10) / 10, W / 2,
-          cy + Math.min(24, Lt.laneW * 0.26), Math.min(13, W * 0.03), P.gold, 'center', 700);
+          cy + Math.min(24, Lt.laneW * 0.26), Math.min(14, W * 0.035), P.gold, 'center', 700);
         ctx.restore();
       }
     },

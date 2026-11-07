@@ -448,15 +448,16 @@ window.GAME = window.GAME || {};
 
     /* ---------- магазин ---------- */
     openShop: function (game) {
+      this.shopFrom = this.mode === 'paused' ? 'paused' : 'running';
       this.panel = 'shop';
       this.mode = 'shop';
       E.sdk.gameplayStop();
       this.buildOver(game);
     },
     closeShop: function (game) {
-      this.mode = 'running';
+      this.mode = this.shopFrom === 'paused' ? 'paused' : 'running';
       this.panel = '';
-      E.sdk.gameplayStart();
+      if (this.mode === 'running') E.sdk.gameplayStart(); else E.sdk.gameplayStop();
       this.buildOver(game);
     },
 

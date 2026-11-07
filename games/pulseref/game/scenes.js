@@ -534,6 +534,7 @@ window.GAME = window.GAME || {};
       this.endButtons = [];
       this.result = null;
       this.reward = 0; this.doubled = false; this.reviveUsed = false;
+      this.coinsGranted = 0; this.runCounted = false;
       this.captureMode = false;
       this.shop = null;
       this.lastBeat = -1;
@@ -541,7 +542,7 @@ window.GAME = window.GAME || {};
       this.prevBest = Meta.bestFor(this.stage);
       this.newBest = false;
       this.fxRng = new E.Rng((E.seedFromString('fx' + String(seed)) || 7) >>> 0);
-      E.audio.music('play');
+      E.audio.music('play', this.st.bpm);
       E.sdk.hideBanner();
       E.sdk.gameplayStart();
       this.layout(game);
@@ -703,9 +704,11 @@ window.GAME = window.GAME || {};
       this.reward = st.coinsEarned;
       this.newBest = st.score > this.prevBest;
       if (!this.captureMode && !E.capture.active) {
-        Meta.addCoins(this.reward);
+        // ревайв не должен начислять те же монеты и забег второй раз
+        var grant = Math.max(0, this.reward - (this.coinsGranted || 0));
+        if (grant > 0) { Meta.addCoins(grant); this.coinsGranted = (this.coinsGranted || 0) + grant; }
         Meta.setBest(this.stage, st.score);
-        Meta.addRun();
+        if (!this.runCounted) { this.runCounted = true; Meta.addRun(); }
         if (win) {
           Meta.setRank(this.stage, st.rank);
           Meta.setStage(Math.max(Meta.stage(), Math.min(C.stages, this.stage + 1)));
@@ -971,7 +974,7 @@ window.GAME = window.GAME || {};
       var Lt = this.Lt, st = this.st, W = Lt.W;
       var pad = 10;
       E.ui.text(ctx, T('stage_n', { n: this.stage }), pad, 20, Math.min(15, W * 0.04), P.cream, 'left', 700);
-      E.ui.text(ctx, T(SONG_NAME[this.stage]), pad, 37, Math.min(11, W * 0.031), P.dim, 'left', 500);
+      E.ui.text(ctx, T(SONG_NAME[this.stage]), pad, 37, Math.min(12.5, W * 0.034), P.dim, 'left', 500);
       var scX = W - (this.pauseBtn ? this.pauseBtn.w : 40) - 18;
       E.ui.text(ctx, String(st.score), scX, 20, Math.min(19, W * 0.049), P.gold, 'right', 800);
       E.ui.text(ctx, T('score_label'), scX, 37, 12, P.dim, 'right', 600);

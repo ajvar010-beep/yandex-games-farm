@@ -6,7 +6,7 @@ window.Engine = window.Engine || {};
   'use strict';
   var ctx = null, master = null, musicGain = null;
   var muted = false, adSuspended = false;
-  var musicName = null, musicTimer = 0, nextNoteTime = 0, noteIdx = 0;
+  var musicName = null, musicTimer = 0, nextNoteTime = 0, noteIdx = 0, musicBpm = 0;
   var A = {};
 
   function createCtx() {
@@ -109,7 +109,8 @@ window.Engine = window.Engine || {};
   function scheduleMusic() {
     if (!ctx || !musicName || muted || adSuspended || ctx.state !== 'running') return;
     var p = PATTERNS[musicName]; if (!p) return;
-    var spb = 60 / p.bpm / 2;
+    var bpm = musicBpm || p.bpm;
+    var spb = 60 / bpm / 2;
     while (nextNoteTime < ctx.currentTime + 0.25) {
       var deg = p.steps[noteIdx % p.steps.length];
       var semis = SCALE[deg % SCALE.length] + 12 * Math.floor(deg / SCALE.length);
@@ -133,9 +134,10 @@ window.Engine = window.Engine || {};
   }
   function stopMusicTimer() { if (musicTimer) { clearInterval(musicTimer); musicTimer = 0; } }
 
-  A.music = function (name) {
-    if (musicName === name) return;
-    musicName = name; noteIdx = 0;
+  A.music = function (name, bpm) {
+    var nb = bpm > 0 ? bpm : 0;
+    if (musicName === name) { if (nb && nb !== musicBpm) musicBpm = nb; return; }
+    musicName = name; musicBpm = nb; noteIdx = 0;
     stopMusicTimer();
     if (name && ctx && !adSuspended) startMusicTimer();
   };

@@ -1017,7 +1017,7 @@ window.GAME = window.GAME || {};
 
       // табличка уровня: на узком экране — короткая форма «12 · Тема»
       var lvlText = T('hud_level', { n: this.level, t: T(this.theme.name) });
-      var maxTagW = Math.min(coinX - 44, W * 0.62);
+      var maxTagW = Math.min(coinX - 68, W * 0.58);
       ctx.font = '700 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
       var tw = ctx.measureText(lvlText).width;
       var tw2 = Math.min(tw + 22, maxTagW);

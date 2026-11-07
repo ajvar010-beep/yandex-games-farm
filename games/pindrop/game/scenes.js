@@ -374,7 +374,8 @@ window.GAME = window.GAME || {};
     },
     closeShop: function () {
       this.shopOpen = false;
-      if (this.mode === 'shop') this.mode = 'paused';
+      this.mode = this.shopFrom === 'paused' ? 'paused' : 'running';
+      if (this.mode === 'running') E.sdk.gameplayStart(); else E.sdk.gameplayStop();
       if (this.mode === 'paused') this.buildEnd(this.game);
     },
 
@@ -427,17 +428,17 @@ window.GAME = window.GAME || {};
           bg: 'rgba(20,17,13,0.9)', border: 'rgba(201,162,74,0.40)',
           icon: function (ctx, b) {
             iconFn(ctx, b);
-            E.ui.text(ctx, label, b.x + b.w / 2, b.y + b.h - 8, Math.max(10, Math.min(12, b.w * 0.2)), 'rgba(243,231,201,0.72)', 'center', 600);
+            E.ui.text(ctx, label, b.x + b.w / 2, b.y + b.h - 8, Math.max(10.5, Math.min(12, b.w * 0.22)), 'rgba(243,231,201,0.78)', 'center', 600);
           },
           onTap: function () { self.useBooster(id, game); }
         });
       };
       this.boost = [
-        mk(0, function (ctx, b) { A.clock(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.24, P.amberHi); countTag(ctx, b, self.st.slowLeft); }, 'slow', T('shop_slow')),
-        mk(1, function (ctx, b) { A.pliers(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.28, P.steelHi); countTag(ctx, b, self.st.pliersLeft); }, 'pliers', T('shop_pliers')),
+        mk(0, function (ctx, b) { A.clock(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.24, P.amberHi); countTag(ctx, b, self.st.slowLeft); }, 'slow', T('boost_slow')),
+        mk(1, function (ctx, b) { A.pliers(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.28, P.steelHi); countTag(ctx, b, self.st.pliersLeft); }, 'pliers', T('boost_pliers')),
         mk(2, function (ctx, b) {
           A.wrench(ctx, b.x + b.w / 2, b.y + b.h / 2 - 6, b.w * 0.24, P.brass);
-        }, 'shop', T('shop'))
+        }, 'shop', T('boost_shop'))
       ];
       this.buttons = this.buttons.concat(this.boost);
     },
@@ -446,13 +447,13 @@ window.GAME = window.GAME || {};
       if (id === 'shop') { this.openShop(game); return; }
       if (id === 'slow') {
         if (L.slow(this.st)) { E.audio.sfx('pulse'); E.fx.flash('#ffd47a', 0.12); }
-        else { this.openShop(game); }
+        else { this.toastT(T('boost_busy')); E.audio.sfx('deny'); }
         return;
       }
       if (id === 'pliers') {
         var i = L.pliers(this.st);
         if (i >= 0) { E.audio.sfx('click'); }
-        else this.openShop(game);
+        else { this.toastT(T('boost_busy')); E.audio.sfx('deny'); }
       }
     },
 
@@ -555,6 +556,7 @@ window.GAME = window.GAME || {};
 
     openShop: function (game) {
       if (!this.st) return;
+      this.shopFrom = this.mode === 'paused' ? 'paused' : 'running';
       this.mode = 'shop';
       this.shopOpen = true;
       E.sdk.gameplayStop();
@@ -914,7 +916,7 @@ window.GAME = window.GAME || {};
 
   function countTag(ctx, b, n) {
     var s = String(n | 0);
-    E.ui.text(ctx, s, b.x + b.w - 6, b.y + b.h - 8, 12, n > 0 ? P.amberHi : P.dim, 'right', 700);
+    E.ui.text(ctx, s, b.x + b.w - 6, b.y + 10, 12, n > 0 ? P.amberHi : P.dim, 'right', 700);
   }
 
   G.scenes = S;

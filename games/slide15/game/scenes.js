@@ -574,8 +574,11 @@ window.GAME = window.GAME || {};
         });
       }
       if (Lt.wide) {
-        var bw = Math.min(Lt.panelW, 260), bh = 48, gap = 10;
-        var y0 = Lt.by + Lt.size * 0.48;
+        var bw = Math.min(Lt.panelW, 260), gap = 8;
+        // стек центрируется по доступной высоте и гарантированно влезает в экран
+        var bh = Math.min(48, Math.max(36, (Lt.H - Lt.pad * 2 - Lt.banner - 40 - gap * (defs.length - 1)) / defs.length));
+        var stackH = bh * defs.length + gap * (defs.length - 1);
+        var y0 = Lt.pad + Math.max(0, (Lt.H - Lt.banner - Lt.pad * 2 - stackH) / 2);
         for (i = 0; i < defs.length; i++) {
           d = defs[i];
           out.push(make(d, Lt.panelX + (Lt.panelW - bw) / 2, y0 + i * (bh + gap), bw, bh));

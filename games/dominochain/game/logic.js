@@ -103,9 +103,22 @@ window.GAME = window.GAME || {};
     /* Стартовая рука обязана иметь хотя бы один ход: иначе первый экран
        выглядит «мёртвым» и новичок не понимает, что делать. Добираем молча,
        жетоны за это не тратятся. */
-    for (var guard = 0; guard < 6 && st.stock.length; guard++) {
-      if (L.playable(st).length) break;
-      st.hand.push(st.stock.shift());
+    var maxHand = C.hand.max;
+    for (var guard = 0; guard < 40; guard++) {
+      if (L.playable(st).length || !st.stock.length) break;
+      if (st.hand.length < maxHand) {
+        st.hand.push(st.stock.shift());
+      } else {
+        // рука полна: меняем одну кость на подходящую из колоды, иначе уровня не начать
+        var swap = -1;
+        for (var si2 = 0; si2 < st.stock.length; si2++) {
+          var tt = st.stock[si2];
+          var sd = L.sides(st, tt);
+          if ((sd.left && st.left.length < st.caps.left) || (sd.right && st.right.length < st.caps.right)) { swap = si2; break; }
+        }
+        if (swap < 0) break;
+        st.hand[st.hand.length - 1] = st.stock.splice(swap, 1)[0];
+      }
     }
     return st;
   };

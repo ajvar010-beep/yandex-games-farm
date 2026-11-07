@@ -426,7 +426,15 @@ window.GAME = window.GAME || {};
       var handLen = Math.min((W - 130 - (hn - 1) * gap) / hn, maxLen);
       handLen = Math.max(30, handLen);
       var handTh = handLen / 2;
-      var handH = Math.max(56, handTh + clamp(handTh * 0.62, 24, 46));
+      // если кости не влезают в один ряд — раскладываем в два
+      var rowGap = clamp(gap * 0.8, 4, 8);
+      var bzGuess = Math.min(handTh * 2.0, W * 0.18);
+      var availGuess = W - 40 - bzGuess - 46;
+      var perRowGuess = Math.max(1, Math.floor((availGuess + gap) / (handLen + gap)));
+      var handRows = Math.ceil(hn / perRowGuess);
+      var handH = handRows > 1
+        ? Math.max(56, handRows * handTh + (handRows - 1) * rowGap + 14)
+        : Math.max(56, handTh + clamp(handTh * 0.62, 24, 46));
 
       var panelTop = H - banner - handH;
       var boardTop = hudH + 6;
@@ -486,7 +494,9 @@ window.GAME = window.GAME || {};
 
       var handX0 = bazaar.x + bazaar.w + 12;
       var handX1 = shopBtn.x - 8;
-      var totalHand = hn * handLen + (hn - 1) * gap;
+      var perRow = Math.max(1, Math.min(hn, Math.floor((handX1 - handX0 + gap) / (handLen + gap))));
+      handRows = Math.max(1, Math.ceil(hn / perRow));
+      var totalHand = Math.min(hn, perRow) * handLen + (Math.min(hn, perRow) - 1) * gap;
       var handStart = handX0 + Math.max(0, (handX1 - handX0 - totalHand) / 2);
 
       var Lt = {
@@ -494,6 +504,7 @@ window.GAME = window.GAME || {};
         boardRect: boardRect, path: path, pauseBtn: pauseBtn, coinsRect: coinsRect,
         leftW: leftW, hearts: hearts, goalRect: goalRect,
         handLen: handLen, handTh: handTh, handH: handH, handGap: gap, handStart: handStart,
+        handX0: handX0, handX1: handX1, handRows: handRows, handPerRow: perRow, handRowGap: rowGap,
         shopBtn: shopBtn, bazaar: bazaar
       };
       this.Lt = Lt;
@@ -526,9 +537,17 @@ window.GAME = window.GAME || {};
 
     handRect: function (i) {
       var Lt = this.Lt;
-      var x = Lt.handStart + i * (Lt.handLen + Lt.handGap);
+      var rows = Lt.handRows || 1;
+      var per = Lt.handPerRow || Math.max(1, this.st.hand.length);
+      var rg = Lt.handRowGap || 0;
+      var row = Math.floor(i / per), col = i % per;
+      var cnt = Math.min(per, Math.max(1, this.st.hand.length - row * per));
+      var rowW = cnt * Lt.handLen + Math.max(0, cnt - 1) * Lt.handGap;
+      var x0 = (Lt.handX0 != null ? Lt.handX0 : Lt.handStart) + Math.max(0, ((Lt.handX1 != null ? Lt.handX1 : Lt.handStart + rowW) - (Lt.handX0 != null ? Lt.handX0 : Lt.handStart) - rowW) / 2);
+      var x = x0 + col * (Lt.handLen + Lt.handGap);
       var lift = (this.mode === 'running' && this.pending != null && this.st.hand[i] && this.st.hand[i].id === this.pending) ? Lt.handTh * 0.22 : 0;
-      var y = Lt.panelTop + (Lt.handH - Lt.handTh) / 2 - lift;
+      var blockH = rows * Lt.handTh + (rows - 1) * rg;
+      var y = Lt.panelTop + (Lt.handH - blockH) / 2 + row * (Lt.handTh + rg) - lift;
       return { x: x, y: y, w: Lt.handLen, h: Lt.handTh };
     },
     handAt: function (x, y) {
@@ -968,6 +987,11 @@ window.GAME = window.GAME || {};
         if (this.mode === 'running') { this.setPaused(true, game); return; }
       }
 
+      if (this.mode === 'running' && this.st.phase === 'play' && L.stuck(this.st)) {
+        this.stuckT = (this.stuckT || 0) + dt;
+        if (this.stuckT > 0.9) { this.stuckT = 0; this.onLose(game, false); return; }
+      } else this.stuckT = 0;
+
       if (this.mode === 'paused' || this.mode === 'win' || this.mode === 'over') {
         if (Ptr.pressed) E.ui.handleTap(this.endButtons, Ptr.x, Ptr.y);
         if (this.autopilot || this.captureMode) {
@@ -1198,7 +1222,8 @@ window.GAME = window.GAME || {};
 
     drawBazaar: function (ctx, bz) {
       var st = this.st;
-      var blocked = L.blocked(st) && st.phase === 'play' && this.mode === 'running';
+      var stuck = L.stuck(st);
+      var blocked = L.blocked(st) && !stuck && st.phase === 'play' && this.mode === 'running';
       var pulse = blocked ? (0.5 + Math.sin(this.t * 6) * 0.5) : 0;
       var pop = this.popBazaar > 0 ? this.popBazaar / 0.28 : 0;
       ctx.save();
@@ -1214,10 +1239,10 @@ window.GAME = window.GAME || {};
       }
       ctx.restore();
       // бейдж «Нет хода»
-      if (blocked) {
+      if (blocked || (stuck && st.phase === 'play' && this.mode === 'running')) {
         var ty = bz.y - 12;
         pill(ctx, bz.x + w / 2 - 74, ty - 13, 148, 26, 'rgba(20,12,5,0.92)', 'rgba(240,193,75,0.7)');
-        E.ui.text(ctx, T('blocked_hint'), bz.x + w / 2, ty, 11, P.gold, 'center', 700);
+        E.ui.text(ctx, T(stuck ? 'stuck_hint' : 'blocked_hint'), bz.x + w / 2, ty, 11, P.gold, 'center', 700);
       }
     },
 

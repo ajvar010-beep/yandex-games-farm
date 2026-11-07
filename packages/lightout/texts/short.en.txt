@@ -1,0 +1,1 @@
+Tap a tile to flip a cross of five neon lights and clear the board.

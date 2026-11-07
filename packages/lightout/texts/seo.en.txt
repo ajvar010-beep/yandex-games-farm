@@ -1,0 +1,1 @@
+Switch off neon tiles with one tap: every touch flips a cross of five lights. 12 night-city levels, hints and a shop.

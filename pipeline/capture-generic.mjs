@@ -70,7 +70,7 @@ async function shoot(q, file, w, h, expect, label) {
     await page.goto(`${gameUrl}?${q}&lang=${label.split('/')[1] || 'ru'}&mute=1`, { waitUntil: 'load' });
     await page.waitForFunction('window.__capture && window.__capture.ready === true', { timeout: 15000 });
     await assertState(page, expect, label);
-    await new Promise(r => setTimeout(r, 220));
+    await new Promise(r => setTimeout(r, 650));
     fs.writeFileSync(file, await canvasPng(page));
     flattenPng(file);
     await gate(page);

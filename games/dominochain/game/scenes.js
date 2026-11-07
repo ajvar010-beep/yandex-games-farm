@@ -378,6 +378,8 @@ window.GAME = window.GAME || {};
       this.toast = null; this.banner = null;
       this.result = null; this.reward = 0; this.doubled = false;
       this.reviveUsed = false; this.captureMode = false;
+      // первый interstitial — не раньше 60 с от старта сессии
+      if (!E.sdk._lastInterstitial) E.sdk._lastInterstitial = Date.now();
       this.shopButtons = []; this.endButtons = [];
       this.pausePrev = 'running';
       this.coinSyncT = 0;
@@ -442,9 +444,10 @@ window.GAME = window.GAME || {};
       // панель HUD
       var ph = Math.min(44, hudH - 10);
       var py = (hudH - ph) / 2 + 2;
-      var pauseS = Math.min(ph, 44);
+      var pauseS = 44;
+      var pauseY = Math.max(4, py + (ph - pauseS) / 2);
       var pauseBtn = new E.ui.Button({
-        x: W - 8 - pauseS, y: py + (ph - pauseS) / 2, w: pauseS, h: pauseS, fontSize: 15, text: 'II',
+        x: W - 8 - pauseS, y: pauseY, w: pauseS, h: pauseS, fontSize: 15, text: 'II',
         bg: 'rgba(20,12,5,0.62)', border: 'rgba(240,193,75,0.4)', fg: P.cream,
         onTap: (function (self) { return function () { E.audio.sfx('click'); self.setPaused(true, self.game); }; })(this)
       });
@@ -797,11 +800,14 @@ window.GAME = window.GAME || {};
         var other = side === 'left' ? 'right' : 'left';
         var otherLen = other === 'left' ? st.left.length : st.right.length;
         var otherCap = other === 'left' ? capL : capR;
-        if (otherLen < otherCap) {
+        var otherEnd = st.ends[other], tObj = null;
+        for (var hi = 0; hi < st.hand.length; hi++) if (st.hand[hi].id === tileId) { tObj = st.hand[hi]; break; }
+        var fitsOther = tObj && (tObj.a === otherEnd || tObj.b === otherEnd);
+        if (otherLen < otherCap && fitsOther) {
           side = other;
-          this.toast ? this.toast(T('side_full')) : null;
+          this.toast = { t: 1.6, text: T('side_full') };
         } else {
-          if (this.toast) this.toast(T('both_full'));
+          this.toast = { t: 1.6, text: T('both_full') };
           E.audio.sfx('deny');
           return false;
         }
@@ -1160,8 +1166,12 @@ window.GAME = window.GAME || {};
       for (var i = 0; i < st.hand.length; i++) {
         var t = st.hand[i];
         var r = this.handRect(i);
-        var s = L.sides(st, t);
-        var playable = (s.left || s.right) && this.mode === 'running' && st.phase === 'play';
+        var playable = this.mode === 'running' && st.phase === 'play';
+        if (playable) {
+          playable = false;
+          var plist = L.playable(st);
+          for (var qi = 0; qi < plist.length; qi++) if (plist[qi].tile.id === t.id) { playable = true; break; }
+        }
         var sel = this.pending === t.id;
         A.domino(ctx, r.x + r.w / 2, r.y + r.h / 2, r.w, t.a, t.b, 0, {
           shadow: true,
@@ -1183,7 +1193,7 @@ window.GAME = window.GAME || {};
       // магазин
       E.ui.drawButtons(ctx, [Lt.shopBtn]);
       // счётчик доборов рядом с базаром
-      E.ui.text(ctx, '×' + st.draws, bz.x + bz.w / 2, bz.y + bz.h + 9, Math.max(11, bz.w * 0.20), P.gold, 'center', 800);
+      E.ui.text(ctx, '×' + st.draws, bz.x + bz.w / 2, bz.y + bz.h - 8, Math.max(11, bz.w * 0.20), P.gold, 'center', 800);
     },
 
     drawBazaar: function (ctx, bz) {

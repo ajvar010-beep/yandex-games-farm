@@ -476,7 +476,7 @@ window.GAME = window.GAME || {};
       var self = this;
       var defs = [];
       if (this.mode === 'paused') {
-        defs.push({ text: T('resume'), bg: '#1f4a36', border: P.toxic || P.exit, fg: P.cream,
+        defs.push({ text: T('resume'), bg: '#1f4a36', border: P.exit, fg: P.cream,
           fn: function () { E.audio.sfx('click'); self.setPaused(false, game); } });
         defs.push({ text: T('restart'), bg: 'rgba(28,38,32,0.95)', border: 'rgba(243,210,100,0.35)', fg: P.cream,
           fn: function () { E.audio.sfx('click'); self.restartLevel(game); } });
@@ -493,7 +493,7 @@ window.GAME = window.GAME || {};
           fn: function () { E.audio.sfx('click'); Meta.setCoins(self.coinsVal); game.setScene('menu', {}); } });
       } else if (this.mode === 'win') {
         var last = this.level >= C.finalLevel;
-        defs.push({ text: last ? T('to_menu') : T('next_level'), bg: '#1f4a36', border: P.toxic || P.exit, fg: P.cream,
+        defs.push({ text: last ? T('to_menu') : T('next_level'), bg: '#1f4a36', border: P.exit, fg: P.cream,
           fn: function () {
             E.audio.sfx('click');
             if (last) { Meta.setCoins(self.coinsVal); game.setScene('menu', {}); }
@@ -522,7 +522,7 @@ window.GAME = window.GAME || {};
             rv: true,
             fn: function () { self.tryRevive(game); } });
         }
-        defs.push({ text: T('retry'), bg: '#1f4a36', border: P.toxic || P.exit, fg: P.cream,
+        defs.push({ text: T('retry'), bg: '#1f4a36', border: P.exit, fg: P.cream,
           fn: function () { E.audio.sfx('click'); self.restartLevel(game); } });
         defs.push({ text: T('to_menu'), bg: 'rgba(20,28,24,0.95)', border: 'rgba(243,210,100,0.22)', fg: P.cream,
           fn: function () { E.audio.sfx('click'); Meta.setCoins(self.coinsVal); game.setScene('menu', {}); } });
@@ -764,7 +764,7 @@ window.GAME = window.GAME || {};
       if (this.autopilot) { this.drag = null; return; }
       if (Ptr.pressed) {
         if (this.pauseBtn && this.pauseBtn.contains(Ptr.x, Ptr.y)) { this.pauseBtn.tap(); return; }
-        if (this.inBoard(Ptr.x, Ptr.y)) this.drag = { x: Ptr.x, y: Ptr.y };
+        if (this.inBoard(Ptr.x, Ptr.y)) this.drag = { x: Ptr.x, y: Ptr.y, moved: false };
       }
       if (this.drag && Ptr.down) {
         var dx = Ptr.x - this.drag.x, dy = Ptr.y - this.drag.y;
@@ -772,8 +772,20 @@ window.GAME = window.GAME || {};
         if (Math.abs(dx) > th || Math.abs(dy) > th) {
           var d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0);
           this.tryMove(d);
+          this.drag.moved = true;
           this.drag.x = Ptr.x;
           this.drag.y = Ptr.y;
+        }
+      }
+      // тап по соседней клетке — на телефоне это первое, что пробует игрок
+      if (this.drag && Ptr.released && !this.drag.moved) {
+        var m = this.st.m;
+        var tc = Math.floor((Ptr.x - this.bx) / this.cs), tr = Math.floor((Ptr.y - this.by) / this.cs);
+        if (tc >= 0 && tc < m.w && tr >= 0 && tr < m.h) {
+          var cur0 = L.cellXY(m, this.st.ball.cell), dc0 = tc - cur0.x, dr0 = tr - cur0.y;
+          if (Math.abs(dc0) + Math.abs(dr0) === 1) {
+            this.tryMove(dc0 === 1 ? 1 : (dc0 === -1 ? 3 : (dr0 === 1 ? 2 : 0)));
+          }
         }
       }
       if (!Ptr.down) this.drag = null;
@@ -1105,9 +1117,8 @@ window.GAME = window.GAME || {};
       var objCol = st.keysTaken < st.keys.length ? P.key : P.exit;
       ctx.font = '600 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
       var availW = W - (x2 + st.shields * 17) - 20;
-      if (ctx.measureText(obj).width < availW) {
-        E.ui.text(ctx, obj, (x2 + st.shields * 17 + 8 + W - 8) / 2, y, 13, objCol, 'center', 600);
-      }
+      var ofs = E.ui.fit(ctx, obj, Math.max(60, availW), 13, 600);
+      E.ui.text(ctx, obj, (x2 + st.shields * 17 + 8 + W - 8) / 2, y, ofs, objCol, 'center', 600);
     },
 
     drawToast: function (ctx) {

@@ -1,0 +1,100 @@
+{
+  "variant": 107,
+  "landscape": [
+    {
+      "name": "song_1",
+      "q": "scene=play&wave=1&t=25&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "song_3",
+      "q": "scene=play&wave=3&t=20&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "song_6",
+      "q": "scene=play&wave=6&t=18&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "song_8",
+      "q": "scene=play&wave=8&t=20&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    }
+  ],
+  "portrait": [
+    {
+      "name": "song_1",
+      "q": "scene=play&wave=1&t=25&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "song_3",
+      "q": "scene=play&wave=3&t=20&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    },
+    {
+      "name": "song_6",
+      "q": "scene=play&wave=6&t=18&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "running"
+      }
+    }
+  ],
+  "qa": [
+    {
+      "name": "menu",
+      "q": "scene=menu&freeze=1",
+      "expect": {
+        "scene": "menu"
+      }
+    },
+    {
+      "name": "shop",
+      "q": "scene=play&wave=5&mode=shop&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "shop"
+      }
+    },
+    {
+      "name": "win",
+      "q": "scene=play&wave=4&mode=win&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "win"
+      }
+    },
+    {
+      "name": "over",
+      "q": "scene=play&wave=6&mode=over&freeze=1",
+      "expect": {
+        "scene": "play",
+        "mode": "over"
+      }
+    }
+  ],
+  "video": {
+    "q": "autoplay=1&record=26&wave=5&seed=31",
+    "seconds": 26
+  }
+}

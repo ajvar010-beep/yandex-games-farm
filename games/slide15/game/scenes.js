@@ -689,6 +689,7 @@ window.GAME = window.GAME || {};
       if (this.mode !== 'running' && this.mode !== 'shop') return;
       this.pausePrev = this.mode === 'shop' ? this.pausePrev : this.mode;
       this.mode = 'shop';
+      E.sdk.gameplayStop();
       this._rebuild(game);
     },
     _closeShop: function (game) {
@@ -944,12 +945,14 @@ window.GAME = window.GAME || {};
       if (this.mode === 'shop') {
         Shop.draw(ctx, v, this);
         E.ui.drawButtons(ctx, this.buttons);
+        toastDraw(ctx, this, v);
         return;
       }
 
       if (this.mode === 'paused' || this.mode === 'win' || this.mode === 'over') {
         this._drawEnd(ctx, Lt);
         E.ui.drawButtons(ctx, this.buttons);
+        toastDraw(ctx, this, v);
         return;
       }
 
@@ -1064,7 +1067,10 @@ window.GAME = window.GAME || {};
         E.ui.text(ctx, sub, Lt.W / 2, titleY + Math.max(28, Lt.W * 0.055), sfs, 'rgba(243,231,201,0.78)', 'center', 500);
       }
       if (this.mode === 'win' && this.result) {
-        var pw = 170, py = titleY + Math.max(56, Lt.W * 0.09);
+        var pw = 170;
+        var firstY = (this.buttons && this.buttons.length) ? this.buttons[0].y : Lt.H;
+        var subY = titleY + Math.max(28, Lt.W * 0.055) + 8;
+        var py = Math.max(subY, Math.min(titleY + Math.max(56, Lt.W * 0.09), firstY - 44));
         pill(ctx, Lt.W / 2 - pw / 2, py, pw, 36, 'rgba(24,14,6,0.8)', 'rgba(201,162,74,0.45)');
         A.coin(ctx, Lt.W / 2 - pw / 2 + 22, py + 18, 10);
         E.ui.text(ctx, T('won_coins', { n: this.doubled ? this.result.reward * 2 : this.result.reward }),

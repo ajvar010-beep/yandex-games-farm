@@ -13,6 +13,8 @@ window.GAME = window.GAME || {};
   function bannerInset() { return (E.sdk.bannerInsetPx ? E.sdk.bannerInsetPx() : 0); }
   function portraitOf(v) { return v.h > v.w * 1.05; }
 
+  var noAdsPrice = '';
+
   /* ---------------- мета / сохранения ---------------- */
   var Meta = {
     coins: function () {
@@ -21,6 +23,8 @@ window.GAME = window.GAME || {};
       return Math.max(0, c | 0);
     },
     setCoins: function (n) { E.storage.set('coins', Math.max(0, Math.round(n))); },
+    noAds: function () { return !!E.storage.get('no_ads', false); },
+    setNoAds: function () { E.storage.set('no_ads', true); },
     addCoins: function (n) {
       var c = Math.max(0, Meta.coins() + Math.round(n));
       Meta.setCoins(c);
@@ -118,7 +122,22 @@ window.GAME = window.GAME || {};
       this.levelButtons = [];
       E.audio.music('menu');
       E.sdk.gameplayStop();
-      E.sdk.showBanner();
+      if (!Meta.noAds()) E.sdk.showBanner(); else E.sdk.hideBanner();
+      E.sdk.initPayments().then(function () {
+        if (E.sdk.getCatalog) E.sdk.getCatalog(function (cat) {
+          for (var ci = 0; ci < (cat ? cat.length : 0); ci++) {
+            var pr = cat[ci];
+            var cid = pr && (pr.productID || pr.id);
+            if (cid === 'no_ads' && pr.price) noAdsPrice = String(pr.price);
+          }
+        });
+        E.sdk.getPurchases(function (list) {
+          for (var pi = 0; pi < (list ? list.length : 0); pi++) {
+            var pid = list[pi] && (list[pi].productID || list[pi].productId);
+            if (pid === 'no_ads') { Meta.setNoAds(); E.sdk.hideBanner(); break; }
+          }
+        });
+      });
       E.fx.reset();
       this._lay(game.view);
       this._build(game);
@@ -682,7 +701,7 @@ window.GAME = window.GAME || {};
       var self = this;
       var next = this.level + 1;
       var needAd = !this.captureMode && !this.autopilot && (this.level % C.ads.interstitialEvery === 0);
-      if (needAd) E.sdk.showInterstitial(function () { game.setScene('play', { level: next }); });
+      if (needAd && !Meta.noAds()) E.sdk.showInterstitial(function () { game.setScene('play', { level: next }); });
       else game.setScene('play', { level: next });
     },
 
@@ -702,12 +721,14 @@ window.GAME = window.GAME || {};
       if (!this.L) { this.shopButtons = []; this.shopCards = []; return; }
       var Lg = this.L, W = Lg.W, H = Lg.H, banner = Lg.banner, self = this;
       var portrait = Lg.portrait;
+      var items = C.shop.slice();
+      if (!Meta.noAds()) items.push({ id: 'no_ads', name: 'shop_no_ads', desc: 'shop_no_ads_d', iap: true });
       var pw = Math.min(W - 24, portrait ? 430 : W - 60);
       var titleH = 56, closeH = 44;
       var cardH, ph;
       if (portrait) {
         cardH = clamp(Math.round(H * 0.085), 74, 96);
-        ph = titleH + C.shop.length * cardH + (C.shop.length - 1) * 8 + closeH + 30;
+        ph = titleH + items.length * cardH + (items.length - 1) * 8 + closeH + 30;
       } else {
         cardH = clamp(Math.round(H * 0.42), 108, 168);
         ph = titleH + cardH + closeH + 30;
@@ -719,22 +740,22 @@ window.GAME = window.GAME || {};
       this.shopCards = [];
       if (portrait) {
         cw = pw - 28;
-        for (i = 0; i < C.shop.length; i++) {
-          this.shopCards.push({ item: C.shop[i], x: px + 14, y: py + titleH + i * (cardH + 8), w: cw, h: cardH, portrait: true });
+        for (i = 0; i < items.length; i++) {
+          this.shopCards.push({ item: items[i], x: px + 14, y: py + titleH + i * (cardH + 8), w: cw, h: cardH, portrait: true });
         }
       } else {
-        var n = C.shop.length, gap = 10;
+        var n = items.length, gap = 10;
         cw = (pw - 28 - (n - 1) * gap) / n;
         for (i = 0; i < n; i++) {
-          this.shopCards.push({ item: C.shop[i], x: px + 14 + i * (cw + gap), y: py + titleH, w: cw, h: cardH, portrait: false });
+          this.shopCards.push({ item: items[i], x: px + 14 + i * (cw + gap), y: py + titleH, w: cw, h: cardH, portrait: false });
         }
       }
       var coinsNow = this.coinsNow();
       for (i = 0; i < this.shopCards.length; i++) {
         (function (card) {
           var item = card.item;
-          var price = Meta.shopPrice(item);
-          var canPay = coinsNow >= price && !(item.id === 'eraser' && self.st.wrong === 0);
+          var price = item.iap ? 0 : Meta.shopPrice(item);
+          var canPay = item.iap ? true : (coinsNow >= price && !(item.id === 'eraser' && self.st.wrong === 0));
           var bh = 40, btnW;
           var bgOn = canPay ? '#3b1178' : 'rgba(30,20,52,0.95)';
           var bdOn = canPay ? P.cyan : 'rgba(143,130,201,0.35)';
@@ -745,6 +766,10 @@ window.GAME = window.GAME || {};
               x: card.x + card.w - btnW - 10, y: card.y + card.h / 2 - bh / 2, w: btnW, h: bh,
               bg: bgOn, border: bdOn, enabled: canPay,
               icon: function (ctx, b) {
+                if (item.iap) {
+                  E.ui.text(ctx, noAdsPrice || T('shop_no_ads_price'), b.x + b.w / 2, b.y + b.h / 2 + 1, 13, P.gold, 'center', 700);
+                  return;
+                }
                 A.coin(ctx, b.x + 18, b.y + b.h / 2, 8);
                 E.ui.text(ctx, String(price), b.x + 32, b.y + b.h / 2 + 1, 15, canPay ? P.gold : P.dim, 'left', 700);
               },
@@ -757,6 +782,10 @@ window.GAME = window.GAME || {};
               x: card.x + 10, y: card.y + card.h - bh - 10, w: btnW, h: bh,
               bg: bgOn, border: bdOn, enabled: canPay,
               icon: function (ctx, b) {
+                if (item.iap) {
+                  E.ui.text(ctx, noAdsPrice || T('shop_no_ads_price'), b.x + b.w / 2, b.y + b.h / 2 + 1, 13, P.gold, 'center', 700);
+                  return;
+                }
                 A.coin(ctx, b.x + b.w / 2 - 26, b.y + b.h / 2, 8);
                 E.ui.text(ctx, String(price), b.x + b.w / 2 - 8, b.y + b.h / 2 + 1, 15, canPay ? P.gold : P.dim, 'left', 700);
               },
@@ -781,6 +810,20 @@ window.GAME = window.GAME || {};
 
     buy: function (item, game) {
       if (this.mode !== 'shop') return;
+      if (item.iap) {
+        var self2 = this;
+        E.sdk.purchase('no_ads', function () {
+          Meta.setNoAds();
+          E.sdk.hideBanner();
+          E.audio.sfx('buy');
+          self2.setToast(T('no_ads_owned'));
+          self2.buildShop(game);
+        }, function () {
+          E.audio.sfx('deny');
+          self2.setToast(T('iap_fail'));
+        });
+        return;
+      }
       var price = Meta.shopPrice(item);
       if (Meta.coins() < price) { this.setToast(T('not_enough')); E.audio.sfx('deny'); return; }
       if (item.id === 'eraser' && this.st.wrong === 0) { this.setToast(T('nothing_wrong')); E.audio.sfx('deny'); return; }
@@ -1174,7 +1217,8 @@ window.GAME = window.GAME || {};
         ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(168,85,247,0.35)'; ctx.stroke();
         var tint = item.id === 'life' ? P.bad : (item.id === 'eraser' ? P.violetHi : P.cyanHi);
         if (card.portrait) {
-          A.shopIcon(ctx, item.id, card.x + 30, card.y + card.h / 2, Math.min(30, card.h * 0.34), tint);
+          if (item.iap) A.noAdsIcon(ctx, card.x + 30, card.y + card.h / 2, Math.min(30, card.h * 0.34), tint);
+          else A.shopIcon(ctx, item.id, card.x + 30, card.y + card.h / 2, Math.min(30, card.h * 0.34), tint);
           E.ui.text(ctx, T(item.name), card.x + 54, card.y + card.h * 0.30, Math.min(16, card.h * 0.19), P.text, 'left', 700);
           var maxW = Math.max(40, card.w - 54 - (card.btnW || 100) - 18);
           var dsz = Math.min(12, card.h * 0.14);
@@ -1183,7 +1227,8 @@ window.GAME = window.GAME || {};
             E.ui.text(ctx, descLines[k], card.x + 54, card.y + card.h * 0.58 + k * 14, dsz, 'rgba(196,181,253,0.75)', 'left', 500);
           }
         } else {
-          A.shopIcon(ctx, item.id, card.x + card.w / 2, card.y + card.h * 0.22, Math.min(38, card.h * 0.2), tint);
+          if (item.iap) A.noAdsIcon(ctx, card.x + card.w / 2, card.y + card.h * 0.22, Math.min(38, card.h * 0.2), tint);
+          else A.shopIcon(ctx, item.id, card.x + card.w / 2, card.y + card.h * 0.22, Math.min(38, card.h * 0.2), tint);
           E.ui.text(ctx, T(item.name), card.x + card.w / 2, card.y + card.h * 0.45, Math.min(17, card.h * 0.12), P.text, 'center', 700);
           var dsz2 = Math.min(12, card.h * 0.075);
           var dl = wrapText(ctx, T(item.desc), card.w - 20, dsz2, 500);

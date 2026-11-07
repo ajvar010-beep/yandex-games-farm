@@ -570,5 +570,18 @@ window.GAME = window.GAME || {};
     promoCover(ctx, w, h, r, title);
   };
 
+  A.noAdsIcon = function (ctx, cx, cy, s, color) {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.6, s * 0.09);
+    var w = s * 0.9, h = s * 0.62;
+    ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
+    ctx.font = '700 ' + Math.round(s * 0.4) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('AD', cx, cy + 1);
+    ctx.beginPath(); ctx.moveTo(cx - w * 0.62, cy + h * 0.78); ctx.lineTo(cx + w * 0.62, cy - h * 0.78); ctx.stroke();
+    ctx.restore();
+  };
+
   G.art = A;
 })(window.GAME);

@@ -1,0 +1,7 @@
+Light Tiles is a quiet puzzle about a city at night, where every light sits on a crossing. Tap a tile and it flips together with its four neighbours in a cross: dead lights come on, burning ones go dark. The goal is simple: switch every light off before the moves run out.
+
+Twelve levels move from a 5x5 grid to 7x7: the bigger the city, the deeper the thinking. Each level is rebuilt from random presses, so a solution always exists, yet you still have to find it.
+
+The shop holds three things: a hint clears one light of the solution, undo takes back the last press, and three moves add room to spare. Coins are paid for each cleared level, and a neat run pays more.
+
+The night skyline, neon panels and wet reflections are drawn entirely in code: no files, everything runs offline.

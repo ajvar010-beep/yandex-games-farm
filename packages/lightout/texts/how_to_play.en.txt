@@ -1,0 +1,7 @@
+Tap a tile on the board: it flips together with its four neighbours, left, right, above and below. That cross is the whole rule.
+
+Clear every light before the moves run out. Each tap spends one move, and the counter sits in the top panel.
+
+Stuck? Open the shop: a hint clears one light of the solution, undo takes back the last press and its move, and three moves add room to spare.
+
+Cleared levels pay coins, and a frugal run with spare moves and no hints pays more.

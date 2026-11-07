@@ -757,13 +757,13 @@ window.GAME = window.GAME || {};
     ctx.lineTo(tx + Math.min(maxW, ctx.measureText(name).width + h * 0.08), h * 0.40);
     ctx.stroke();
 
-    var tag = dict.cover_tag || '';
+    var tag = dict['cover_tag'] || '';
     var ts = fit(tag, h * 0.056, maxW, 600);
     ctx.font = font(ts, 600);
     ctx.fillStyle = P.cream;
     ctx.fillText(tag, tx, h * 0.49);
 
-    var line = dict.cover_line || '';
+    var line = dict['cover_line'] || '';
     var ls = fit(line, h * 0.044, maxW, 500);
     ctx.font = font(ls, 500);
     ctx.fillStyle = 'rgba(233,245,242,0.68)';

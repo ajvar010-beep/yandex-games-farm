@@ -25,6 +25,62 @@ research/   — исследование топов каталога, выбор
 - Пакет: `cd pipeline && node pack.mjs ../games/<name>` → `packages/<name>/game.zip` + `--check`.
 - Аудит перед сабмишном: `node audit.mjs --all` (0 issues — зелёный свет).
 
+## Партия-4: 10 игр — состояние на 2026-11-07 (после команды «стоп»)
+
+Все 10 собраны, упакованы и лежат в `main` (ветки `game/<slug>` смержены,
+worktrees `C:/gf-wt/<slug>` можно удалять). У каждой игры есть
+`games/<slug>/` (index.html + `game/*.js` + `engine/`) и `packages/<slug>/`:
+`game.zip`, медиа RU/EN (4 landscape + 3 portrait + qa), два видео,
+иконка 512×512, обложки 800×470, тексты 5 полей × 2 языка, `CHECKLIST.md`.
+
+| slug | название | жанр | RUBRIC | вердикт |
+|---|---|---|---|---|
+| pulseref | Пульс | ритм-аркада | 87 | PUBLISH |
+| mazeheart | Сердце Лабиринта | лабиринт | 86 | PUBLISH |
+| pindrop | Гвозди | шпильки/шары | 86 | PUBLISH |
+| pipes | Трубы | поворот труб | 85 | PUBLISH |
+| pixelcode | Пиксель-Код | нонограмма | 85 | PUBLISH |
+| lightout | Свет-Плитки | свет-плитки | 85 | PUBLISH |
+| cannonball | Ядро | баллистика | 85 | PUBLISH |
+| slide15 | Латунный Порядок | пятнашки | 83 → правки внесены | FIX |
+| wordgrid | Слово-Сетка | поиск слов | 84 → правки внесены | FIX |
+| dominochain | Домино-Цепь | домино-цепь | 84 → правки внесены | FIX |
+
+**Гейты** (по каждой после последней правки): `smoke` OK, `capture-generic`
+пересъёмка, `pack` OK, `audit` 0 issues, `testbed` 48/48, `release-check` 0.
+Сплошной прогон: `audit` 10/10. Рабочее дерево чистое, `main` = `origin/main`.
+
+**Что осталось**
+1. **slide15 / wordgrid / dominochain** — правки внесены и загейчены, но
+   финальный независимый пересчёт не завершён (последние подтверждённые
+   баллы — 83/84/84; правки: GameplayAPI в лавке, остаток ходов, зазор HUD,
+   спасение из тупика с перетасовкой руки).
+2. **Ручная выкладка** по `packages/<slug>/CHECKLIST.md`. Первый кандидат по
+   совокупности балла и контента — **pulseref** (87, 8 песен + 4 энкора).
+   Для массового casual — pindrop (86) или mazeheart (86).
+3. **Товар `no_ads`** создать в консоли Яндекса: wordgrid и pixelcode
+   (манифесты уже содержат `iap: ["no_ads"]`); на живом SDK покупка не
+   проверялась, только заглушка.
+
+**Как продолжить после сброса сессии**
+```bash
+cd pipeline
+node capture-generic.mjs ../games/<slug> ../packages/<slug>/media ru,en
+node pack.mjs ../games/<slug>
+node audit.mjs ../games/<slug>
+node testbed.mjs ../games/<slug>
+node release-check.mjs ../games/<slug>
+```
+Полный разбор правок и оценок — `docs/BATCH-4-REPORT.md`. Контекст партии —
+`market/play-batch-2026-11-07.md` (Play был недоступен, жанры по скану
+Яндекса) и память проекта `gamefactory-batch4.md`.
+
+**Идея автоматизации выкладки** (не реализована): подключиться к уже
+авторизованному Chrome через `--remote-debugging-port=9222` + `connectOverCDP`,
+заполнять форму консоли и загружать файлы из `packages/<slug>/`, финальную
+кнопку «на модерацию» оставлять человеку. Скрипт `pipeline/console-upload.mjs`
+не создан.
+
 ## Текущая партия (10 игр, v1.1, pack --check ×10)
 
 hexwave · mergemon · skyblocks · starfall · bubblebay · sweettower · gingerdash · pizzaspin · fireflygrove · cloudherder

@@ -753,7 +753,7 @@ window.GAME = window.GAME || {};
     },
 
     _leave: function (game, target, params) {
-      var needAd = !this.captureMode && !this.autopilot &&
+      var needAd = !this.captureMode && !this.autopilot && runs() > 0 &&
         (runs() % C.ads.interstitialEvery === 0);
       if (needAd) {
         E.sdk.showInterstitial(function () { game.setScene(target, params || {}); });
@@ -779,9 +779,19 @@ window.GAME = window.GAME || {};
       }
       useCharge('shuffle');
       var usedMoves = this.st.moves;
+      var oldState = this.st, oldRng = this.rng;
       var seed = this.rng.int(1, 999983);
-      this.rng = new E.Rng(seed + this.level * 7919);
-      this.st = L.newPuzzle(this.rng, C.levels[this.level - 1]);
+      var newRng = new E.Rng(seed + this.level * 7919);
+      var newSt = L.newPuzzle(newRng, C.levels[this.level - 1]);
+      if (newSt.limit - usedMoves < newSt.par) {
+        addCharges('shuffle', 1);   // вернуть заряд: перемешивание не даст решить
+        this.st = oldState; this.rng = oldRng;
+        this.toastT(T('shuffle_late'));
+        E.audio.sfx('deny');
+        return;
+      }
+      this.rng = newRng;
+      this.st = newSt;
       this.st.moves = usedMoves;   // перемешать — не бесплатный рестарт
       this.anim.length = 0;
       this.hint = null;

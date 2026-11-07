@@ -56,7 +56,8 @@ window.GAME = window.GAME || {};
       shop_undo_name: 'Отмена ×3',
       shop_undo_desc: 'Возвращает доску на ход назад',
       shop_shuffle_name: 'Перемешать',
-      shop_shuffle_desc: 'Новая раскладка, счётчик с нуля',
+      shop_shuffle_desc: 'Новая раскладка, ходы сохраняются',
+      shuffle_late: 'Мало ходов для перемешивания',
 
       ad_fail: 'Реклама не загрузилась',
       free_moves: '+{n} ходов',
@@ -118,7 +119,8 @@ window.GAME = window.GAME || {};
       shop_undo_name: 'Undos ×3',
       shop_undo_desc: 'Takes the board one move back',
       shop_shuffle_name: 'Reshuffle',
-      shop_shuffle_desc: 'Fresh scramble, counter reset',
+      shop_shuffle_desc: 'Fresh board, your moves are kept',
+      shuffle_late: 'Too few moves left to reshuffle',
 
       ad_fail: 'The ad did not load',
       free_moves: '+{n} moves',

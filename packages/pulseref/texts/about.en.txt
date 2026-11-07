@@ -1,0 +1,5 @@
+Pulse is a rhythm arcade set in a neon synthwave world. Notes fall down four lanes, and you tap a lane just as its note crosses the hit line. Clean timing pays out points, combo and coins; a miss drains the pulse bar.
+
+Eight songs and four encores pick up the tempo, from the calm "Neon Dawn" to the dense "Synth Finale". Later stages add phantoms — crossed diamonds you must not touch: tapping one breaks your combo and costs pulse, while letting it pass costs nothing.
+
+Coins buy three upgrades: a shield that forgives misses, a slow start that softens the opening, and a coin multiplier. Your best score and rank are saved for every stage, so there is always a reason to come back.

@@ -53,7 +53,16 @@ window.GAME = window.GAME || {};
       for (k in d) { n = +k; if (d[k] && n > m) m = n; }
       return m;
     },
-    unlocked: function (n) { return n <= 1 || n <= Meta.best() + 1 || n <= Meta.level(); }
+    unlocked: function (n) { return n <= 1 || n <= Meta.best() + 1 || n <= Meta.level(); },
+    stars: function () {
+      var s = E.storage.get('stars', null);
+      return (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
+    },
+    star: function (n) { return Meta.stars()[n] | 0; },
+    setStar: function (n, v) {
+      var s = Meta.stars();
+      if ((s[n] | 0) < v) { s[n] = v; E.storage.set('stars', s); }
+    }
   };
 
   /* ---------------- кнопки-иконки ---------------- */
@@ -320,6 +329,12 @@ window.GAME = window.GAME || {};
         ctx.fillStyle = 'rgba(150,175,175,0.6)';
         ctx.fill();
       } else if (done) {
+        // звёзды за экономию ходов
+        var stn0 = Meta.star(ch.n);
+        for (var si = 0; si < 3; si++) {
+          E.ui.text(ctx, '★', x + w * 0.10 + si * w * 0.10, y + h * 0.90,
+            Math.max(10, Math.min(w * 0.07, 13)), si < stn0 ? P.gold : 'rgba(130,160,160,0.30)', 'left', 700);
+        }
         ctx.save();
         ctx.strokeStyle = P.ok;
         ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.055);
@@ -672,6 +687,11 @@ window.GAME = window.GAME || {};
         this.st.coins += this.reward;
         Meta.setCoins(this.st.coins);
         Meta.markDone(this.level);
+        // звёзды за экономию ходов: 3 — осталось ≥40% лимита, 2 — ≥15%, иначе 1
+        var lim0 = Math.max(1, this.st.limit || 1), left0 = Math.max(0, this.st.movesLeft | 0);
+        var stn = left0 >= Math.ceil(lim0 * 0.40) ? 3 : (left0 >= Math.ceil(lim0 * 0.15) ? 2 : 1);
+        this.stars = stn;
+        Meta.setStar(this.level, stn);
         Meta.setLevel(Math.max(Meta.level(), Math.min(C.levels.length, this.level + 1)));
       }
       E.audio.sfx('win');

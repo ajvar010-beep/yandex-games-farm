@@ -113,7 +113,8 @@
         return Promise.resolve({
           purchase: function (opts) { console.warn('[sdk-stub] purchase ' + (opts && opts.id)); return Promise.resolve({ purchaseToken: 'stub-' + Date.now() }); },
           consumePurchase: function (t) { console.warn('[sdk-stub] consume ' + t); return Promise.resolve(); },
-          getPurchases: function () { return Promise.resolve([]); }
+          getPurchases: function () { return Promise.resolve([]); },
+          getCatalog: function () { return Promise.resolve([{ productID: 'no_ads', id: 'no_ads', price: '0,99 ₽', priceCurrencyCode: 'RUB', priceValue: '99' }]); }
         });
       },
       auth: {

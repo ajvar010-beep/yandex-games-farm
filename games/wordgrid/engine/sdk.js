@@ -219,6 +219,12 @@ window.Engine = window.Engine || {};
       }).catch(function (e) { if (onFail) onFail(e); });
     } catch (e) { if (onFail) onFail(e); }
   };
+  K.getCatalog = function (onList) {
+    if (!K._payments || typeof K._payments.getCatalog !== 'function') { onList([]); return; }
+    try {
+      K._payments.getCatalog().then(function (r) { onList(r || []); }).catch(function () { onList([]); });
+    } catch (e) { onList([]); }
+  };
   K.getPurchases = function (onList) {
     if (!K._payments || typeof K._payments.getPurchases !== 'function') { onList([]); return; }
     try {

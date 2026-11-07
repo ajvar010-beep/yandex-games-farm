@@ -13,6 +13,8 @@ window.GAME = window.GAME || {};
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
   /* ---------- сохранение: один кошелёк + прогресс + рекорд ---------- */
+  var noAdsPrice = '';
+
   var Save = {
     coins: function () {
       var c = E.storage.get('coins', null);
@@ -54,9 +56,17 @@ window.GAME = window.GAME || {};
       E.sdk.gameplayStop();
       if (!Save.noAds()) E.sdk.showBanner(); else E.sdk.hideBanner();
       E.sdk.initPayments().then(function () {
+        if (E.sdk.getCatalog) E.sdk.getCatalog(function (cat) {
+          for (var ci = 0; ci < (cat ? cat.length : 0); ci++) {
+            var pr = cat[ci];
+            var cid = pr && (pr.productID || pr.id);
+            if (cid === 'no_ads' && pr.price) noAdsPrice = String(pr.price);
+          }
+        });
         E.sdk.getPurchases(function (list) {
           for (var pi = 0; pi < (list ? list.length : 0); pi++) {
-            if (list[pi] && list[pi].productId === 'no_ads') { Save.setNoAds(); E.sdk.hideBanner(); break; }
+            var pid = list[pi] && (list[pi].productID || list[pi].productId);
+            if (pid === 'no_ads') { Save.setNoAds(); E.sdk.hideBanner(); break; }
           }
         });
       });
@@ -396,6 +406,7 @@ window.GAME = window.GAME || {};
                   self.coins += self.reward;
                   self.addScore(self.reward * 2);
                   Save.setCoins(self.coins);
+                  Save.setBest(self.score);
                   E.audio.sfx('coin');
                   self.toast = { text: T('toast_rv', { n: self.reward }), t: 1.6, color: P.accent2 };
                   self.buildOver(game);
@@ -546,7 +557,7 @@ window.GAME = window.GAME || {};
                 ctx.textAlign = 'right';
                 ctx.fillStyle = P.accent2;
                 ctx.font = '700 ' + Math.round(b.h * 0.23) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-                ctx.fillText(T('item_no_ads_price'), b.x + b.w - 14, cy2 + 1);
+                ctx.fillText(noAdsPrice || T('item_no_ads_price'), b.x + b.w - 14, cy2 + 1);
               } else {
                 var pr = String(it.price);
                 ctx.font = '700 ' + Math.round(b.h * 0.26) + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';

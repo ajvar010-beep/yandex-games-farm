@@ -74,7 +74,8 @@ window.GAME = window.GAME || {};
     if (!it) return 0;
     // цена растёт от числа ПОКУПОК, а не от остатка зарядов
     var n = Meta.bought(id);
-    return it.price + it.step * n;
+    // потолок 3x базовой цены: рост не превращает бустер в недоступный
+    return Math.min(it.price + it.step * n, it.price * 3);
   }
 
   /* ---------------- мелкая графика ---------------- */

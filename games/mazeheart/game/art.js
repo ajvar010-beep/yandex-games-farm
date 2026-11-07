@@ -49,7 +49,7 @@ window.GAME = window.GAME || {};
   var A = { rng: mkRng };
 
   /* ================== лабиринт (запекается один раз на уровень) ================== */
-  var FLOOR = ['#1a2a22', '#1e2f27', '#17251f', '#1c2c24', '#213329'];
+  var FLOOR = ['#22382c', '#27402f', '#1f3329', '#243a2e', '#2b4237'];
 
   A.bakeMaze = function (m, cs, seed) {
     var W = Math.max(1, Math.round(m.w * cs)), H = Math.max(1, Math.round(m.h * cs));
@@ -593,7 +593,7 @@ window.GAME = window.GAME || {};
         var ka = -Math.PI / 2 + k * 2.0944;
         A.key(ctx, cx + Math.cos(ka) * R * 0.68, cy + Math.sin(ka) * R * 0.68, w * 0.062, 0.5 + k, false);
       }
-      A.vignette(ctx, w, h, 0.42);
+      A.vignette(ctx, w, h, 0.30);
       return;
     }
 
@@ -647,7 +647,7 @@ window.GAME = window.GAME || {};
     for (var i = 0; i < 3; i++) {
       A.key(ctx, tx + h * 0.045 + i * h * 0.085, h * 0.73, h * 0.048, 0.6 + i, false);
     }
-    A.vignette(ctx, w, h, 0.34);
+    A.vignette(ctx, w, h, 0.24);
   };
 
   G.art = A;

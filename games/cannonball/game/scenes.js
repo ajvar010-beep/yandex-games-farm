@@ -25,6 +25,15 @@ window.GAME = window.GAME || {};
     markDone: function (n) { var d = Meta.done(); d[n] = 1; E.storage.set('done', d); },
     level: function () { return clamp((E.storage.get('lvl', 1) | 0) || 1, 1, C.levels.length); },
     setLevel: function (n) { E.storage.set('lvl', clamp(n | 0, 1, C.levels.length)); },
+    stars: function () {
+      var s = E.storage.get('stars', null);
+      return (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
+    },
+    star: function (n) { return Meta.stars()[n] | 0; },
+    setStar: function (n, v) {
+      var s = Meta.stars();
+      if ((s[n] | 0) < v) { s[n] = v; E.storage.set('stars', s); }
+    },
     upg: function () {
       var u = E.storage.get('upg', null);
       u = (u && typeof u === 'object' && !Array.isArray(u)) ? u : {};
@@ -375,6 +384,12 @@ window.GAME = window.GAME || {};
           ctx.lineTo(b.x + b.w - b.w * 0.06, b.y + b.h * 0.08);
           ctx.stroke();
           ctx.restore();
+          var stn = Meta.star(def.n);
+          for (var si = 0; si < 3; si++) {
+            E.ui.text(ctx, '★', b.x + b.w / 2 + (si - 1) * Math.max(10, b.w * 0.11),
+              b.y + b.h * 0.93, Math.max(8, Math.min(11, b.w * 0.10)),
+              si < stn ? P.gold : 'rgba(242,193,78,0.22)', 'center', 700);
+          }
         }
       }
       if (cur) {
@@ -642,6 +657,8 @@ window.GAME = window.GAME || {};
       if (!capture && !this.autopilot) {
         Meta.addCoins(base);
         Meta.markDone(this.levelNum);
+        // звёзды за экономию ядер: 3 — два и больше в запасе, 2 — одно, 1 — впритык
+        Meta.setStar(this.levelNum, this.st.shots >= 2 ? 3 : (this.st.shots >= 1 ? 2 : 1));
         Meta.setLevel(Math.max(Meta.level(), Math.min(C.levels.length, this.levelNum + 1)));
       }
       E.audio.sfx('win');

@@ -31,9 +31,32 @@ window.Engine = window.Engine || {};
   K.pause = function (why) { emit(K._pauseCbs, why); };
   K.resume = function (why) { emit(K._resumeCbs, why); };
 
-  K.init = function () {
+  /* Диспетчер: выбирает платформенный источник ysdk. Платформа уже определена в
+     engine/platform.js (Engine.platform) и её скрипт вставлен. Здесь только решаем,
+     откуда взять объект ysdk той же формы:
+       yandex       → window.YaGames.init()
+       vk           → window.VKAdapter.init()  (оборачивает vk-bridge)
+       gamemonetize → window.GMAdapter.init()  (оборачивает их window.sdk)
+       standalone   → sdk-stub.js уже создал window.YaGames-заглушку
+     Вся реклама/gameplay/лидерборды/платежи ниже работают через K.ysdk и не меняются. */
+  function initSource() {
+    var P = E.platform || { name: 'standalone' };
+    if (P.name === 'vk' && window.VKAdapter && typeof window.VKAdapter.init === 'function') {
+      return window.VKAdapter.init().catch(function () { return fallbackYandex(); });
+    }
+    if (P.name === 'gamemonetize' && window.GMAdapter && typeof window.GMAdapter.init === 'function') {
+      return Promise.resolve(window.GMAdapter.init());
+    }
+    return fallbackYandex();
+  }
+  function fallbackYandex() {
     if (!window.YaGames || typeof window.YaGames.init !== 'function') return Promise.resolve(null);
-    return window.YaGames.init().then(function (ysdk) {
+    return window.YaGames.init().catch(function () { return null; });
+  }
+
+  K.init = function () {
+    return initSource().then(function (ysdk) {
+      if (!ysdk) return null;
       K.ysdk = ysdk;
       K.isStub = !!ysdk.__isStub;
       var l = '';
@@ -218,12 +241,6 @@ window.Engine = window.Engine || {};
         if (onOk) onOk();
       }).catch(function (e) { if (onFail) onFail(e); });
     } catch (e) { if (onFail) onFail(e); }
-  };
-  K.getCatalog = function (onList) {
-    if (!K._payments || typeof K._payments.getCatalog !== 'function') { onList([]); return; }
-    try {
-      K._payments.getCatalog().then(function (r) { onList(r || []); }).catch(function () { onList([]); });
-    } catch (e) { onList([]); }
   };
   K.getPurchases = function (onList) {
     if (!K._payments || typeof K._payments.getPurchases !== 'function') { onList([]); return; }

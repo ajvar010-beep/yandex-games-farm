@@ -49,15 +49,10 @@
 <body>
 <div id="boot"><div id="bootmark"></div></div>
 <canvas id="game"></canvas>
-<script>
-  (function () {
-    var p = location.protocol;
-    if (p !== 'file:' && p !== 'about:' && p !== 'data:') {
-      document.write('<script src="/sdk.js"><\/script>');
-    }
-  })();
-</script>
+<script src="engine/platform.js"></script>
 <script src="sdk-stub.js"></script>
+<script src="engine/platform/vk.js"></script>
+<script src="engine/platform/gamemonetize.js"></script>
 <script src="engine/rng.js"></script>
 <script src="engine/i18n.js"></script>
 <script src="engine/audio.js"></script>

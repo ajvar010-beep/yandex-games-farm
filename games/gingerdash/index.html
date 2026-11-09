@@ -51,15 +51,10 @@
 <canvas id="game"></canvas>
 <!-- 1.1: SDK подключается официальным <script src="/sdk.js"> на платформе;
      на file:// тег НЕ вставляется (нет 404-ошибки в консоли), работает заглушка. -->
-<script>
-  (function () {
-    var p = location.protocol;
-    if (p !== 'file:' && p !== 'about:' && p !== 'data:') {
-      document.write('<script src="/sdk.js"><\/script>');
-    }
-  })();
-</script>
+<script src="engine/platform.js"></script>
 <script src="sdk-stub.js"></script>
+<script src="engine/platform/vk.js"></script>
+<script src="engine/platform/gamemonetize.js"></script>
 <script src="engine/rng.js"></script>
 <script src="engine/i18n.js"></script>
 <script src="engine/audio.js"></script>

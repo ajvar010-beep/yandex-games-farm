@@ -41,7 +41,13 @@ function auditStatic(game, issues) {
     if (!/^[\x20-\x7E]+$/.test(rel)) fail(issues, 'static', `не-ASCII имя: ${rel}`);
     if (/\.(js|html|css|json|txt)$/.test(f)) {
       const src = fs.readFileSync(f, 'utf8');
-      if (/https?:\/\//.test(src) && !/yandex|localhost|127\.0\.0\.1/.test(src) && !rel.startsWith('sdk-stub'))
+      // Кросс-платформенный слой: адаптеры engine/platform* обязаны знать URL
+      // платформенных CDN (vk-bridge, gamemonetize) — это их работа, не утечка.
+      // Игровой код (game/*, прочий engine/*) по-прежнему не должен ссылаться наружу.
+      const isPlatformAdapter = /^engine\/platform/.test(rel);
+      const allowCdn = /yandex|localhost|127\.0\.0\.1/.test(src)
+        || (isPlatformAdapter && /jsdelivr\.net|gamemonetize\.com|userapi\.com|vk\.com|vkplay/.test(src));
+      if (/https?:\/\//.test(src) && !allowCdn && !rel.startsWith('sdk-stub'))
         fail(issues, 'static', `внешний URL в ${rel}`);
     }
   }

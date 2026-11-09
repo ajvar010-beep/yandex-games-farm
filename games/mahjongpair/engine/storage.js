@@ -60,6 +60,17 @@ window.Engine = window.Engine || {};
     if (S._saveTimer) clearTimeout(S._saveTimer);
     S._saveTimer = setTimeout(function () { S.flush(false); }, 800);
   };
+  /* Удалить ключ (например, сброс сохранённого забега). Сразу пишет в localStorage
+     и планирует облачный flush, чтобы «Продолжить» не воскресло после перезагрузки. */
+  S.remove = function (key, immediate) {
+    if (!(key in S.data)) return;
+    delete S.data[key];
+    S.data.savedAt = Date.now();
+    writeLocal(S.ns, S.data);
+    if (immediate) { S.flush(false); return; }
+    if (S._saveTimer) clearTimeout(S._saveTimer);
+    S._saveTimer = setTimeout(function () { S.flush(false); }, 800);
+  };
   /* flushNow=true — вызов при EXIT/закрытии страницы: setData(data, true) шлёт на сервер
      немедленно (по доке Яндекса flush=true). При обычном дебаунсе — false (очередь SDK),
      чтобы не упереться в rate-limit 100 зап./5 мин. */

@@ -67,7 +67,13 @@ window.GAME = window.GAME || {};
       }
       this.streak = streak;
     },
-    update: function (game, dt) { this.t += dt; },
+    update: function (game, dt) {
+      this.t += dt;
+      var E = window.Engine;
+      if (E.input.pointer.pressed) {
+        this.onTap(E.input.pointer.x, E.input.pointer.y);
+      }
+    },
     draw: function (game, ctx) {
       var E = window.Engine;
       var w = this.game.view.w, h = this.game.view.h;

@@ -600,8 +600,8 @@ window.GAME = window.GAME || {};
       if (P.down && P.y > this.hudH + 8) this.targetX = P.x;
       else this.targetX = null;
       var k = 0;
-      if (E.input.isDown('ArrowLeft') || E.input.isDown('KeyA')) k -= 1;
-      if (E.input.isDown('ArrowRight') || E.input.isDown('KeyD')) k += 1;
+      if (E.input.down('ArrowLeft') || E.input.down('KeyA')) k -= 1;
+      if (E.input.down('ArrowRight') || E.input.down('KeyD')) k += 1;
       if (k !== 0) this.targetX = this.bx * v.w + k * 320 * dt * 4;
       if (E.input.wasPressed('Escape')) this.setPaused(true);
     },

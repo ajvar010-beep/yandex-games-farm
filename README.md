@@ -114,3 +114,14 @@ hexwave · mergemon · skyblocks · starfall · bubblebay · sweettower · ginge
 Порог 8.0 консилиума (партия-2) заменён релизным порогом RUBRIC ≥85: он учитывает
 монетизацию и модерацию, а не только «весело ли».
 
+## Аудит и чистка 2026-11-08
+
+Полный аудит (игры + pipeline + скиллы) завершён. Исправлено:
+
+- **P0:** `pipeline/audit.mjs` — добавлен `process.env.CHROME_PATH` fallback (ранее жёсткий путь).
+- **P1:** Удалены 16 debug/legacy скриптов (`debug-*`, `_*`, `capture.mjs`, `promo-only.mjs` и др.). Созданы `docs/pipeline.md` и `docs/CHROME.md`.
+- **P2:** `scratch/` (1.5 ГБ) архивирован в `.trash/scratch/`. Оставлены только `assets/` (CC0) и `play-scout/` (разведка). 6 orphaned пакетов (`blockfit`…`sudokulite`) задокументированы в `docs/orphaned-packages.md`.
+- **P3:** Удалены 49 orphaned скиллов (`skills/` + 11 Blender из `~/.claude/skills/`). Ложное утверждение `full-team:*` (147/27) исправлено в `memory/gamefactory-ecc-skills.md`.
+
+Текущее состояние: 36 HTML5-игр + 5 Godot-прототипов, 40 пакетов, pipeline чистый, 0 активных скиллов.
+

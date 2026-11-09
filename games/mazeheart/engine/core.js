@@ -35,7 +35,10 @@ window.Engine = window.Engine || {};
     this.fps = 60; this._fpsCount = 0; this._fpsTime = 0;
   }
 
-  Game.prototype.addScene = function (name, scene) { this.scenes[name] = scene; scene.name = name; };
+  Game.prototype.addScene = function (name, scene) {
+    this.scenes[name] = scene; scene.name = name;
+    if (E.core && E.core._register) E.core._register(this);
+  };
   Game.prototype.setScene = function (name, params) {
     if (this.scene && this.scene.exit) { try { this.scene.exit(this); } catch (e) {} }
     // геометрия ОБЯЗАНА существовать до enter(): иначе layout/capture-симуляция считаются
@@ -215,5 +218,23 @@ window.Engine = window.Engine || {};
     requestAnimationFrame(function (t) { self._last = t; self._frame(t); });
   };
 
-  E.core = { Game: Game };
+  /* Шим для легаси-игр: некоторые сцены вызывают E.core.setScene(sceneObj, params)
+     вместо game.setScene(name, params). Текущий Game-экземпляр регистрируется при
+     создании; переключение резолвит имя сцены по объекту и делегирует экземпляру.
+     Не ломает game.setScene — это отдельный метод прототипа. */
+  var _currentGame = null;
+  function legacySetScene(scene, params) {
+    var g = _currentGame;
+    if (!g || !g.scenes) return;
+    var name = null;
+    if (typeof scene === 'string') name = scene;
+    else for (var k in g.scenes) if (g.scenes[k] === scene) { name = k; break; }
+    if (name) g.setScene(name, params);
+  }
+
+  E.core = {
+    Game: Game,
+    setScene: legacySetScene,
+    _register: function (g) { _currentGame = g; }
+  };
 })(window.Engine);

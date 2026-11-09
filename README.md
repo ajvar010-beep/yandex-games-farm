@@ -1,14 +1,21 @@
 # Яндекс Игры — Ферма
 
-Производство HTML5-игр (Canvas, vanilla JS, ноль внешних зависимостей) под публикацию в каталоге Яндекс Игр (гео RU+EN, монетизация рекламой РСЯ).
+Производство HTML5-игр (Canvas, vanilla JS, ноль внешних зависимостей) под публикацию в каталоге Яндекс Игр (гео RU+EN, монетизация рекламой РСЯ). С 2026-11-10 — **кросс-платформенно**: тот же билд публикуется на Яндекс Играх (рубли), VK Играх (рубли) и GameMonetize (USDT) без правок игр.
+
+## Платформы (кросс-публикация, 2026-11-10)
+
+Единый `engine/sdk.js` — диспетчер: `engine/platform.js` по домену определяет площадку и подключает её SDK, адаптеры `engine/platform/{vk,gamemonetize}.js` приводят её к контракту ysdk. Игровые сцены платформу не видят. Подробнее — `docs/SESSION-2026-11-10.md`, карта площадок с монетизацией в РФ — память `gamefactory-platforms-rf`.
 
 ## Структура
 
 ```
-engine/     — движок: core (цикл/сцены), capture-хуки, sdk, i18n, audio, ui, fx, storage, rng
+engine/     — движок: core (цикл/сцены), capture-хуки, sdk (диспетчер), platform.js +
+              platform/{vk,gamemonetize}.js (адаптеры), i18n, audio, ui, fx, storage, rng
 games/      — исходники игр (по папке на игру: index.html + game/*.js + sdk-stub.js)
 pipeline/   — конвейер: pack.mjs (сборка zip+валидация), capture-<game>.mjs (медиа),
-              montage.mjs (монтаж gameplay-ролика), audit.mjs (полный баг-чек)
+              montage.mjs (монтаж gameplay-ролика), audit.mjs (полный баг-чек),
+              _xplat_rollout.mjs (раскатка кросс-слоя на index.html), _webrecon.mjs
+              (веб-разведка через локальный Chrome, когда WebSearch/WebFetch недоступны)
 packages/   — готовые к загрузке пакеты: game.zip + media/ (иконка, обложка, скриншоты,
               видео RU/EN) + texts/ (5 полей × 2 языка) + CHECKLIST.md
 docs/       — спецификация требований Яндекса (157 пунктов), гайды по сабмишну

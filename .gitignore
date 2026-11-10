@@ -20,3 +20,4 @@ games/*/tools/mod_v*
 
 # локальные настройки Claude Code (не для репозитория)
 .claude/settings.local.json
+*.webm

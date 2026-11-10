@@ -198,17 +198,38 @@ async function checkRuntime(game, issues) {
   const src = buildDirOf(game.dir);
   const gameUrl = 'file:///' + path.join(src, 'index.html').replace(/\\/g, '/');
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--mute-audio', '--hide-scrollbars'] });
+  // Открытие страницы с retry: под нагрузкой (пакетный --all, холодный Chrome) тяжёлая
+  // игра может не успеть выставить __capture.ready за 15с и падала каскадом, убивая
+  // весь прогон. Делаем до 3 попыток с нарастающим таймаутом (15/25/35с) и прогревом;
+  // при полном провале возвращаем страницу с флагом notReady — чек запишет issue и
+  // пойдёт дальше, а не уронит весь пакет.
   async function open(w, h, q) {
+    const errs = [];
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ctx = await browser.createBrowserContext();
+      const page = await ctx.newPage();
+      page.on('pageerror', e => errs.push('pageerror: ' + e.message));
+      page.on('console', m => { if (m.type() === 'error') errs.push('console.error: ' + m.text()); });
+      page.on('requestfailed', r => errs.push('requestfailed: ' + r.url()));
+      try {
+        await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
+        await page.goto(`${gameUrl}?${q}`, { waitUntil: 'load' });
+        await page.waitForFunction('window.__capture && window.__capture.ready === true', { timeout: 15000 + attempt * 10000 });
+        return { ctx, page, errs, notReady: false };
+      } catch (e) {
+        lastErr = e;
+        try { await ctx.close(); } catch (_) {}
+        if (attempt < 2) await new Promise(r => setTimeout(r, 800)); // прогрев между попытками
+      }
+    }
+    // все попытки исчерпаны — возвращаем нефатально, чтобы гейт записал issue
     const ctx = await browser.createBrowserContext();
     const page = await ctx.newPage();
-    const errs = [];
-    page.on('pageerror', e => errs.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error') errs.push('console.error: ' + m.text()); });
-    page.on('requestfailed', r => errs.push('requestfailed: ' + r.url()));
-    await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
-    await page.goto(`${gameUrl}?${q}`, { waitUntil: 'load' });
-    await page.waitForFunction('window.__capture && window.__capture.ready === true', { timeout: 15000 });
-    return { ctx, page, errs };
+    await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 }).catch(() => {});
+    try { await page.goto(`${gameUrl}?${q}`, { waitUntil: 'load' }); } catch (_) {}
+    errs.push('runtime-not-ready: __capture.ready не выставился за 3 попытки (' + (lastErr && lastErr.message) + ')');
+    return { ctx, page, errs, notReady: true };
   }
   const wait = async (page, expr, ms) => {
     try { await page.waitForFunction(expr, { timeout: ms || 3000 }); return true; } catch { return false; }
@@ -222,8 +243,9 @@ async function checkRuntime(game, issues) {
 
   // 1. Меню → реальный клик «Играть» → play
   {
-    const { ctx, page, errs } = await open(1280, 720, 'lang=ru&mute=1');
-    const inMenu = await page.evaluate(() => window.Engine.sdk._game.sceneName === 'menu');
+    const { ctx, page, errs, notReady } = await open(1280, 720, 'lang=ru&mute=1');
+    if (notReady) fail(issues, 'runtime', 'страница не стала ready (menu): см. console-ошибки ниже');
+    const inMenu = !notReady && await page.evaluate(() => window.Engine.sdk._game.sceneName === 'menu').catch(() => false);
     if (inMenu) {
       const clicked = await tapButton(page, `(() => { const s = window.Engine.sdk._game.scene; const b = s.buttons && s.buttons[0]; return b ? [b.x + b.w/2, b.y + b.h/2] : null; })()`);
       if (!clicked) fail(issues, 'runtime', 'в меню нет кнопки «Играть»');
@@ -241,9 +263,10 @@ async function checkRuntime(game, issues) {
 
   // 2. Пауза → Resume (кнопка и Escape)
   {
-    const { ctx, page, errs } = await open(1280, 720, 'scene=play&seed=5&wave=2&lang=ru&mute=1');
+    const { ctx, page, errs, notReady } = await open(1280, 720, 'scene=play&seed=5&wave=2&lang=ru&mute=1');
+    if (notReady) fail(issues, 'runtime', 'страница не стала ready (pause)');
     await new Promise(r => setTimeout(r, 220));
-    const hasPause = await page.evaluate(() => !!(window.Engine.sdk._game.scene && window.Engine.sdk._game.scene.pauseBtn));
+    const hasPause = !notReady && await page.evaluate(() => !!(window.Engine.sdk._game.scene && window.Engine.sdk._game.scene.pauseBtn)).catch(() => false);
     const mode = () => page.evaluate(() => window.Engine.sdk._game.scene.mode);
     if (hasPause) {
       await page.evaluate(() => { const s = window.Engine.sdk._game.scene; s.pauseBtn.tap(); });
@@ -263,8 +286,9 @@ async function checkRuntime(game, issues) {
 
   // 3. Магазин (если есть метод openShop)
   {
-    const { ctx, page, errs } = await open(390, 844, 'scene=play&seed=5&wave=2&lang=ru&mute=1');
-    const can = await page.evaluate(() => !!(window.Engine.sdk._game.scene && window.Engine.sdk._game.scene.openShop));
+    const { ctx, page, errs, notReady } = await open(390, 844, 'scene=play&seed=5&wave=2&lang=ru&mute=1');
+    if (notReady) fail(issues, 'runtime', 'страница не стала ready (shop)');
+    const can = !notReady && await page.evaluate(() => !!(window.Engine.sdk._game.scene && window.Engine.sdk._game.scene.openShop)).catch(() => false);
     if (can) {
       await page.evaluate(() => { const g = window.Engine.sdk._game; g.scene.openShop(g); });
       const ok = await wait(page, `(() => { const s = window.Engine.sdk._game.scene; return s.mode === 'shop' || s.panel === 'shop'; })()`, 2500);

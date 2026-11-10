@@ -1,10 +1,8 @@
 /* game/i18n.js — строки «Слияния 2048» RU/EN.
    Только ключи, реально вызываемые из scenes.js. */
-
 window.GAME = window.GAME || {};
 (function (G) {
   'use strict';
-
   var STR = {
     ru: {
       title: 'Слияние 2048',
@@ -17,7 +15,6 @@ window.GAME = window.GAME || {};
       hud_level: 'Уровень {n}',
       hud_target: 'Цель: {n}',
       hud_score: 'Очки',
-      hud_coins: 'Монеты',
       shop_title: 'Лавка',
       shop_rv: 'Видео за {n} ✨',
       item_hint: 'Подсказка',
@@ -44,12 +41,10 @@ window.GAME = window.GAME || {};
       pause_restart: 'Заново',
       pause_menu: 'В меню',
       not_enough: 'Не хватает монет',
-      game_over: 'Игра окончена',
       tutorial_1: 'Свайпайте, чтобы сдвинуть плитки',
       tutorial_2: 'Одинаковые плитки сливаются в одну',
       tutorial_3: 'Создайте плитку с целью уровня!',
-      streak_new: 'Стрик {n} дней! +{c} ✨',
-      best_score: 'Рекорд: {n}'
+      streak_new: 'Стрик {n} дней! +{c} ✨'
     },
     en: {
       title: 'Merge 2048',
@@ -62,7 +57,6 @@ window.GAME = window.GAME || {};
       hud_level: 'Level {n}',
       hud_target: 'Target: {n}',
       hud_score: 'Score',
-      hud_coins: 'Coins',
       shop_title: 'Shop',
       shop_rv: 'Video for {n} ✨',
       item_hint: 'Hint',
@@ -89,16 +83,15 @@ window.GAME = window.GAME || {};
       pause_restart: 'Restart',
       pause_menu: 'Menu',
       not_enough: 'Not enough coins',
-      game_over: 'Game over',
       tutorial_1: 'Swipe to move tiles',
       tutorial_2: 'Matching tiles merge into one',
       tutorial_3: 'Create the target tile!',
-      streak_new: 'Streak {n} days! +{c} ✨',
-      best_score: 'Best: {n}'
+      streak_new: 'Streak {n} days! +{c} ✨'
     }
   };
-
   G.i18n = {
+    ru: STR.ru,
+    en: STR.en,
     lang: 'ru',
     t: function (key, params) {
       var s = STR[G.i18n.lang] && STR[G.i18n.lang][key];

@@ -94,7 +94,13 @@ window.GAME = window.GAME || {};
     }
   };
 
+  /* КЛЮЧЕВОЕ: E.i18n.init(G.i18n, lang) в main.js ждёт СЛОВАРЬ {ru:{},en:{}}, а не
+     объект-метод. Отдаём словари как поля ru/en — тогда E.i18n получит настоящий словарь
+     (иначе экран всегда на английском, fallback). Методы t/setLang/list остаются для
+     обратной совместимости (если где-то зовут G.i18n.t). */
   G.i18n = {
+    ru: STR.ru,
+    en: STR.en,
     lang: 'ru',
     t: function (key, params) {
       var s = STR[G.i18n.lang] && STR[G.i18n.lang][key];

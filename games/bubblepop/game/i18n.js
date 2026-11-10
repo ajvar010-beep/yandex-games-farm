@@ -1,10 +1,8 @@
 /* game/i18n.js — строки «Шарового Залпа» RU/EN.
    Все ключи реально вызываются из scenes.js. */
-
 window.GAME = window.GAME || {};
 (function (G) {
   'use strict';
-
   G.i18n = {
     ru: {
       title: 'Шаровой Залп',
@@ -17,7 +15,6 @@ window.GAME = window.GAME || {};
       hud_level: 'Уровень {n}',
       hud_shots: 'Выстрелы: {n}',
       hud_score: 'Очки',
-      hud_coins: 'Монеты',
       shop_title: 'Лавка',
       shop_rv: 'Видео за {n} ✨',
       item_rainbow: 'Радуга',
@@ -44,7 +41,6 @@ window.GAME = window.GAME || {};
       pause_restart: 'Заново',
       pause_menu: 'В меню',
       not_enough: 'Не хватает монет',
-      no_moves: 'Нет ходов!',
       tutorial_1: 'Тяните, чтобы прицелиться, отпустите для выстрела',
       tutorial_2: 'Собирайте 3+ шарика одного цвета',
       tutorial_3: 'Очистите потолок до конца выстрелов!',
@@ -62,7 +58,6 @@ window.GAME = window.GAME || {};
       hud_level: 'Level {n}',
       hud_shots: 'Shots: {n}',
       hud_score: 'Score',
-      hud_coins: 'Coins',
       shop_title: 'Shop',
       shop_rv: 'Video for {n} ✨',
       item_rainbow: 'Rainbow',
@@ -89,7 +84,6 @@ window.GAME = window.GAME || {};
       pause_restart: 'Restart',
       pause_menu: 'Menu',
       not_enough: 'Not enough coins',
-      no_moves: 'No moves left!',
       tutorial_1: 'Drag to aim, release to shoot',
       tutorial_2: 'Match 3+ bubbles of the same color',
       tutorial_3: 'Clear the ceiling before you run out of shots!',

@@ -1,10 +1,8 @@
 /* game/i18n.js — строки «Пасьянса Клондайк» RU/EN.
    Только ключи, реально вызываемые из scenes.js. */
-
 window.GAME = window.GAME || {};
 (function (G) {
   'use strict';
-
   var STR = {
     ru: {
       title: 'Пасьянс Клондайк',
@@ -14,7 +12,6 @@ window.GAME = window.GAME || {};
       menu_lang: 'English',
       menu_auth: 'Войти',
       hud_level: 'Уровень {n}',
-      hud_coins: 'Монеты',
       shop_title: 'Лавка',
       item_hint: 'Подсказка',
       item_hint_desc: 'Показать доступный ход',
@@ -46,7 +43,6 @@ window.GAME = window.GAME || {};
       menu_lang: 'Русский',
       menu_auth: 'Sign in',
       hud_level: 'Level {n}',
-      hud_coins: 'Coins',
       shop_title: 'Shop',
       item_hint: 'Hint',
       item_hint_desc: 'Show available move',
@@ -71,8 +67,9 @@ window.GAME = window.GAME || {};
       tutorial_3: 'Reveal all cards and clear the board!'
     }
   };
-
   G.i18n = {
+    ru: STR.ru,
+    en: STR.en,
     lang: 'ru',
     t: function (key, params) {
       var s = STR[G.i18n.lang] && STR[G.i18n.lang][key];

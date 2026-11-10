@@ -1,10 +1,8 @@
 /* game/i18n.js — строки «Судоку Лайт» RU/EN.
    Только ключи, реально вызываемые из scenes.js. */
-
 window.GAME = window.GAME || {};
 (function (G) {
   'use strict';
-
   var STR = {
     ru: {
       title: 'Судоку Лайт',
@@ -15,7 +13,6 @@ window.GAME = window.GAME || {};
       menu_auth: 'Войти',
       menu_streak: 'Дней подряд',
       hud_level: 'Уровень {n}',
-      hud_coins: 'Монеты',
       shop_title: 'Лавка',
       shop_rv: 'Видео за {n} ✨',
       item_hint: 'Подсказка',
@@ -57,7 +54,6 @@ window.GAME = window.GAME || {};
       menu_auth: 'Sign in',
       menu_streak: 'Day streak',
       hud_level: 'Level {n}',
-      hud_coins: 'Coins',
       shop_title: 'Shop',
       shop_rv: 'Video for {n} ✨',
       item_hint: 'Hint',
@@ -91,8 +87,9 @@ window.GAME = window.GAME || {};
       streak_new: 'Streak {n} days! +{c} ✨'
     }
   };
-
   G.i18n = {
+    ru: STR.ru,
+    en: STR.en,
     lang: 'ru',
     t: function (key, params) {
       var s = STR[G.i18n.lang] && STR[G.i18n.lang][key];

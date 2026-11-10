@@ -1,10 +1,8 @@
 /* game/i18n.js — строки «Парного Маджонга» RU/EN.
    Только ключи, реально вызываемые из scenes.js. */
-
 window.GAME = window.GAME || {};
 (function (G) {
   'use strict';
-
   var STR = {
     ru: {
       title: 'Парный Маджонг',
@@ -14,11 +12,7 @@ window.GAME = window.GAME || {};
       menu_lang: 'English',
       menu_auth: 'Войти',
       menu_streak: 'Дней подряд',
-      menu_streak_reward: '+{n} за возврат',
       hud_level: 'Уровень {n}',
-      hud_time: 'Время',
-      hud_coins: 'Монеты',
-      hud_score: 'Очки',
       shop_title: 'Лавка',
       shop_rv: 'Видео за {n} ✨',
       item_hint: 'Подсказка',
@@ -49,8 +43,7 @@ window.GAME = window.GAME || {};
       tutorial_1: 'Находите пары одинаковых плиток',
       tutorial_2: 'Плитка доступна, если сверху и сбоку свободно',
       tutorial_3: 'Уберите все плитки до конца времени',
-      streak_new: 'Стрик {n} дней! +{c} ✨',
-      best_score: 'Рекорд: {n}'
+      streak_new: 'Стрик {n} дней! +{c} ✨'
     },
     en: {
       title: 'Mahjong Pair',
@@ -60,11 +53,7 @@ window.GAME = window.GAME || {};
       menu_lang: 'Русский',
       menu_auth: 'Sign in',
       menu_streak: 'Day streak',
-      menu_streak_reward: '+{n} for return',
       hud_level: 'Level {n}',
-      hud_time: 'Time',
-      hud_coins: 'Coins',
-      hud_score: 'Score',
       shop_title: 'Shop',
       shop_rv: 'Video for {n} ✨',
       item_hint: 'Hint',
@@ -95,12 +84,12 @@ window.GAME = window.GAME || {};
       tutorial_1: 'Find pairs of matching tiles',
       tutorial_2: 'A tile is free if top and side are clear',
       tutorial_3: 'Clear all tiles before time runs out',
-      streak_new: 'Streak {n} days! +{c} ✨',
-      best_score: 'Best: {n}'
+      streak_new: 'Streak {n} days! +{c} ✨'
     }
   };
-
   G.i18n = {
+    ru: STR.ru,
+    en: STR.en,
     lang: 'ru',
     t: function (key, params) {
       var s = STR[G.i18n.lang] && STR[G.i18n.lang][key];

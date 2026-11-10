@@ -33,9 +33,13 @@ for (const g of games) {
   const ownScript = path.join(PIPE, `capture-${g}.mjs`);
   const useOwn = fs.existsSync(ownScript);
   const script = useOwn ? ownScript : path.join(PIPE, 'capture-generic.mjs');
+  // capture-скрипты ждут ОТНОСИТЕЛЬНЫЕ пути (от cwd=pipeline): ../games/<slug> ../packages/<slug>/media.
+  // Абсолютные ломают file:// URL внутри capture. Передаём относительные от PIPE.
+  const relGame = path.relative(PIPE, gameDir).replace(/\\/g, '/');
+  const relOut = path.relative(PIPE, outDir).replace(/\\/g, '/');
   try {
     console.log(`\n=== ${g} (${useOwn ? 'capture-' + g : 'generic'}) ===`);
-    execFileSync('node', [script, gameDir, outDir, 'ru,en'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 300000 });
+    execFileSync('node', [script, relGame, relOut, 'ru,en'], { cwd: PIPE, stdio: ['ignore', 'pipe', 'pipe'], timeout: 300000 });
     // конвертация PNG → RGB
     execFileSync('node', [path.join(PIPE, '_png_rgb.mjs'), outDir], { stdio: ['ignore', 'pipe', 'pipe'] });
     console.log(`OK  ${g}`);

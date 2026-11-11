@@ -179,8 +179,15 @@ function checkI18n(game, issues) {
   for (const k of en) if (!ru.includes(k)) fail(issues, 'i18n', 'в ru нет ' + k);
   const other = walk(game.dir).filter(f => f.endsWith('.js') && f !== i18nFile).map(read).join('\n');
   const dynamic = new Set(['title', 'sweets', 'skins']);
+  // Динамическая конкатенация t('item_'+id): если код собирает ключ из префикса,
+  // все ключи с этим префиксом живые (иначе FP на hexwave/mergemon/skyblocks).
+  // Прямые вызовы t('item_'+id), вызовы через алиас (t.t('goal_'+k)) и сборка
+  // ключа в переменную (var key = 'goal_'+kind; ... T(key)) — все ключи с таким
+  // префиксом считаем живыми (иначе FP на hexwave/mergemon/skyblocks).
+  const dynPrefixes = [...other.matchAll(/['"]([A-Za-z0-9]+_)['"]\s*\+\s*\w/g)].map(m => m[1]);
   for (const k of ru) {
     if (dynamic.has(k) || /^(boost|skin)_/.test(k)) continue;
+    if (dynPrefixes.some(p => k.startsWith(p))) continue;
     const re = new RegExp(`['"]${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`);
     if (!re.test(other)) fail(issues, 'i18n', `мёртвый ключ '${k}'`);
   }

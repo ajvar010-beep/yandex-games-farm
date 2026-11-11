@@ -47,7 +47,7 @@ window.GAME = window.GAME || {};
           for (var n = 0; n < nums.length; n++) {
             if (isValid(grid, y, x, nums[n])) {
               grid[y][x] = nums[n];
-              if (solve(grid)) return true;
+              if (solve(grid, rnd)) return true;
               grid[y][x] = 0;
             }
           }

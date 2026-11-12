@@ -134,7 +134,7 @@ window.GAME = window.GAME || {};
         icon: function (ctx, b) {
           A.coin(ctx, b.x + 20, b.y + b.h / 2, 9);
           E.ui.text(ctx, T('coins_150', { n: C.ads.rvCoins }), b.x + 36, b.y + b.h / 2 - 5, 13, P.gold, 'left', 700);
-          E.ui.text(ctx, T('coins_ad'), b.x + 36, b.y + b.h / 2 + 8, 9.5, P.dim, 'left', 500);
+          E.ui.text(ctx, T('coins_ad'), b.x + 36, b.y + b.h / 2 + 8, 12, P.dim, 'left', 500);
           ctx.fillStyle = 'rgba(95,174,74,0.9)';
           ctx.beginPath();
           ctx.moveTo(b.x + b.w - 20, b.y + b.h / 2 - 6);
@@ -848,6 +848,10 @@ window.GAME = window.GAME || {};
       if (rec.doubled) {
         this.floaters.push({ x: at.x, y: at.y + this.Lt.path.tileH * 0.9, t: 0, life: 1.2, text: '×2', color: '#fff', size: Math.max(12, this.Lt.path.tileLen * 0.18) });
       }
+      if (rec.gold) {
+        this.floaters.push({ x: at.x, y: at.y - this.Lt.path.tileH * 1.2, t: 0, life: 1.3, text: T('gold_tile'), color: '#ffd54a', size: Math.max(13, this.Lt.path.tileLen * 0.2) });
+        E.fx.burst(at.x, at.y, '#ffd54a', 10, 160, st.rng);
+      }
       var sp = this.slotPos(side, side === 'left' ? st.left.length : st.right.length);
       for (var i = 0; i < 8; i++) {
         var ang = st.rng.angle(), spd = 60 + st.rng.float() * 120;
@@ -901,6 +905,15 @@ window.GAME = window.GAME || {};
       if (i < 0) return;
       var tile = st.hand[i];
       if (!tile) return;
+      if (tile.frozen) {
+        // замороженная кость: не ошибка, а «ещё не растаяла» — показываем тост
+        var ft2 = tile.frozen;
+        this.toast = { t: 1.8, text: T('frozen_hint', { n: ft2 }) };
+        E.audio.sfx('deny');
+        var hr0 = this.handRect(i);
+        this.floaters.push({ x: hr0.x + hr0.w / 2, y: hr0.y - 4, t: 0, life: 1.1, text: '❄', color: '#a9d8ff', size: 16 });
+        return;
+      }
       var s = L.sides(st, tile);
       if (!s.left && !s.right) {
         L.wrongTap(st, tile.id);
@@ -1171,7 +1184,7 @@ window.GAME = window.GAME || {};
         var dw = Math.min(186, Lt.W * 0.48);
         var dy = gr.y + gr.h + 5;
         pill(ctx, Lt.W / 2 - dw / 2, dy, dw, 22, 'rgba(240,193,75,0.94)', 'rgba(120,60,26,0.9)');
-        E.ui.text(ctx, T('doubled_next'), Lt.W / 2, dy + 11, 11, '#3a2410', 'center', 800);
+        E.ui.text(ctx, T('doubled_next'), Lt.W / 2, dy + 11, 12, '#3a2410', 'center', 800);
       }
     },
 
@@ -1210,8 +1223,29 @@ window.GAME = window.GAME || {};
         A.domino(ctx, r.x + r.w / 2, r.y + r.h / 2, r.w, t.a, t.b, 0, {
           shadow: true,
           dim: !playable && !sel,
-          glow: playable || sel
+          glow: playable || sel,
+          frozen: t.frozen > 0,
+          gold: !!t.gold
         });
+        if (t.frozen > 0) {
+          // иней-оверлей + счётчик ходов до растаяния
+          ctx.save();
+          ctx.globalAlpha = 0.72;
+          var fg = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+          fg.addColorStop(0, 'rgba(150,200,255,0.55)');
+          fg.addColorStop(1, 'rgba(90,140,220,0.75)');
+          E.ui.roundRect(ctx, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
+          ctx.fillStyle = fg; ctx.fill();
+          ctx.globalAlpha = 0.9;
+          E.ui.text(ctx, '❄' + t.frozen, r.x + r.w / 2, r.y + r.h / 2, Math.max(11, r.h * 0.4), '#eaf6ff', 'center', 800);
+          ctx.restore();
+        } else if (t.gold) {
+          ctx.save();
+          ctx.globalAlpha = 0.5 + Math.sin(this.t * 5 + i) * 0.18;
+          E.ui.roundRect(ctx, r.x - 2, r.y - 2, r.w + 4, r.h + 4, 7);
+          ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 2.2; ctx.stroke();
+          ctx.restore();
+        }
         if (playable && !sel) {
           // лёгкое покачивание — «эта подходит»
           var bob = Math.sin(this.t * 4 + i) * 1.2;
@@ -1252,7 +1286,7 @@ window.GAME = window.GAME || {};
       if (blocked || (stuck && st.phase === 'play' && this.mode === 'running')) {
         var ty = bz.y - 12;
         pill(ctx, bz.x + w / 2 - 74, ty - 13, 148, 26, 'rgba(20,12,5,0.92)', 'rgba(240,193,75,0.7)');
-        E.ui.text(ctx, T(stuck ? 'stuck_hint' : 'blocked_hint'), bz.x + w / 2, ty, 11, P.gold, 'center', 700);
+        E.ui.text(ctx, T(stuck ? 'stuck_hint' : 'blocked_hint'), bz.x + w / 2, ty, 12, P.gold, 'center', 700);
       }
     },
 

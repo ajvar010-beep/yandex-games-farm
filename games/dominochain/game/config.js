@@ -48,6 +48,8 @@ window.GAME = window.GAME || {};
     economy: {
       perTile: 1,                // монет за выложенную кость
       doubleCoin: 3,             // дополнительно за дубль
+      goldCoin: 2,               // дополнительно за золотую кость (поверх doubleCoin, если дубль)
+      goldMult: 2,               // множитель очков за золотую кость
       levelBase: 30,             // награда за уровень
       levelStep: 10,             // +10 за номер уровня
       handEmpty: 25,             // бонус за опустевшую руку
@@ -62,20 +64,26 @@ window.GAME = window.GAME || {};
     ],
 
     /* 12 уровней. goal — сколько костей выложить, hand — стартовая рука,
-       draws — жетоны добора, start — стартовая кость в центре цепи. */
+       draws — жетоны добора, start — стартовая кость в центре цепи.
+       Механики по мирам:
+         1-4   — базовые (включая дубль → +1 жетон добора, всегда был);
+         5-8   — заморозка: frozen случайных костей в руке заморожены на frozenTurns ходов,
+                 их нельзя играть, пока не растают (видны в руке с иней-эффектом);
+         9-12  — заморозка + золотые дубли: goldPairs дублей в стартовой руке золотые,
+                 дают ×2 очков и +2 монеты сверху (помимо базовых бонусов дубля). */
     levels: [
       { goal: 10, hand: 6, draws: 14, start: [6, 6] },
       { goal: 11, hand: 6, draws: 14, start: [5, 5] },
       { goal: 12, hand: 6, draws: 13, start: [4, 4] },
       { goal: 13, hand: 5, draws: 13, start: [6, 3] },
-      { goal: 14, hand: 5, draws: 13, start: [5, 2] },
-      { goal: 15, hand: 5, draws: 13, start: [4, 6] },
-      { goal: 16, hand: 5, draws: 13, start: [3, 5] },
-      { goal: 16, hand: 5, draws: 12, start: [2, 6] },
-      { goal: 17, hand: 5, draws: 13, start: [6, 6] },
-      { goal: 18, hand: 5, draws: 14, start: [1, 4] },
-      { goal: 19, hand: 5, draws: 15, start: [5, 5] },
-      { goal: 20, hand: 5, draws: 16, start: [3, 3] }
+      { goal: 14, hand: 5, draws: 13, start: [5, 2], frozen: 2, frozenTurns: 3 },
+      { goal: 15, hand: 5, draws: 13, start: [4, 6], frozen: 2, frozenTurns: 3 },
+      { goal: 16, hand: 5, draws: 13, start: [3, 5], frozen: 2, frozenTurns: 4 },
+      { goal: 16, hand: 5, draws: 12, start: [2, 6], frozen: 3, frozenTurns: 3 },
+      { goal: 17, hand: 5, draws: 13, start: [6, 6], frozen: 2, frozenTurns: 3, goldPairs: 1 },
+      { goal: 18, hand: 5, draws: 14, start: [1, 4], frozen: 2, frozenTurns: 3, goldPairs: 1 },
+      { goal: 19, hand: 5, draws: 15, start: [5, 5], frozen: 3, frozenTurns: 4, goldPairs: 1 },
+      { goal: 20, hand: 5, draws: 16, start: [3, 3], frozen: 3, frozenTurns: 4, goldPairs: 2 }
     ],
 
     ads: {

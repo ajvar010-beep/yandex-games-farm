@@ -95,6 +95,8 @@ window.GAME = window.GAME || {};
       doubled: false,
       buys: { draw: 0, shuffle: 0, double: 0 },
       phase: 'play',          // play | win | over
+      frozenTurns: def.frozenTurns || 3, // на сколько ходов замораживаются кости
+      goldCount: 0,
       recordSafe: !!o.recordSafe,
       rng: rng,
       events: [],
@@ -122,6 +124,36 @@ window.GAME = window.GAME || {};
         st.stock.push(oldT);
       }
     }
+
+    /* Заморозка (уровни 5-8) и золотые дубли (9-12): раскладываются ПОСЛЕ
+       гарантии хода, чтобы замороженные кости не могли оставить уровень
+       «мёртвым» на старте. Замораживаем сначала не-играющие кости; если их
+       не хватает — играющие, но всегда оставляем ≥1 играющую незамороженной. */
+    if (def.frozen) {
+      var froz = 0, fi, ft;
+      for (fi = st.hand.length - 1; fi >= 0 && froz < def.frozen; fi--) {
+        ft = st.hand[fi];
+        if (!L.canPlay(st, ft)) { ft.frozen = st.frozenTurns; froz++; }
+      }
+      for (fi = st.hand.length - 1; fi >= 0 && froz < def.frozen; fi--) {
+        ft = st.hand[fi];
+        if (ft.frozen) continue;
+        var aliveLeft = 0;
+        for (var pi = 0; pi < st.hand.length; pi++) {
+          var pt = st.hand[pi];
+          if (!pt.frozen && pt.id !== ft.id && L.canPlay(st, pt)) aliveLeft++;
+        }
+        if (aliveLeft < 1) break;   // последнюю рабочую кость не трогаем
+        ft.frozen = st.frozenTurns; froz++;
+      }
+    }
+    if (def.goldPairs) {
+      var golds = 0;
+      for (var gi = 0; gi < st.hand.length && golds < def.goldPairs; gi++) {
+        if (st.hand[gi].a === st.hand[gi].b && !st.hand[gi].frozen) { st.hand[gi].gold = true; golds++; }
+      }
+      st.goldCount = golds;
+    }
     return st;
   };
 
@@ -142,10 +174,12 @@ window.GAME = window.GAME || {};
   L.playable = function (st) {
     var out = [];
     for (var i = 0; i < st.hand.length; i++) {
-      var s = L.sides(st, st.hand[i]);
+      var t = st.hand[i];
+      if (t.frozen) continue;   // замороженные кости не ходят
+      var s = L.sides(st, t);
       var l = s.left && st.left.length < st.caps.left;
       var r = s.right && st.right.length < st.caps.right;
-      if (l || r) out.push({ tile: st.hand[i], index: i, left: l, right: r });
+      if (l || r) out.push({ tile: t, index: i, left: l, right: r });
     }
     return out;
   };
@@ -195,6 +229,7 @@ window.GAME = window.GAME || {};
     for (var i = 0; i < st.hand.length; i++) if (st.hand[i].id === tileId) { idx = i; break; }
     if (idx < 0) return null;
     var tile = st.hand[idx];
+    if (tile.frozen) return null;   // замороженную кость играть нельзя
     if (side === 'left' && st.left.length >= st.caps.left) return null;
     if (side === 'right' && st.right.length >= st.caps.right) return null;
     var end = st.ends[side];
@@ -216,10 +251,11 @@ window.GAME = window.GAME || {};
     var isDouble = (tile.a === tile.b);
     if (isDouble) pts += Math.round(sc.doubleBonus * mult);
     if (st.doubled) { pts *= 2; st.doubled = false; rec.doubled = true; }
+    if (tile.gold) { pts *= C.economy.goldMult; rec.gold = true; }
     st.score += pts;
     rec.pts = pts;
 
-    var gain = C.economy.perTile + (isDouble ? C.economy.doubleCoin : 0);
+    var gain = C.economy.perTile + (isDouble ? C.economy.doubleCoin : 0) + (tile.gold ? C.economy.goldCoin : 0);
     st.coins += gain;
     rec.coin = gain;
 
@@ -230,7 +266,15 @@ window.GAME = window.GAME || {};
       st.draws++;                       // дубль в цепи — бесплатный жетон добора
       rec.draw = true;
     }
-    st.events.push({ type: 'place', rec: rec, double: isDouble, gain: gain, pts: pts });
+    // каждый сыгранный ход тащит лёд с остальных костей руки
+    for (var ti = 0; ti < st.hand.length; ti++) {
+      var tt = st.hand[ti];
+      if (tt.frozen) {
+        tt.frozen--;
+        if (tt.frozen <= 0) { tt.frozen = 0; st.events.push({ type: 'thaw', tileId: tt.id }); }
+      }
+    }
+    st.events.push({ type: 'place', rec: rec, double: isDouble, gain: gain, pts: pts, gold: !!rec.gold });
     L.checkEnd(st);
     return rec;
   };

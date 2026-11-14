@@ -546,6 +546,10 @@ func _maybe_interstitial() -> void:
 		Yandex.show_fullscreen()
 
 func _toggle_pause() -> void:
+	# Пока fullscreen-реклама держит дерево на паузе (_paused_by_adv), не даём
+	# игроку растаскивать состояние — иначе таймер идёт во время рекламы.
+	if Yandex._paused_by_adv:
+		return
 	AudioBus.click()
 	get_tree().paused = not get_tree().paused
 	if get_tree().paused:
@@ -646,6 +650,9 @@ func _build_touch_input() -> void:
 	_jump_btn.add_theme_stylebox_override("pressed", j_sb_pr)
 	_jump_btn.flat = true
 	_jump_btn.focus_mode = Control.FOCUS_NONE
+	# Fire on PRESS, not release — Roblox-style кнопки реагируют мгновенно,
+	# иначе на мобильных ~80-150 мс воспринимаемой задержки прыжка.
+	_jump_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	_jump_btn.pressed.connect(func():
 		if player: player.tap_jump())
 	hud.add_child(_jump_btn)
@@ -671,6 +678,8 @@ func _build_touch_input() -> void:
 		_dash_btn.flat = true
 		_dash_btn.focus_mode = Control.FOCUS_NONE
 		_dash_btn.modulate = Color(1, 1, 1, 0.75)
+		# Как и прыжок — срабатывание на press (см. комментарий у _jump_btn).
+		_dash_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 		_dash_btn.pressed.connect(func(): player.try_dash())
 		hud.add_child(_dash_btn)
 

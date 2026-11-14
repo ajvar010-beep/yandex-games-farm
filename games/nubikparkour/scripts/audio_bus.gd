@@ -17,6 +17,20 @@ func mute(m: bool) -> void:
 	for p in _players:
 		p.volume_db = -80.0 if m else 0.0
 
+var _tone_cache: Dictionary = {}
+
+## Кэш сгенерированных WAV: каждый SFX-вызов иначе регенерирует ~2-5 тыс.
+## сэмплов в GDScript (jump = 1985 итераций + аллокация PackedByteArray на
+## каждый тап). Частота/длительность/вид у наших звуков фиксированы —
+## поэтому кэшируем готовый AudioStreamWAV по ключу (freq, dur, kind).
+func _tone(freq: float, dur: float, kind := "square") -> AudioStreamWAV:
+	var key := "%s|%.0f|%.3f" % [kind, freq, dur]
+	if _tone_cache.has(key):
+		return _tone_cache[key]
+	var wav := _gen_tone(freq, dur, kind)
+	_tone_cache[key] = wav
+	return wav
+
 func _gen_tone(freq: float, dur: float, kind := "square") -> AudioStreamWAV:
 	var rate := 22050
 	var n := int(rate * dur)
@@ -52,20 +66,20 @@ func _play(wav: AudioStreamWAV, vol := 1.0) -> void:
 			p.play()
 			return
 
-func jump() -> void:  _play(_gen_tone(520, 0.09, "square"), 0.5)
-func double_jump() -> void: _play(_gen_tone(720, 0.10, "square"), 0.5)
-func coin() -> void:  _play(_gen_tone(980, 0.07), 0.45)
+func jump() -> void:  _play(_tone(520, 0.09, "square"), 0.5)
+func double_jump() -> void: _play(_tone(720, 0.10, "square"), 0.5)
+func coin() -> void:  _play(_tone(980, 0.07), 0.45)
 # v9: рывок (быстрый «вжух») и щит (низкий «бум», спас от падения)
-func dash() -> void:  _play(_gen_tone(300, 0.12, "saw"), 0.5)
-func shield() -> void: _play(_gen_tone(180, 0.22, "noise"), 0.6)
-func checkpoint() -> void: _play(_gen_tone(660, 0.12), 0.6)
-func die() -> void:   _play(_gen_tone(140, 0.25, "noise"), 0.7)
+func dash() -> void:  _play(_tone(300, 0.12, "saw"), 0.5)
+func shield() -> void: _play(_tone(180, 0.22, "noise"), 0.6)
+func checkpoint() -> void: _play(_tone(660, 0.12), 0.6)
+func die() -> void:   _play(_tone(140, 0.25, "noise"), 0.7)
 func win() -> void:
-	_play(_gen_tone(660, 0.10), 0.5)
+	_play(_tone(660, 0.10), 0.5)
 	await get_tree().create_timer(0.1).timeout
-	_play(_gen_tone(880, 0.14), 0.6)
-func click() -> void: _play(_gen_tone(440, 0.05), 0.4)
+	_play(_tone(880, 0.14), 0.6)
+func click() -> void: _play(_tone(440, 0.05), 0.4)
 func buy() -> void:
-	_play(_gen_tone(700, 0.08), 0.5)
+	_play(_tone(700, 0.08), 0.5)
 	await get_tree().create_timer(0.08).timeout
-	_play(_gen_tone(1050, 0.10), 0.55)
+	_play(_tone(1050, 0.10), 0.55)

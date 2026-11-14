@@ -7,11 +7,20 @@ var _coins_label: Label
 var _stars_label: Label
 var _title: Label
 
-# «Хакер Паркур»: кампания = 9 неоновых уровней матрицы, вся игра в теме hacker.
+# v11: число уровней — из варианта (21 у Нуба/Бога, 30 у Про с хакер-главой).
+# Было константой 21; теперь читаем Variant, чтобы глава 22-30 появилась в меню.
+const HACKER_FROM := 21       # первый неон-уровень (стиль кнопки матрицы)
 const RV_COINS := 30          # «📺 +30 ◈» — повторяемый RV-триггер
 const RV_COINS_COOLDOWN_MS := 180_000  # 3 минуты
 
 var _rv_btn: Button = null  # v8.1 (#5): кэш кнопки RV-монет для живого отсчёта
+
+# TTL-кэш лидерборда: см. _build_leaderboard
+const LB_CACHE_TTL_MS := 60_000
+var _lb_cache = null
+var _lb_cache_ms := 0
+var _lb_fetching := false
+var _pending_lb_labels: Array = []
 
 func _ready() -> void:
 	_main = get_tree().root.get_node_or_null("Main")
@@ -177,23 +186,33 @@ func _build_levels(parent: Control) -> void:
 		var unlocked := i <= GameState.max_level
 		var st := GameState.stars_of(i)
 		var best := GameState.best_time(i)
-		# «Хакер Паркур»: ВСЯ игра — неоновая матрица, кнопки в стиле терминала
-		b.text = "H%d" % i if unlocked else "🔒"
-		b.modulate = Color(0.1, 1.0, 0.3) if unlocked else Color(0.45, 0.45, 0.5)
-		b.add_theme_font_size_override("font_size", 22)
-		if unlocked:
-			var info := "\n" + _mini_stars(st)
-			if best > 0:
-				info += "  %.1f" % (best / 1000.0)
-			var info_lbl := Label.new()
-			info_lbl.text = info
-			info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			info_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-			info_lbl.offset_top = -30
-			info_lbl.add_theme_font_size_override("font_size", 14)
-			info_lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
-			info_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			b.add_child(info_lbl)
+		if i >= HACKER_FROM:
+			# ХАКЕР-глава (21 у всех, 21-30 у Про) — неоновые кнопки матрицы
+			b.text = (GameState.L("hacker") if i == HACKER_FROM else "H%d" % i) if unlocked else "🔒"
+			b.modulate = Color(0.1, 1.0, 0.3) if unlocked else Color(0.45, 0.45, 0.5)
+			b.add_theme_font_size_override("font_size", 24 if i == HACKER_FROM else 20)
+		else:
+			b.text = "%d" % i
+			b.add_theme_font_size_override("font_size", 32)
+			if unlocked:
+				b.modulate = Color(0.5, 0.95, 0.6)
+				# мета: звёзды + рекорд (данные уже хранились, но не показывались)
+				var info := "\n" + _mini_stars(st)
+				if best > 0:
+					info += "  %.1f" % (best / 1000.0)
+				var info_lbl := Label.new()
+				info_lbl.text = info
+				info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				info_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+				info_lbl.offset_top = -30
+				info_lbl.add_theme_font_size_override("font_size", 14)
+				info_lbl.add_theme_color_override("font_color", Color(1, 0.9, 0.3))
+				info_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				b.add_child(info_lbl)
+			else:
+				b.modulate = Color(0.45, 0.45, 0.5)
+				b.text = "🔒"
+				b.add_theme_font_size_override("font_size", 30)
 		b.disabled = not unlocked
 		var lv := i
 		b.pressed.connect(func():
@@ -350,33 +369,52 @@ func _build_leaderboard(parent: Control) -> void:
 	lb_label.add_theme_color_override("font_color", Color(0.75, 0.8, 0.9))
 	parent.add_child(lb_label)
 
+	# TTL-кэш: refresh() вызывается после каждой покупки/языка/daily/возврата из
+	# уровня — без кэша это спам get_leaderboard на каждое меню.
+	var now_ms := Time.get_ticks_msec()
+	if _lb_cache != null and now_ms - _lb_cache_ms < LB_CACHE_TTL_MS:
+		_apply_leaderboard(lb_label, _lb_cache)
+		return
+	_pending_lb_labels.append(lb_label)
+	if _lb_fetching:
+		return
+	_lb_fetching = true
 	Yandex.get_leaderboard("parkour_time", func(res):
-		if not is_instance_valid(lb_label): return
-		# null-safe: у свежего ЛБ entries может отсутствовать; quantity нет в API
-		if res == null or res.entries == null:
-			lb_label.text = GameState.L("lb_unavailable")
-			return
-		var entries = res.entries
-		var n: int = mini(int(entries.size()), 8)
-		if n == 0:
-			lb_label.text = GameState.L("lb_unavailable")
-			return
-		var lines: PackedStringArray = []
-		for i in range(n):
-			var e = entries[i]
-			var pname := "?"
-			if e.player != null:
-				pname = str(e.player.publicName)
-			lines.append("%d. %s — %s" % [i + 1, pname, _fmt_score(int(e.score))])
-		if res.userRank != null and int(res.userRank) > 0:
-			var uname := "?"
-			var uscore := 0
-			if res.userEntry != null:
-				if res.userEntry.player != null:
-					uname = str(res.userEntry.player.publicName)
-				uscore = int(res.userEntry.score)
-			lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(uscore)])
-		lb_label.text = "\n".join(lines))
+		_lb_fetching = false
+		_lb_cache = res
+		_lb_cache_ms = Time.get_ticks_msec()
+		for lbl in _pending_lb_labels:
+			if is_instance_valid(lbl):
+				_apply_leaderboard(lbl, res)
+		_pending_lb_labels.clear()
+	)
+
+func _apply_leaderboard(lb_label: Label, res) -> void:
+	# null-safe: у свежего ЛБ entries может отсутствовать; quantity нет в API
+	if res == null or res.entries == null:
+		lb_label.text = GameState.L("lb_unavailable")
+		return
+	var entries = res.entries
+	var n: int = mini(int(entries.size()), 8)
+	if n == 0:
+		lb_label.text = GameState.L("lb_unavailable")
+		return
+	var lines: PackedStringArray = []
+	for i in range(n):
+		var e = entries[i]
+		var pname := "?"
+		if e.player != null:
+			pname = str(e.player.publicName)
+		lines.append("%d. %s — %s" % [i + 1, pname, _fmt_score(int(e.score))])
+	if res.userRank != null and int(res.userRank) > 0:
+		var uname := "?"
+		var uscore := 0
+		if res.userEntry != null:
+			if res.userEntry.player != null:
+				uname = str(res.userEntry.player.publicName)
+			uscore = int(res.userEntry.score)
+		lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(uscore)])
+	lb_label.text = "\n".join(lines)
 
 func _fmt_score(v: int) -> String:
 	# v9.1: score = par-эффективность ×1000 (1000 = ровно в par, >1000 = быстрее).
@@ -395,6 +433,7 @@ func _build_series_promo(parent: Control) -> void:
 		"nub": hint.text = GameState.L("series_nub")
 		"pro": hint.text = GameState.L("series_pro")
 		"god": hint.text = GameState.L("series_god")
+		"hacker": hint.text = GameState.L("series_hacker")
 	hint.add_theme_font_size_override("font_size", 15)
 	hint.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85))
 	parent.add_child(hint)

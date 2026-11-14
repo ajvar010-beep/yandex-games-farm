@@ -39,7 +39,7 @@ window.GAME = window.GAME || {};
       }
       this.buttons.push({ id: 'play', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_play') });
       y0 += bh + gap;
-      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.muted ? 'OFF' : 'ON') });
+      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.isMuted() ? E.i18n.t('sound_off') : E.i18n.t('sound_on')) });
       y0 += bh + gap;
       this.buttons.push({ id: 'lang', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_lang') });
       y0 += bh + gap;
@@ -158,7 +158,9 @@ window.GAME = window.GAME || {};
         var run = E.storage.get('mahjongpair_run');
         E.core.setScene(SC.play, { level: run ? run.level : 1, coins: run ? run.coins : 0 });
       } else if (id === 'snd') {
-        E.audio.toggleMute();
+        var m = !E.audio.isMuted();
+        E.audio.setMuted(m);
+        E.storage.set('muted', m);
         this.buildButtons(this.game);
       } else if (id === 'lang') {
         E.i18n.setLang(E.i18n.lang === 'ru' ? 'en' : 'ru');
@@ -194,7 +196,7 @@ window.GAME = window.GAME || {};
       this.tutorialStep = E.storage.get('mahjongpair_tutorial') ? 3 : 0;
       this.tutorialTimer = 0;
 
-      E.audio.music('gameplay');
+      E.audio.music('play');
       E.sdk.gameplayStart();
       E.sdk.hideBanner();
 
@@ -693,7 +695,7 @@ window.GAME = window.GAME || {};
       // HUD: пауза и лавка
       if (y < this.hudH) {
         if (x < 50) { this.mode = 'paused'; E.audio.sfx('click'); return; }
-        if (x > window.Engine.core.width - 50) { this.mode = 'shop'; E.audio.sfx('click'); return; }
+        if (x > this.game.view.w - 50) { this.mode = 'shop'; E.audio.sfx('click'); return; }
         return;
       }
 
@@ -762,7 +764,7 @@ window.GAME = window.GAME || {};
       var E = window.Engine;
       this.mode = 'over';
       var reward = G.config.economy.winBase + (this.level - 1) * G.config.economy.winPerLevel;
-      if (E.capture.recordMode) reward = Math.min(reward, 500);
+      if (this.recordMode) reward = Math.min(reward, 500);
       this.lastReward = reward;
       this.coins += reward;
       E.storage.set('mahjongpair_coins', this.coins);
@@ -775,14 +777,14 @@ window.GAME = window.GAME || {};
       E.fx.flash('#6dd98a', 0.3);
       E.fx.burst(this.game.view.w / 2, this.game.view.h / 2, '#6dd98a', 20, 200, this.rng || Math.random);
 
-      if (!E.capture.recordMode && !E.capture.autopilot) {
+      if (!this.recordMode && !this.autopilot) {
         E.sdk.showInterstitial();
       }
     },
 
     failLevel: function () {
       var E = window.Engine;
-      if (!this.reviveUsed && !E.capture.recordMode && !E.capture.autopilot) {
+      if (!this.reviveUsed && !this.recordMode && !this.autopilot) {
         this.mode = 'revive';
       } else {
         this.mode = 'fail';
@@ -802,10 +804,13 @@ window.GAME = window.GAME || {};
           self.mode = 'running';
           E.audio.sfx('click');
         },
-        onError: function () {
-          self.mode = 'fail';
-          E.sdk.gameplayStop();
-          E.sdk.showBanner();
+        onDone: function (ok) {
+          // sdk вызывает только onReward/onDone; при ошибке рекламы вернём fail-экран
+          if (!ok && self.mode === 'revive') {
+            self.mode = 'fail';
+            E.sdk.gameplayStop();
+            E.sdk.showBanner();
+          }
         }
       });
     },
@@ -866,8 +871,9 @@ window.GAME = window.GAME || {};
         this.hintTimer = 5;
         if (!this.hintPair) this.showFlash(E.i18n.t('no_moves'));
       } else if (id === 'shuffle') {
-        var rng = E.rng.mulberry32(Date.now() % 100000);
-        G.entities.shuffle(this.tiles, rng);
+        var rng = new E.Rng((Date.now() % 100000) | 0);
+        var rngFn = rng.float.bind(rng);
+        G.entities.shuffle(this.tiles, rngFn);
         this.updateTileStates();
         this.selected = null;
         this.clearHint();

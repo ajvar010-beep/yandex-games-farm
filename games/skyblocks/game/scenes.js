@@ -206,6 +206,7 @@ window.GAME = window.GAME || {};
   /* ========================================================= PLAY */
   var MAX_LEVEL = 20;
   var PlayScene = {
+    consumesInputInUpdate: true,
     /* ---------- lifecycle ---------- */
     enter: function (game, params) {
       var C = G.config;

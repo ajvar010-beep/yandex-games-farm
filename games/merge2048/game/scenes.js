@@ -40,7 +40,7 @@ window.GAME = window.GAME || {};
       }
       this.buttons.push({ id: 'play', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_play') });
       y0 += bh + gap;
-      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.muted ? 'OFF' : 'ON') });
+      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.isMuted() ? E.i18n.t('sound_off') : E.i18n.t('sound_on')) });
       y0 += bh + gap;
       this.buttons.push({ id: 'lang', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_lang') });
       y0 += bh + gap;
@@ -153,7 +153,9 @@ window.GAME = window.GAME || {};
         var run = E.storage.get('merge2048_run');
         E.core.setScene(SC.play, { level: run ? run.level : 1, coins: run ? run.coins : 0 });
       } else if (id === 'snd') {
-        E.audio.toggleMute();
+        var m = !E.audio.isMuted();
+        E.audio.setMuted(m);
+        E.storage.set('muted', m);
         this.buildButtons(this.game);
       } else if (id === 'lang') {
         E.i18n.setLang(E.i18n.lang === 'ru' ? 'en' : 'ru');
@@ -281,9 +283,55 @@ window.GAME = window.GAME || {};
         // автопилот для записи видео
         if (this.autopilot) this.driveAutopilot(dt);
       }
+
+      // Ввод игрока: тап (все режимы через onTap), свайп и клавиши (только running).
+      this.handlePlayerInput(game);
+
       if (this.flashTimer > 0) {
         this.flashTimer -= dt;
         if (this.flashTimer <= 0) this.flashMsg = null;
+      }
+    },
+
+    handlePlayerInput: function (game) {
+      var E = window.Engine;
+      var P = E.input.pointer;
+      if (this.autopilot) { this._drag = null; return; }
+
+      // Тап: пауза/магазин/оверлеи (все режимы через onTap-диспетчер).
+      if (P.pressed) {
+        this.onTap(P.x, P.y);
+        if (this.mode === 'running' && P.y >= this.hudH) {
+          this._drag = { x: P.x, y: P.y, moved: false };
+        } else {
+          this._drag = null;
+        }
+      }
+
+      // Свайп (только running, только если тащим по доске).
+      if (this._drag && this.mode === 'running') {
+        var dx = P.x - this._drag.x, dy = P.y - this._drag.y;
+        var th = Math.max(24, this.cellSize * 0.5);
+        if (Math.abs(dx) > th || Math.abs(dy) > th) {
+          this.onSwipe(dx, dy);
+          this._drag = null;
+        }
+        if (!P.down) this._drag = null;
+      } else if (!P.down) {
+        this._drag = null;
+      }
+
+      // Клавиши (только running).
+      if (this.mode === 'running') {
+        var keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS'];
+        for (var i = 0; i < keys.length; i++) {
+          if (E.input.wasPressed(keys[i])) {
+            var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
+                        KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down' };
+            this.doMove(map[keys[i]]);
+            break;
+          }
+        }
       }
     },
 
@@ -937,10 +985,13 @@ window.GAME = window.GAME || {};
           }
           E.audio.sfx('click');
         },
-        onError: function () {
-          self.mode = 'fail';
-          E.sdk.gameplayStop();
-          E.sdk.showBanner();
+        onDone: function (ok) {
+          // sdk вызывает только onReward/onDone; при ошибке рекламы вернём fail-экран
+          if (!ok && self.mode === 'revive') {
+            self.mode = 'fail';
+            E.sdk.gameplayStop();
+            E.sdk.showBanner();
+          }
         }
       });
     },

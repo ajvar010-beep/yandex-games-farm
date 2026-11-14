@@ -33,7 +33,7 @@ window.GAME = window.GAME || {};
       this.buttons = [];
       this.buttons.push({ id: 'play', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_play') });
       y0 += bh + gap;
-      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.muted ? 'OFF' : 'ON') });
+      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.isMuted() ? E.i18n.t('sound_off') : E.i18n.t('sound_on')) });
       y0 += bh + gap;
       this.buttons.push({ id: 'lang', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_lang') });
     },
@@ -113,7 +113,9 @@ window.GAME = window.GAME || {};
       if (id === 'play') {
         E.core.setScene(SC.play, {});
       } else if (id === 'snd') {
-        E.audio.toggleMute();
+        var m = !E.audio.isMuted();
+        E.audio.setMuted(m);
+        E.storage.set('muted', m);
         this.buildButtons(this.game);
       } else if (id === 'lang') {
         E.i18n.setLang(E.i18n.lang === 'ru' ? 'en' : 'ru');

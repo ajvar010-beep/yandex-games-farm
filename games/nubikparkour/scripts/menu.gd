@@ -15,6 +15,13 @@ const RV_COINS_COOLDOWN_MS := 180_000  # 3 минуты
 
 var _rv_btn: Button = null  # v8.1 (#5): кэш кнопки RV-монет для живого отсчёта
 
+# TTL-кэш лидерборда: см. _build_leaderboard
+const LB_CACHE_TTL_MS := 60_000
+var _lb_cache = null
+var _lb_cache_ms := 0
+var _lb_fetching := false
+var _pending_lb_labels: Array = []
+
 func _ready() -> void:
 	_main = get_tree().root.get_node_or_null("Main")
 	if _main == null:
@@ -362,33 +369,52 @@ func _build_leaderboard(parent: Control) -> void:
 	lb_label.add_theme_color_override("font_color", Color(0.75, 0.8, 0.9))
 	parent.add_child(lb_label)
 
+	# TTL-кэш: refresh() вызывается после каждой покупки/языка/daily/возврата из
+	# уровня — без кэша это спам get_leaderboard на каждое меню.
+	var now_ms := Time.get_ticks_msec()
+	if _lb_cache != null and now_ms - _lb_cache_ms < LB_CACHE_TTL_MS:
+		_apply_leaderboard(lb_label, _lb_cache)
+		return
+	_pending_lb_labels.append(lb_label)
+	if _lb_fetching:
+		return
+	_lb_fetching = true
 	Yandex.get_leaderboard("parkour_time", func(res):
-		if not is_instance_valid(lb_label): return
-		# null-safe: у свежего ЛБ entries может отсутствовать; quantity нет в API
-		if res == null or res.entries == null:
-			lb_label.text = GameState.L("lb_unavailable")
-			return
-		var entries = res.entries
-		var n: int = mini(int(entries.size()), 8)
-		if n == 0:
-			lb_label.text = GameState.L("lb_unavailable")
-			return
-		var lines: PackedStringArray = []
-		for i in range(n):
-			var e = entries[i]
-			var pname := "?"
-			if e.player != null:
-				pname = str(e.player.publicName)
-			lines.append("%d. %s — %s" % [i + 1, pname, _fmt_score(int(e.score))])
-		if res.userRank != null and int(res.userRank) > 0:
-			var uname := "?"
-			var uscore := 0
-			if res.userEntry != null:
-				if res.userEntry.player != null:
-					uname = str(res.userEntry.player.publicName)
-				uscore = int(res.userEntry.score)
-			lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(uscore)])
-		lb_label.text = "\n".join(lines))
+		_lb_fetching = false
+		_lb_cache = res
+		_lb_cache_ms = Time.get_ticks_msec()
+		for lbl in _pending_lb_labels:
+			if is_instance_valid(lbl):
+				_apply_leaderboard(lbl, res)
+		_pending_lb_labels.clear()
+	)
+
+func _apply_leaderboard(lb_label: Label, res) -> void:
+	# null-safe: у свежего ЛБ entries может отсутствовать; quantity нет в API
+	if res == null or res.entries == null:
+		lb_label.text = GameState.L("lb_unavailable")
+		return
+	var entries = res.entries
+	var n: int = mini(int(entries.size()), 8)
+	if n == 0:
+		lb_label.text = GameState.L("lb_unavailable")
+		return
+	var lines: PackedStringArray = []
+	for i in range(n):
+		var e = entries[i]
+		var pname := "?"
+		if e.player != null:
+			pname = str(e.player.publicName)
+		lines.append("%d. %s — %s" % [i + 1, pname, _fmt_score(int(e.score))])
+	if res.userRank != null and int(res.userRank) > 0:
+		var uname := "?"
+		var uscore := 0
+		if res.userEntry != null:
+			if res.userEntry.player != null:
+				uname = str(res.userEntry.player.publicName)
+			uscore = int(res.userEntry.score)
+		lines.append(GameState.L("lb_you") % [int(res.userRank), uname, _fmt_score(uscore)])
+	lb_label.text = "\n".join(lines)
 
 func _fmt_score(v: int) -> String:
 	# v9.1: score = par-эффективность ×1000 (1000 = ровно в par, >1000 = быстрее).

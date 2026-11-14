@@ -136,6 +136,7 @@ window.GAME = window.GAME || {};
 
   /* ============================================================ PLAY */
   var PlayScene = {
+    consumesInputInUpdate: true,
     /* ---------- lifecycle ---------- */
     enter: function (game, params) {
       var C = G.config;
@@ -384,8 +385,8 @@ window.GAME = window.GAME || {};
     buyLetter: function (game) {
       var p = this.cost('letter');
       if (this.coins < p) { this.showMsg(T('not_enough'), '#ff6b81'); E.audio.sfx('deny'); return; }
-      // открыть первую закрытую клетку первого нерешённого слова
-      var h = G.words.hintLetter(this.targets, this.found, this.revealed);
+      // «Буква» — клетка в самом длинном нерешённом слове (отличие от общей «Подсказки»).
+      var h = G.words.hintLongestLetter(this.targets, this.found, this.revealed);
       if (!h) { E.audio.sfx('deny'); return; }
       this.coins -= p; this.bought.letter++;
       this.revealed[h.key] = true;

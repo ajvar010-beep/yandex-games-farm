@@ -41,7 +41,7 @@ window.GAME = window.GAME || {};
       }
       this.buttons.push({ id: 'play', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_play') });
       y0 += bh + gap;
-      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.muted ? 'OFF' : 'ON') });
+      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.isMuted() ? E.i18n.t('sound_off') : E.i18n.t('sound_on')) });
       y0 += bh + gap;
       this.buttons.push({ id: 'lang', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_lang') });
       y0 += bh + gap;
@@ -153,7 +153,9 @@ window.GAME = window.GAME || {};
         var run = E.storage.get('sudokulite_run');
         E.core.setScene(SC.play, { level: run ? run.level : 1, coins: run ? run.coins : 0 });
       } else if (id === 'snd') {
-        E.audio.toggleMute();
+        var m = !E.audio.isMuted();
+        E.audio.setMuted(m);
+        E.storage.set('muted', m);
         this.buildButtons(this.game);
       } else if (id === 'lang') {
         E.i18n.setLang(E.i18n.lang === 'ru' ? 'en' : 'ru');
@@ -170,6 +172,7 @@ window.GAME = window.GAME || {};
   /* ==================== PlayScene ==================== */
   SC.play = {
     name: 'play',
+    consumesInputInUpdate: true,
     enter: function (game, opts) {
       this.game = game;
       var E = window.Engine;
@@ -969,10 +972,13 @@ window.GAME = window.GAME || {};
           self.mistakes = 0; // сбрасываем ошибки
           E.audio.sfx('click');
         },
-        onError: function () {
-          self.mode = 'fail';
-          E.sdk.gameplayStop();
-          E.sdk.showBanner();
+        onDone: function (ok) {
+          // sdk вызывает только onReward/onDone; при ошибке рекламы вернём fail-экран
+          if (!ok && self.mode === 'revive') {
+            self.mode = 'fail';
+            E.sdk.gameplayStop();
+            E.sdk.showBanner();
+          }
         }
       });
     },

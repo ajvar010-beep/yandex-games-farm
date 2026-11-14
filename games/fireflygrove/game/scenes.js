@@ -243,7 +243,13 @@ window.GAME = window.GAME || {};
       this.applyCaptureParams(game, params);
       this.saveGame();
     },
-    exit: function () { E.sdk.gameplayStop(); },
+    exit: function () {
+      // Очищаем отложенные спавны светлячков — иначе таймер из старой сессии
+      // может досидеть и добавить жука в свежую партию после быстрого рестарта.
+      if (this._bugTimers) for (var i = 0; i < this._bugTimers.length; i++) clearTimeout(this._bugTimers[i]);
+      this._bugTimers = [];
+      E.sdk.gameplayStop();
+    },
     onResize: function (game) {
       this.layout(game);
       E.fx.reset();
@@ -404,7 +410,8 @@ window.GAME = window.GAME || {};
           // пополнение стаи (мотылёк на замену не приходит — он редкий,
           // появляется отдельным шансом при каждом пополнении)
           var self = this;
-          setTimeout(function () {
+          this._bugTimers = this._bugTimers || [];
+          var id = setTimeout(function () {
             if (self.mode === 'running' && self.bugs.length < C.bugsCount(self.level)) {
               var x = self.area.x0 + 40 + self.rng.float() * (self.area.x1 - self.area.x0 - 80);
               var y = self.area.y0 + 40 + self.rng.float() * (self.area.y1 - self.area.y0 - 80);
@@ -415,6 +422,7 @@ window.GAME = window.GAME || {};
               }
             }
           }, 800);
+          this._bugTimers.push(id);
           return;
         }
       }

@@ -34,6 +34,7 @@ window.GAME = window.GAME || {};
       shop_hint: 'Помощь за монеты. Цены растут с каждой покупкой.',
       buy: 'Купить',
       not_enough: 'Не хватает монет',
+      hint_nothing: 'Всё уже на месте — подсказка не нужна',
       coins_ad: 'За рекламу',
       coins_150: '+{n} монет',
 
@@ -125,6 +126,7 @@ window.GAME = window.GAME || {};
       shop_hint: 'Help for coins. Prices rise with every purchase.',
       buy: 'Buy',
       not_enough: 'Not enough coins',
+      hint_nothing: 'Everything is already in place — no hint needed',
       coins_ad: 'Watch an ad',
       coins_150: '+{n} coins',
 

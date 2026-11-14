@@ -124,8 +124,24 @@ window.GAME = window.GAME || {};
     return null;
   }
 
+  // «Буква» — открыть клетку в САМОМ ДЛИННОМ нерешённом слове (дольше всего отгадывается).
+  function hintLongestLetter(targets, found, revealed) {
+    var best = null;
+    for (var t = 0; t < targets.length; t++) {
+      var w = targets[t];
+      if (found[w]) continue;
+      if (!best || w.length > best.length) best = w;
+    }
+    if (!best) return null;
+    for (var i = 0; i < best.length; i++) {
+      var key = best + ':' + i;
+      if (!revealed[key]) return { word: best, index: i, letter: best[i], key: key };
+    }
+    return null;
+  }
+
   G.words = {
     dict: dict, weights: weights, wordScore: wordScore,
-    makeLevel: makeLevel, canSpell: canSpell, hintLetter: hintLetter
+    makeLevel: makeLevel, canSpell: canSpell, hintLetter: hintLetter, hintLongestLetter: hintLongestLetter
   };
 })(window.GAME);

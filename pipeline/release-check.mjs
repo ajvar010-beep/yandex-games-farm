@@ -143,10 +143,22 @@ function checkIds(game, issues) {
   if (!exists(mf)) { fail(issues, 'manifest', 'нет manifest.json (обязателен)'); return; }
   let man = {};
   try { man = JSON.parse(read(mf)); } catch { fail(issues, 'manifest', 'битый manifest.json'); return; }
+  // JS-игры: game/*.js. Godot-игры: scripts/*.gd — без .gd-скана все объявленные
+  // ID у Godot всегда помечались «заявлен, но не используется» (FP 2026-11-13).
+  const gd = walk(game.dir).filter(f => f.endsWith('.gd')).map(read).join('\n');
   const js = walk(game.dir).filter(f => f.endsWith('.js') && f.includes(`${path.sep}game${path.sep}`)).map(read).join('\n');
+  const code = js + '\n' + gd;
+  // JS: submitScore('x') / purchase('x'); GDScript: submit_score("x") / purchase("x").
+  // Плюс ID внутри строковых литералов кода (mineridle вызывает purchase(pk[0]),
+  // где pk = ["coins_5000", ...] — прямой аргумент-литерал не матчится).
+  const lb = [...code.matchAll(/(?:submitScore|getLeaderboard|submit_score|get_leaderboard)\s*[(']\s*['"]([^'"]+)['"]/g)].map(m => m[1]);
+  const iap = [...code.matchAll(/purchase\s*[(']\s*['"]([^'"]+)['"]/g)].map(m => m[1]);
+  // строковые литералы, похожие на IAP/leaderboard id (только для манifest-проверки
+  // «заявлен, но не используется»: заявленный ID в коде как строка = используется)
+  const literals = new Set([...code.matchAll(/['"]([a-z0-9_]{3,40})['"]/g)].map(m => m[1]));
   const sets = {
-    leaderboards: new Set([...js.matchAll(/(?:submitScore|getLeaderboard)\('([^']+)'/g)].map(m => m[1])),
-    iap: new Set([...js.matchAll(/purchase\('([^']+)'/g)].map(m => m[1]))
+    leaderboards: new Set([...lb, ...(man.leaderboards || []).filter(id => literals.has(id))]),
+    iap: new Set([...iap, ...(man.iap || []).filter(id => literals.has(id))])
   };
   for (const k of ['leaderboards', 'iap']) {
     const declared = new Set(man[k] || []);
@@ -156,9 +168,28 @@ function checkIds(game, issues) {
 }
 
 function parseI18n(src) {
+  // Depth-aware поиск блока `loc: { ... }`: наивная регулярка `(loc:\s*\{[\s\S]*?\n\s*\})`
+  // останавливалась на ПЕРВОМ `\n}` — а внутри ru-блока бывают вложенные объекты,
+  // из-за чего «en: {» находился внутри ru, и `в en нет en` давало ложный FAIL
+  // (кейс fishpond, 2026-11-13).
   const block = (loc) => {
-    const m = src.match(new RegExp(loc + ':\\s*\\{([\\s\\S]*?)\\n\\s*\\}'));
-    return m ? m[1] : null;
+    const start = src.search(new RegExp(loc + '\\s*:\\s*\\{'));
+    if (start < 0) return null;
+    const open = src.indexOf('{', start);
+    let depth = 0;
+    let inStr = null;
+    for (let i = open; i < src.length; i++) {
+      const ch = src[i];
+      if (inStr) {
+        if (ch === '\\') { i++; continue; }
+        if (ch === inStr) inStr = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"') { inStr = ch; continue; }
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) return src.slice(open + 1, i); }
+    }
+    return null;
   };
   const keysOf = (txt) => {
     if (!txt) return null;

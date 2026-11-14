@@ -547,7 +547,10 @@ window.GAME = window.GAME || {};
       if (this.recordMode) sp = Math.min(sp, C.recordMaxSpeed);
       this.scroll += sp * dt;
       this.distance += sp * dt / 40; // 40 px = 1 метр
-      this.score += Math.floor(sp * dt / 40) * C.score.meter;
+      // Накопление дробных метров — иначе Math.floor(sp*dt/40) = 0 каждый тик
+      this.meterAcc = (this.meterAcc || 0) + sp * dt / 40;
+      var m = Math.floor(this.meterAcc);
+      if (m) { this.score += m * C.score.meter; this.meterAcc -= m; }
       // прыжок кота
       if (this.cat.air) {
         this.cat.vy += C.gravity * dt;

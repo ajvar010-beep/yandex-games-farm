@@ -21,7 +21,16 @@ func _ready() -> void:
 	call_deferred("_post_open")
 
 func refresh() -> void:
-	if _root: _root.queue_free()
+	# Полная очистка: bg-панель и ScrollContainer добавляются напрямую в Menu
+	# (см. _build), поэтому освобождения только _root мало — каждый refresh()
+	# (язык/звук/покупка/daily/скин) иначе наращивает стопку непрозрачных
+	# полноэкранных панелей и растущий overdraw до конца сессии.
+	for c in get_children():
+		c.queue_free()
+	_root = null
+	_lang_btn = null
+	_coins_lbl = null
+	_toast_ref = null
 	_build()
 
 func _build() -> void:
@@ -242,10 +251,20 @@ func _show_daily() -> void:
 	take.pressed.connect(func():
 		var got := GameState.claim_daily()
 		_daily_panel.visible = false
-		# предложить удвоить
-		Yandex.show_rewarded(func():
-			GameState.add_coins(got); _toast(GameState.L("doubled")); refresh(),
-		func(): refresh()))
+		# Диалог согласия перед рекламой (daily_double_q/no_thanks существовали в i18n,
+		# но не были подключены — игрок был обязан смотреть RV без opt-out).
+		var dbl := ConfirmationDialog.new()
+		dbl.dialog_text = GameState.L("daily_double_q") % got
+		dbl.ok_button_text = GameState.L("doubled")
+		dbl.cancel_button_text = GameState.L("no_thanks")
+		dbl.get_ok_button().pressed.connect(func():
+			Yandex.show_rewarded(func():
+				GameState.add_coins(got); _toast(GameState.L("doubled")); refresh(),
+			func(): GameState.add_coins(got); refresh()))
+		dbl.get_cancel_button().pressed.connect(func():
+			GameState.add_coins(got); refresh())
+		add_child(dbl)
+		dbl.popup_centered())
 	row.add_child(take)
 
 func _fill_lb(r) -> void:

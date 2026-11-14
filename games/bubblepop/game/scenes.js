@@ -40,7 +40,7 @@ window.GAME = window.GAME || {};
       }
       this.buttons.push({ id: 'play', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_play') });
       y0 += bh + gap;
-      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.muted ? 'OFF' : 'ON') });
+      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.isMuted() ? E.i18n.t('sound_off') : E.i18n.t('sound_on')) });
       y0 += bh + gap;
       this.buttons.push({ id: 'lang', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_lang') });
       y0 += bh + gap;
@@ -162,7 +162,9 @@ window.GAME = window.GAME || {};
         var run = E.storage.get('bubblepop_run');
         E.core.setScene(SC.play, { level: run ? run.level : 1, coins: run ? run.coins : 0 });
       } else if (id === 'snd') {
-        E.audio.toggleMute();
+        var m = !E.audio.isMuted();
+        E.audio.setMuted(m);
+        E.storage.set('muted', m);
         this.buildButtons(this.game);
       } else if (id === 'lang') {
         E.i18n.setLang(E.i18n.lang === 'ru' ? 'en' : 'ru');
@@ -457,7 +459,7 @@ window.GAME = window.GAME || {};
             var pos = G.entities.gridToScreen(o.x, o.y, this.cellSize, this.boardX, this.boardY);
             E.fx.burst(pos.x, pos.y, G.config.palette.accent, 5, 80, this.rng);
           }
-          this.addFloater(x, y, '+' + orphanScore + ' падение', G.config.palette.accent);
+          this.addFloater(x, y, '+' + orphanScore + ' ' + E.i18n.t('orphan_drop'), G.config.palette.accent);
         }
         E.audio.sfx('explode');
         E.fx.flash(G.config.palette.good, 0.3);
@@ -537,10 +539,13 @@ window.GAME = window.GAME || {};
           E.sdk.gameplayStart();
           E.sdk.hideBanner();
         },
-        onError: function () {
-          self.mode = 'fail';
-          E.sdk.gameplayStop();
-          E.sdk.showBanner();
+        onDone: function (ok) {
+          // sdk вызывает только onReward/onDone; при ошибке рекламы вернём fail-экран
+          if (!ok && self.mode === 'revive') {
+            self.mode = 'fail';
+            E.sdk.gameplayStop();
+            E.sdk.showBanner();
+          }
         }
       });
     },

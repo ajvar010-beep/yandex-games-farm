@@ -405,8 +405,17 @@ window.GAME = window.GAME || {};
       var cell = L.hint(st);
       out.cell = cell;
       out.solved = st.solved;
-      if (cell >= 0) st.hints++;
-      if (cell >= 0) st.hintCell = cell;
+      if (cell >= 0) {
+        st.hints++;
+        st.hintCell = cell;
+      } else {
+        // Нечего подсказывать (все тайлы в базе) — не берём деньги.
+        st.coins += price;
+        st.bought[id] = (st.bought[id] | 0) - 1;
+        out.ok = false;
+        out.reason = 'nothing';
+        return out;
+      }
     } else if (id === 'moves') {
       st.movesLeft += C.extraMoves;
       st.movesBought++;

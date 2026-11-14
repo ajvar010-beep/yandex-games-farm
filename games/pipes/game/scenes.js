@@ -653,7 +653,7 @@ window.GAME = window.GAME || {};
       var res = L.buy(this.st, id);
       if (!res.ok) {
         E.audio.sfx('deny');
-        this.toast = { t: 1.8, text: T('not_enough') };
+        this.toast = { t: 1.8, text: res.reason === 'nothing' ? T('hint_nothing') : T('not_enough') };
         return;
       }
       E.audio.sfx('buy');

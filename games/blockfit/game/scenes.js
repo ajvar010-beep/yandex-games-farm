@@ -40,7 +40,7 @@ window.GAME = window.GAME || {};
       }
       this.buttons.push({ id: 'play', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_play') });
       y0 += bh + gap;
-      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.muted ? 'OFF' : 'ON') });
+      this.buttons.push({ id: 'snd', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_snd') + ': ' + (E.audio.isMuted() ? E.i18n.t('sound_off') : E.i18n.t('sound_on')) });
       y0 += bh + gap;
       this.buttons.push({ id: 'lang', x: cx - bw / 2, y: y0, w: bw, h: bh, text: E.i18n.t('menu_lang') });
       y0 += bh + gap;
@@ -156,7 +156,9 @@ window.GAME = window.GAME || {};
         var run = E.storage.get('blockfit_run');
         E.core.setScene(SC.play, { level: run ? run.level : 1, coins: run ? run.coins : 0 });
       } else if (id === 'snd') {
-        E.audio.toggleMute();
+        var m = !E.audio.isMuted();
+        E.audio.setMuted(m);
+        E.storage.set('muted', m);
         this.buildButtons(this.game);
       } else if (id === 'lang') {
         E.i18n.setLang(E.i18n.lang === 'ru' ? 'en' : 'ru');
@@ -278,13 +280,31 @@ window.GAME = window.GAME || {};
         }
         // автопилот для записи видео
         if (this.autopilot) this.driveAutopilot(dt);
-        // ввод
-        this.driveInput(game);
       }
+
+      // Диспетч тапов по режимам (работает во всех mode, не только running).
+      // Без этого overlay-обработчики ниже были недостижимы → soft-lock.
+      this.handleTap(E.input.pointer.x, E.input.pointer.y, game);
+
       if (this.flashTimer > 0) {
         this.flashTimer -= dt;
         if (this.flashTimer <= 0) this.flashMsg = null;
       }
+    },
+
+    handleTap: function (x, y, game) {
+      var E = window.Engine;
+      if (!E.input.pointer.pressed && !this.dragging) return;
+
+      // Диспетч по режиму — как у bubblepop/scenes.js:309-315.
+      if (this.mode === 'shop')   { this.handleShopTap(x, y); return; }
+      if (this.mode === 'over')   { this.handleOverTap(x, y); return; }
+      if (this.mode === 'fail')   { this.handleFailTap(x, y); return; }
+      if (this.mode === 'revive') { this.handleReviveTap(x, y); return; }
+      if (this.mode === 'paused') { this.handlePauseTap(x, y); return; }
+      if (this.mode !== 'running') return;
+
+      this.driveInput(game);
     },
 
     driveInput: function (game) {
@@ -1041,10 +1061,13 @@ window.GAME = window.GAME || {};
           }
           E.audio.sfx('click');
         },
-        onError: function () {
-          self.mode = 'fail';
-          E.sdk.gameplayStop();
-          E.sdk.showBanner();
+        onDone: function (ok) {
+          // sdk вызывает только onReward/onDone; при ошибке рекламы вернём fail-экран
+          if (!ok && self.mode === 'revive') {
+            self.mode = 'fail';
+            E.sdk.gameplayStop();
+            E.sdk.showBanner();
+          }
         }
       });
     },

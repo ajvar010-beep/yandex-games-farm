@@ -210,6 +210,7 @@ window.GAME = window.GAME || {};
 
   /* ========================================================= PLAY */
   var PlayScene = {
+    consumesInputInUpdate: true,
     /* ---------- lifecycle ---------- */
     enter: function (game, params) {
       var C = G.config;
